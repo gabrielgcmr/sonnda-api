@@ -1,4 +1,4 @@
-module github.com/gabrielgcmr/previn-api
+module github.com/gabrielgcmr/sonnda-api
 
 go 1.24.1
 

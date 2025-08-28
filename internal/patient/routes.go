@@ -1,8 +1,8 @@
 package patient
 
 import (
-	"github.com/gabrielgcmr/previn-api/internal/database"
-	"github.com/gabrielgcmr/previn-api/internal/middleware"
+	"github.com/gabrielgcmr/sonnda-api/internal/database"
+	"github.com/gabrielgcmr/sonnda-api/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 

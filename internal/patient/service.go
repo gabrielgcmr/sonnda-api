@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gabrielgcmr/previn-api/internal/patient/dto"
-	"github.com/gabrielgcmr/previn-api/internal/patient/utils"
+	"github.com/gabrielgcmr/sonnda-api/internal/patient/dto"
+	"github.com/gabrielgcmr/sonnda-api/internal/patient/utils"
 
 	"gorm.io/gorm"
 )
