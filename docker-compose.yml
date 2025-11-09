@@ -1,38 +1,40 @@
-version: "3.8"
-
 services:
   db:
     image: postgres:latest
-    container_name: postgres_rastreadb
+    container_name: postgres_sonnda
     restart: always
-    ports:
-      - "5432:5432"
+    ports: 
+    - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: senha123
-      POSTGRES_DB: rastreio
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api:
-    # Dá build usando o Dockerfile que está em previn-api/
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: previn_api
+    container_name: sonnda-api
     restart: always
     ports:
     - "8080:8080"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.docker
     environment:
-      # Ajuste as variáveis de ambiente para apontar pro serviço 'db'
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_USER: postgres 
-      DB_PASSWORD: senha123
-      DB_NAME: rastreio
-      JWT_SECRET: amovoces
-
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
 volumes:
   postgres-data:

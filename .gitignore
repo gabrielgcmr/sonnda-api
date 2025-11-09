@@ -1,0 +1,13 @@
+# Go build
+bin/
+*.exe
+*.out
+
+# Docker
+.env
+.env.docker
+postgres-data/
+
+# IDEs
+.vscode/
+.idea/

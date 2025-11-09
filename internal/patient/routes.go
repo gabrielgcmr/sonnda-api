@@ -1,23 +1,28 @@
 package patient
 
 import (
-	"github.com/gabrielgcmr/previn-api/internal/database"
-	"github.com/gabrielgcmr/previn-api/internal/middleware"
+	"sonnda-api/internal/database"
+	"sonnda-api/internal/middleware"
+	"sonnda-api/internal/user"
+
 	"github.com/gin-gonic/gin"
 )
 
-func Routes(r *gin.Engine) {
+func Routes(rg *gin.RouterGroup) {
 	repo := NewRepository(database.DB)
 	svc := NewService(repo)
 	handler := NewHandler(svc)
 
-	grp := r.Group("/api/patients")
+	patients := rg.Group("/patients")
 	{
 		// públicas
-		grp.POST("/register", handler.Register)
-		grp.POST("/login", handler.Login)
+		patients.POST("/register", handler.Register)
+
+		protected := patients.Group("")
+		protected.Use(middleware.JWTAuthMiddleware())
+		protected.Use(middleware.RequireRole(user.RolePatient))
 
 		// protegida
-		grp.GET("/me", middleware.JWTAuthMiddleware(), handler.Me)
+		protected.GET("/me", middleware.JWTAuthMiddleware(), handler.Me)
 	}
 }

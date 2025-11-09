@@ -1,6 +1,7 @@
-package patient
+package admin
 
 type Service interface {
+	// Define os métodos que o serviço admin deve implementar
 }
 type service struct {
 	repo Repository
