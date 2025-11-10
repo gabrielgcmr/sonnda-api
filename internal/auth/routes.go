@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"sonnda-api/internal/middleware"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func AuthRoutes(rg *gin.RouterGroup, db *gorm.DB, jwt *JWTManager) {
+func AuthRoutes(rg *gin.RouterGroup, db *gorm.DB, jwt *middleware.JWTManager) {
 	repo := NewRepository(db)
 	svc := NewService(repo, jwt)
 	h := NewHandler(svc)

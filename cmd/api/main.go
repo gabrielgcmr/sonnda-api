@@ -21,7 +21,9 @@ func main() {
 	db := database.DB
 
 	//montar o gin e rotas
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 
 	// 🌐 Aplica o middleware de CORS
 	r.Use(middleware.SetupCors())
@@ -35,7 +37,7 @@ func main() {
 	})
 
 	//config
-	jwtMgr := auth.NewJWTManager(
+	jwtMgr := middleware.NewJWTManager(
 		os.Getenv("JWT_SECRET"),
 		"sonnda-api",
 		24*time.Hour,

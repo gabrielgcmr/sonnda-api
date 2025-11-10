@@ -2,96 +2,68 @@ package middleware
 
 import (
 	"errors"
-	"net/http"
-	"os"
-	"strings"
+	"strconv"
+	"time"
 
-	"github.com/gin-gonic/gin"
+	"sonnda-api/internal/user"
+
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
 )
 
-var jwtSecret []byte
-
-func init() {
-	_ = godotenv.Load()
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		panic("JWT_SECRET must be set")
-	}
-	jwtSecret = []byte(secret)
+type JWTManager struct {
+	Secret []byte
+	Issuer string
+	TTL    time.Duration
 }
 
-func JWTAuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
-			return
-		}
+type Claims struct {
+	UserID uint      `json:"uid"`
+	Email  string    `json:"email"`
+	Role   user.Role `json:"role"`
+	jwt.RegisteredClaims
+}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Bearer token required"})
-			return
-		}
-
-		tokenString := parts[1]
-
-		// Parse e validação do token
-		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-			// Verifica o método de assinatura
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return jwtSecret, nil
-		})
-
-		// Tratamento de erros
-		if err != nil {
-			switch {
-			case errors.Is(err, jwt.ErrTokenMalformed):
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "malformed token"})
-			case errors.Is(err, jwt.ErrTokenExpired):
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token expired"})
-			case errors.Is(err, jwt.ErrTokenNotValidYet):
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token not yet valid"})
-			case errors.Is(err, jwt.ErrSignatureInvalid):
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
-			default:
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token", "details": err.Error()})
-			}
-			return
-		}
-
-		// Verificação das claims
-		if !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
-			return
-		}
-
-		// Extrai o user_id das claims
-		rawUserID, exists := claims["user_id"]
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user_id claim missing"})
-			return
-		}
-
-		// Converte o user_id para uint
-		userID, ok := rawUserID.(float64) // JSON numbers são float64 por padrão
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid user_id format"})
-			return
-		}
-
-		// Armazena o user_id no contexto
-		c.Set("user_id", uint(userID))
-		c.Next()
+func NewJWTManager(secret, issuer string, ttl time.Duration) *JWTManager {
+	return &JWTManager{
+		Secret: []byte(secret),
+		Issuer: issuer,
+		TTL:    ttl,
 	}
+}
+
+func (j *JWTManager) Generate(u *user.User) (string, error) {
+	now := time.Now().UTC()
+	claims := &Claims{
+		UserID: u.ID,
+		Email:  u.Email,
+		Role:   u.Role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    j.Issuer,
+			Subject:   strconv.FormatUint(uint64(u.ID), 10),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(j.TTL)),
+		},
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return t.SignedString(j.Secret)
+}
+
+func (j *JWTManager) Parse(tokenStr string) (*Claims, error) {
+	tok, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, errors.New("unexpected signing method")
+		}
+		return j.Secret, nil
+	})
+	if err != nil || !tok.Valid {
+		return nil, errors.New("invalid token")
+	}
+	claims, ok := tok.Claims.(*Claims)
+	if !ok {
+		return nil, errors.New("invalid claims")
+	}
+	if claims.Issuer != j.Issuer {
+		return nil, errors.New("invalid issuer")
+	}
+	return claims, nil
 }

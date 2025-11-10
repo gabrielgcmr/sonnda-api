@@ -23,7 +23,7 @@ func Routes(rg *gin.RouterGroup) {
 
 		// Rotas protegidas - apenas médicos
 		protected := doctors.Group("")
-		protected.Use(middleware.JWTAuthMiddleware())
+
 		protected.Use(middleware.RequireRole(user.RoleDoctor))
 		{
 			// GET /api/v1/doctors/me
@@ -44,7 +44,7 @@ func Routes(rg *gin.RouterGroup) {
 
 		// Rotas apenas para admins
 		adminOnly := doctors.Group("")
-		adminOnly.Use(middleware.JWTAuthMiddleware())
+
 		adminOnly.Use(middleware.RequireAdmin())
 		{
 			// POST /api/v1/doctors

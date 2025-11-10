@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"sonnda-api/internal/middleware"
 	"sonnda-api/internal/user"
 
 	"golang.org/x/crypto/bcrypt"
@@ -22,10 +23,10 @@ type Service interface {
 
 type service struct {
 	repo Repository
-	jwt  *JWTManager
+	jwt  *middleware.JWTManager
 }
 
-func NewService(repo Repository, jwt *JWTManager) Service {
+func NewService(repo Repository, jwt *middleware.JWTManager) Service {
 	return &service{repo: repo, jwt: jwt}
 }
 

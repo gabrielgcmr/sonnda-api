@@ -13,7 +13,7 @@ func Routes(rg *gin.RouterGroup) {
 
 	// Todas as rotas de admin requerem autenticação e role de admin
 	admin := rg.Group("/admin")
-	admin.Use(middleware.JWTAuthMiddleware())
+
 	admin.Use(middleware.RequireAdmin())
 	{
 		// Gestão de usuários

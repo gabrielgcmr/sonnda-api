@@ -17,13 +17,17 @@ dev:
 docker-up:
 	docker-compose up
 
+docker-db:
+	docker-compose up -d db
+
 docker-down:
 	docker-compose down
 
 docker-restart: docker-down docker-up
 
 docker-dev:
-	docker-compose up --build
+	docker-compose up -d db
+	go run cmd/api/main.go
 
 # Limpeza
 clean:
