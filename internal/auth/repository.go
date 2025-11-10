@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"sonnda-api/internal/user"
+	"sonnda-api/internal/core/user"
 
 	"gorm.io/gorm"
 )

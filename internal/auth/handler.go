@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"sonnda-api/internal/user"
+	"sonnda-api/internal/core/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"

@@ -1,15 +1,15 @@
-package auth
+package middleware
 
 import (
 	"net/http"
 	"strings"
 
-	"sonnda-api/internal/middleware"
-
 	"github.com/gin-gonic/gin"
+
+	"sonnda-api/internal/core/jwt"
 )
 
-func NewAuthMiddleware(jwt *middleware.JWTManager) gin.HandlerFunc {
+func NewAuthMiddleware(jwt *jwt.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.GetHeader("Authorization")
 		if !strings.HasPrefix(h, "Bearer ") {

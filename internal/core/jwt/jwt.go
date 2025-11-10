@@ -1,11 +1,11 @@
-package middleware
+package jwt
 
 import (
 	"errors"
 	"strconv"
 	"time"
 
-	"sonnda-api/internal/user"
+	"sonnda-api/internal/core/user"
 
 	"github.com/golang-jwt/jwt/v5"
 )

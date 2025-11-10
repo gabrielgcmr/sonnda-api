@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"sonnda-api/internal/core/jwt"
 	"sonnda-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func AuthRoutes(rg *gin.RouterGroup, db *gorm.DB, jwt *middleware.JWTManager) {
+func AuthRoutes(rg *gin.RouterGroup, db *gorm.DB, jwt *jwt.JWTManager) {
 	repo := NewRepository(db)
 	svc := NewService(repo, jwt)
 	h := NewHandler(svc)
@@ -34,7 +35,7 @@ func AuthRoutes(rg *gin.RouterGroup, db *gorm.DB, jwt *middleware.JWTManager) {
 	// Rotas protegidas - requerem autenticação
 
 	protected := rg.Group("")
-	protected.Use(NewAuthMiddleware(jwt))
+	protected.Use(middleware.NewAuthMiddleware(jwt))
 	{
 		protected.GET("/me", h.Me)
 	}
