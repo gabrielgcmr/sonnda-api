@@ -4,7 +4,7 @@ package middleware
 import (
 	"net/http"
 
-	"sonnda-api/internal/core/user"
+	user "sonnda-api/internal/core/model"
 	"sonnda-api/internal/database"
 
 	"github.com/gin-gonic/gin"

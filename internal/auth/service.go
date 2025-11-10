@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"sonnda-api/internal/core/jwt"
-	"sonnda-api/internal/core/user"
+	"sonnda-api/internal/core/model"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,9 +16,9 @@ var (
 )
 
 type Service interface {
-	Register(ctx context.Context, name, email, password string, role user.Role) (*user.User, error)
-	Login(ctx context.Context, email, password string) (*user.User, string, error)
-	Me(ctx context.Context, id uint) (*user.User, error)
+	Register(ctx context.Context, name, email, password string, role model.Role) (*model.User, error)
+	Login(ctx context.Context, email, password string) (*model.User, string, error)
+	Me(ctx context.Context, id uint) (*model.User, error)
 }
 
 type service struct {
@@ -30,7 +30,7 @@ func NewService(repo Repository, jwt *jwt.JWTManager) Service {
 	return &service{repo: repo, jwt: jwt}
 }
 
-func (s *service) Register(ctx context.Context, name, email, password string, role user.Role) (*user.User, error) {
+func (s *service) Register(ctx context.Context, name, email, password string, role model.Role) (*model.User, error) {
 	if existing, _ := s.repo.FindByEmail(ctx, email); existing != nil {
 		return nil, ErrEmailTaken
 	}
@@ -40,7 +40,7 @@ func (s *service) Register(ctx context.Context, name, email, password string, ro
 		return nil, err
 	}
 
-	u := &user.User{
+	u := &model.User{
 		Email:        email,
 		PasswordHash: string(hash),
 		Role:         role,
@@ -52,7 +52,7 @@ func (s *service) Register(ctx context.Context, name, email, password string, ro
 	return u, nil
 }
 
-func (s *service) Login(ctx context.Context, email, password string) (*user.User, string, error) {
+func (s *service) Login(ctx context.Context, email, password string) (*model.User, string, error) {
 	u, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, "", ErrInvalidCredentials
@@ -70,6 +70,6 @@ func (s *service) Login(ctx context.Context, email, password string) (*user.User
 	return u, token, nil
 }
 
-func (s *service) Me(ctx context.Context, id uint) (*user.User, error) {
+func (s *service) Me(ctx context.Context, id uint) (*model.User, error) {
 	return s.repo.FindByID(ctx, id)
 }

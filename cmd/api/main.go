@@ -8,10 +8,9 @@ import (
 
 	"sonnda-api/internal/auth"
 	"sonnda-api/internal/core/jwt"
-	"sonnda-api/internal/core/user"
+	"sonnda-api/internal/core/model"
 	"sonnda-api/internal/database"
 	"sonnda-api/internal/middleware"
-	"sonnda-api/internal/patient"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,8 +50,8 @@ func main() {
 
 	//migrations
 	if err := db.AutoMigrate(
-		&user.User{},
-		&patient.PatientProfile{},
+		&model.User{},
+		&model.PatientProfile{},
 	); err != nil {
 		log.Fatalf("Erro ao migrar tabela users: %v", err)
 	}

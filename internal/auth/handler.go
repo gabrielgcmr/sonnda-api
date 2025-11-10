@@ -3,10 +3,9 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"sonnda-api/internal/core/model"
 	"strconv"
 	"strings"
-
-	"sonnda-api/internal/core/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -21,10 +20,10 @@ func NewHandler(svc Service) *Handler {
 }
 
 type registerRequest struct {
-	Name     string    `json:"name" binding:"required,min=2"`
-	Email    string    `json:"email" binding:"required,email"`
-	Password string    `json:"password" binding:"required,min=6"`
-	Role     user.Role `json:"role" binding:"required"` // futura validação: permitir só alguns
+	Name     string     `json:"name" binding:"required,min=2"`
+	Email    string     `json:"email" binding:"required,email"`
+	Password string     `json:"password" binding:"required,min=6"`
+	Role     model.Role `json:"role" binding:"required"` // futura validação: permitir só alguns
 }
 
 type loginRequest struct {

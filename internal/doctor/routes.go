@@ -1,7 +1,7 @@
 package doctor
 
 import (
-	"sonnda-api/internal/core/user"
+	user "sonnda-api/internal/core/model"
 	"sonnda-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"

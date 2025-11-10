@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"sonnda-api/internal/core/user"
+	"sonnda-api/internal/core/model"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -17,9 +17,9 @@ type JWTManager struct {
 }
 
 type Claims struct {
-	UserID uint      `json:"uid"`
-	Email  string    `json:"email"`
-	Role   user.Role `json:"role"`
+	UserID uint       `json:"uid"`
+	Email  string     `json:"email"`
+	Role   model.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -31,7 +31,7 @@ func NewJWTManager(secret, issuer string, ttl time.Duration) *JWTManager {
 	}
 }
 
-func (j *JWTManager) Generate(u *user.User) (string, error) {
+func (j *JWTManager) Generate(u *model.User) (string, error) {
 	now := time.Now().UTC()
 	claims := &Claims{
 		UserID: u.ID,

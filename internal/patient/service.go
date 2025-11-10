@@ -3,6 +3,7 @@ package patient
 import (
 	"context"
 	"errors"
+	"sonnda-api/internal/core/model"
 )
 
 var (
@@ -12,11 +13,11 @@ var (
 )
 
 type Service interface {
-	Create(ctx context.Context, actorID uint, input CreatePatientInput) (*PatientProfile, error)
-	Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*PatientProfile, error)
-	SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*PatientProfile, error)
-	GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*PatientProfile, error)
-	List(ctx context.Context, limit, offset int) ([]PatientProfile, error)
+	Create(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
+	Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.PatientProfile, error)
+	SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.PatientProfile, error)
+	GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.PatientProfile, error)
+	List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error)
 }
 type service struct {
 	repo Repository
@@ -26,7 +27,7 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, actorID uint, input CreatePatientInput) (*PatientProfile, error) {
+func (s *service) Create(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
 	existing, err := s.repo.FindByCPF(ctx, input.CPF)
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func (s *service) Create(ctx context.Context, actorID uint, input CreatePatientI
 		return nil, ErrCPFAlreadyExists
 	}
 
-	patient := &PatientProfile{
+	patient := &model.PatientProfile{
 		UserID:    input.UserID,
 		FullName:  input.FullName,
 		BirthDate: input.BirthDate,
@@ -50,7 +51,7 @@ func (s *service) Create(ctx context.Context, actorID uint, input CreatePatientI
 	return patient, nil
 }
 
-func (s *service) Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*PatientProfile, error) {
+func (s *service) Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.PatientProfile, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func (s *service) Update(ctx context.Context, actorID uint, actorRole string, us
 
 	if actorRole == "DOCTOR" && actorID != userID {
 		auths, err := s.repo.FindAuthorizations(ctx, userID)
-		if err != nil || len(auths) == 0 || auths[0].Status != AuthApproved {
+		if err != nil || len(auths) == 0 || auths[0].Status != model.AuthApproved {
 			return nil, ErrUnauthorizedAccess
 		}
 	}
@@ -77,7 +78,7 @@ func (s *service) Update(ctx context.Context, actorID uint, actorRole string, us
 	return patient, nil
 }
 
-func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*PatientProfile, error) {
+func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.PatientProfile, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -92,7 +93,7 @@ func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateI
 	return patient, nil
 }
 
-func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*PatientProfile, error) {
+func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.PatientProfile, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -104,7 +105,7 @@ func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole strin
 
 	if actorRole == "DOCTOR" && actorID != userID {
 		auths, err := s.repo.FindAuthorizations(ctx, userID)
-		if err != nil || len(auths) == 0 || auths[0].Status != AuthApproved {
+		if err != nil || len(auths) == 0 || auths[0].Status != model.AuthApproved {
 			return nil, ErrUnauthorizedAccess
 		}
 	}
@@ -112,6 +113,6 @@ func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole strin
 	return patient, nil
 }
 
-func (s *service) List(ctx context.Context, limit, offset int) ([]PatientProfile, error) {
+func (s *service) List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error) {
 	return s.repo.List(ctx, limit, offset)
 }
