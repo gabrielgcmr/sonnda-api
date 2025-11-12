@@ -3,6 +3,7 @@ package patient
 import (
 	"fmt"
 	"net/http"
+	"sonnda-api/internal/core/jwt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,15 +18,6 @@ func NewHandler(svc Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-type registerRequest struct {
-	FullName string  `json:"full_name" binding:"required,min=2"`
-	CPF      string  `json:"cpf" binding:"required,len=11"`
-	CNS      string  `json:"cns" binding:"required,len=15"`
-	Email    *string `json:"email" binding:"omitempty,email"`
-	Phone    *string `json:"phone" binding:"omitempty"`
-	Password string  `json:"password" binding:"required,min=6"`
-}
-
 func (h *Handler) Create(ctx *gin.Context) {
 	var input CreatePatientInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
@@ -33,8 +25,15 @@ func (h *Handler) Create(ctx *gin.Context) {
 		return
 	}
 
-	userID := getUserID(ctx)
-	patient, err := h.svc.Create(ctx, userID, input)
+	claims, ok := ctx.MustGet("claims").(*jwt.Claims)
+
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	SubjectID := claims.SubjectID
+	patient, err := h.svc.CreatePatientAsPatient(ctx, SubjectID, input)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

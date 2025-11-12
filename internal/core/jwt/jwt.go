@@ -17,9 +17,9 @@ type JWTManager struct {
 }
 
 type Claims struct {
-	UserID uint       `json:"uid"`
-	Email  string     `json:"email"`
-	Role   model.Role `json:"role"`
+	SubjectID uint       `json:"uid"`
+	Email     string     `json:"email"`
+	Role      model.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -31,15 +31,15 @@ func NewJWTManager(secret, issuer string, ttl time.Duration) *JWTManager {
 	}
 }
 
-func (j *JWTManager) Generate(u *model.User) (string, error) {
+func (j *JWTManager) GenerateToken(u *model.User) (string, error) {
 	now := time.Now().UTC()
 	claims := &Claims{
-		UserID: u.ID,
-		Email:  u.Email,
-		Role:   u.Role,
+		SubjectID: u.UID,
+		Email:     u.Email,
+		Role:      u.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    j.Issuer,
-			Subject:   strconv.FormatUint(uint64(u.ID), 10),
+			Subject:   strconv.FormatUint(uint64(u.UID), 10),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(j.TTL)),
 		},
@@ -48,7 +48,7 @@ func (j *JWTManager) Generate(u *model.User) (string, error) {
 	return t.SignedString(j.Secret)
 }
 
-func (j *JWTManager) Parse(tokenStr string) (*Claims, error) {
+func (j *JWTManager) ParseToken(tokenStr string) (*Claims, error) {
 	tok, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, errors.New("unexpected signing method")

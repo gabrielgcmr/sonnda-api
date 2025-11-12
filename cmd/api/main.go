@@ -11,11 +11,17 @@ import (
 	"sonnda-api/internal/core/model"
 	"sonnda-api/internal/database"
 	"sonnda-api/internal/middleware"
+	"sonnda-api/internal/patient"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	//carregar .env
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️  .env não carregado automaticamente")
+	}
 
 	//conectar db
 	database.Connect()
@@ -46,7 +52,8 @@ func main() {
 
 	//routes
 	apiV1 := r.Group("/api/v1")
-	auth.AuthRoutes(apiV1, db, jwtMgr)
+	auth.Routes(apiV1, jwtMgr)
+	patient.Routes(apiV1)
 
 	//migrations
 	if err := db.AutoMigrate(

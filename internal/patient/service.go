@@ -13,7 +13,8 @@ var (
 )
 
 type Service interface {
-	Create(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
+	CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
+	CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
 	Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.PatientProfile, error)
 	SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.PatientProfile, error)
 	GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.PatientProfile, error)
@@ -23,11 +24,38 @@ type service struct {
 	repo Repository
 }
 
+// CreatePatientAsDoctor implements Service.
 func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
+func (s *service) CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
+	// 1. Verifica se o CPF já existe
+	existing, err := s.repo.FindByCPF(ctx, input.CPF)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrCPFAlreadyExists
+	}
+
+	// 2. Criar o PatientProfile
+	patient := &model.PatientProfile{
+		UserID:    actorID,
+		FullName:  input.FullName,
+		BirthDate: input.BirthDate,
+		Gender:    input.Gender,
+		CPF:       input.CPF,
+		Phone:     input.Phone,
+	}
+	if err := s.repo.Create(ctx, patient); err != nil {
+		return nil, err
+	}
+
+	return patient, nil
+}
+
+func (s *service) CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
 	existing, err := s.repo.FindByCPF(ctx, input.CPF)
 	if err != nil {
 		return nil, err

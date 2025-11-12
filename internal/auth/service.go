@@ -62,7 +62,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*model.Use
 		return nil, "", ErrInvalidCredentials
 	}
 
-	token, err := s.jwt.Generate(u)
+	token, err := s.jwt.GenerateToken(u)
 	if err != nil {
 		return nil, "", err
 	}

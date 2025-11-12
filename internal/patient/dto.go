@@ -14,6 +14,15 @@ type CreatePatientInput struct {
 	Phone     *string      `json:"phone,omitempty"`
 }
 
+type CreatePatientByDoctorInput struct {
+	Email     string       `json:"email"`
+	FullName  string       `json:"full_name"`
+	BirthDate time.Time    `json:"birth_date"`
+	Gender    model.Gender `json:"gender"`
+	CPF       string       `json:"cpf"`
+	Phone     *string      `json:"phone,omitempty"`
+}
+
 type SelfUpdateInput struct {
 	Phone     *string `json:"phone,omitempty"`
 	AvatarURL string  `json:"avatar_url,omitempty"`

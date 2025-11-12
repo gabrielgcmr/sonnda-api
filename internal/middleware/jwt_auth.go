@@ -9,23 +9,22 @@ import (
 	"sonnda-api/internal/core/jwt"
 )
 
-func NewAuthMiddleware(jwt *jwt.JWTManager) gin.HandlerFunc {
+func NewAuthMiddleware(jwtManager *jwt.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		h := c.GetHeader("Authorization")
-		if !strings.HasPrefix(h, "Bearer ") {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing_token"})
 			return
 		}
-		raw := strings.TrimPrefix(h, "Bearer ")
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		claims, err := jwt.Parse(raw)
+		claims, err := jwtManager.ParseToken(tokenStr)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
 			return
 		}
 
-		c.Set("userID", claims.UserID)
-		c.Set("role", claims.Role)
+		c.Set("claims", claims)
 		c.Next()
 	}
 }
