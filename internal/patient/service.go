@@ -13,12 +13,12 @@ var (
 )
 
 type Service interface {
-	CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
-	CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error)
-	Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.PatientProfile, error)
-	SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.PatientProfile, error)
-	GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.PatientProfile, error)
-	List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error)
+	CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.Patient, error)
+	CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.Patient, error)
+	Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.Patient, error)
+	SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.Patient, error)
+	GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.Patient, error)
+	List(ctx context.Context, limit, offset int) ([]model.Patient, error)
 }
 type service struct {
 	repo Repository
@@ -29,7 +29,7 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
+func (s *service) CreatePatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.Patient, error) {
 	// 1. Verifica se o CPF já existe
 	existing, err := s.repo.FindByCPF(ctx, input.CPF)
 	if err != nil {
@@ -40,7 +40,7 @@ func (s *service) CreatePatient(ctx context.Context, actorID uint, input CreateP
 	}
 
 	// 2. Criar o PatientProfile
-	patient := &model.PatientProfile{
+	patient := &model.Patient{
 		UserID:    actorID,
 		FullName:  input.FullName,
 		BirthDate: input.BirthDate,
@@ -55,7 +55,7 @@ func (s *service) CreatePatient(ctx context.Context, actorID uint, input CreateP
 	return patient, nil
 }
 
-func (s *service) CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.PatientProfile, error) {
+func (s *service) CreatePatientAsPatient(ctx context.Context, actorID uint, input CreatePatientInput) (*model.Patient, error) {
 	existing, err := s.repo.FindByCPF(ctx, input.CPF)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (s *service) CreatePatientAsPatient(ctx context.Context, actorID uint, inpu
 		return nil, ErrCPFAlreadyExists
 	}
 
-	patient := &model.PatientProfile{
+	patient := &model.Patient{
 		UserID:    input.UserID,
 		FullName:  input.FullName,
 		BirthDate: input.BirthDate,
@@ -79,7 +79,7 @@ func (s *service) CreatePatientAsPatient(ctx context.Context, actorID uint, inpu
 	return patient, nil
 }
 
-func (s *service) Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.PatientProfile, error) {
+func (s *service) Update(ctx context.Context, actorID uint, actorRole string, userID uint, input UpdatePatientInput) (*model.Patient, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (s *service) Update(ctx context.Context, actorID uint, actorRole string, us
 	return patient, nil
 }
 
-func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.PatientProfile, error) {
+func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateInput) (*model.Patient, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func (s *service) SelfUpdate(ctx context.Context, userID uint, input SelfUpdateI
 	return patient, nil
 }
 
-func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.PatientProfile, error) {
+func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole string, userID uint) (*model.Patient, error) {
 	patient, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -141,6 +141,6 @@ func (s *service) GetByUserID(ctx context.Context, actorID uint, actorRole strin
 	return patient, nil
 }
 
-func (s *service) List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error) {
+func (s *service) List(ctx context.Context, limit, offset int) ([]model.Patient, error) {
 	return s.repo.List(ctx, limit, offset)
 }

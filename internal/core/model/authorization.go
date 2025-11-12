@@ -4,13 +4,13 @@ import "time"
 
 // Sistema de autorizações com histórico
 type Authorization struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	UserID      uint       `gorm:"not null" json:"user_id"`
-	PatientID   uint       `gorm:"not null" json:"patient_id"`
-	Status      AuthStatus `gorm:"type:varchar(20);not null" json:"status"`
-	RequestedAt time.Time  `json:"requested_at"`
-	ApprovedAt  *time.Time `json:"approved_at,omitempty"`
-	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	AuthorizedID uint       `gorm:"not null" json:"user_id"`
+	PatientID    uint       `gorm:"not null" json:"patient_id"`
+	Status       AuthStatus `gorm:"type:varchar(20);not null" json:"status"`
+	RequestedAt  time.Time  `json:"requested_at"`
+	ApprovedAt   *time.Time `json:"approved_at,omitempty"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
 
 	// Histórico de alterações
 	History []AuthorizationHistory `gorm:"foreignKey:AuthorizationID" json:"history"`
