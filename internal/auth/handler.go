@@ -76,7 +76,7 @@ func (handler *Handler) Register(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, gin.H{
-		"id":    user.UID,
+		"id":    user.ID,
 		"email": user.Email,
 		"role":  user.Role,
 	})
@@ -126,7 +126,7 @@ func (handler *Handler) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"accessToken": token,
 		"user": gin.H{
-			"id":    user.UID,
+			"id":    user.ID,
 			"email": user.Email,
 			"role":  user.Role,
 		},
@@ -148,7 +148,7 @@ func (handler *Handler) Me(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"id":    u.UID,
+		"id":    u.ID,
 		"email": u.Email,
 		"role":  u.Role,
 	})

@@ -11,7 +11,7 @@ const (
 )
 
 type User struct {
-	UID          uint      `gorm:"primaryKey"`
+	ID           uint      `gorm:"primaryKey"`
 	Email        string    `gorm:"uniqueIndex;not null"`
 	PasswordHash string    `gorm:"not null"`
 	Role         Role      `gorm:"type:varchar(20);not null"`

@@ -77,7 +77,7 @@ func main() {
 	//migrations
 	if err := db.AutoMigrate(
 		&model.User{},
-		&model.PatientProfile{},
+		&model.Patient{},
 	); err != nil {
 		log.Fatalf("Erro ao migrar tabela users: %v", err)
 	}

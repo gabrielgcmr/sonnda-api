@@ -4,8 +4,11 @@ import (
 	"time"
 )
 
-type PatientProfile struct {
-	UserID    uint       `gorm:"primaryKey" json:"user_id"`
+type Patient struct {
+	ID     uint `gorm:"primaryKey" json:"id"`
+	UserID uint `gorm:"uniqueIndex;not null" json:"user_id"`
+	User   User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
+
 	CPF       string     `gorm:"size:11;not null;uniqueIndex" json:"cpf"`
 	CNS       *string    `gorm:"size:15" json:"cns,omitempty"`
 	FullName  string     `gorm:"size:255;not null" json:"full_name"`
@@ -18,7 +21,7 @@ type PatientProfile struct {
 	UpdatedAt *time.Time `gorm:"autoUpdateTime" json:"updated_at,omitempty"`
 
 	// Relacionamentos
-	MedicalRecords []MedicalRecord `gorm:"foreignKey:UserID" json:"medical_records"`
+	MedicalRecords []MedicalRecord `gorm:"foreignKey:PatientID" json:"medical_records"`
 	Authorizations []Authorization `gorm:"foreignKey:PatientID" json:"authorizations"`
 }
 
@@ -44,8 +47,10 @@ const (
 
 // Mantendo a mesma estrutura do seu Kotlin
 type MedicalRecord struct {
-	ID          uint              `gorm:"primaryKey" json:"id"`
-	UserID      uint              `gorm:"not null" json:"user_id"`
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	PatientID uint    `gorm:"not null" json:"patient_id"`
+	Patient   Patient `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
 	CreatedBy   uint              `gorm:"not null" json:"created_by"` // UserID de quem criou
 	EntryType   MedicalRecordType `gorm:"type:varchar(50);not null" json:"entry_type"`
 	Title       string            `gorm:"not null" json:"title"`

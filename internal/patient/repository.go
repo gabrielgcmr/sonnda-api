@@ -14,14 +14,14 @@ var (
 
 type Repository interface {
 	// Operações CRUD básicas
-	Create(ctx context.Context, patient *model.PatientProfile) error
-	Update(ctx context.Context, patient *model.PatientProfile) error
+	Create(ctx context.Context, patient *model.Patient) error
+	Update(ctx context.Context, patient *model.Patient) error
 	Delete(ctx context.Context, id uint) error
-	List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error)
+	List(ctx context.Context, limit, offset int) ([]model.Patient, error)
 
 	// Finders
-	FindByUserID(ctx context.Context, userID uint) (*model.PatientProfile, error)
-	FindByCPF(ctx context.Context, cpf string) (*model.PatientProfile, error)
+	FindByUserID(ctx context.Context, userID uint) (*model.Patient, error)
+	FindByCPF(ctx context.Context, cpf string) (*model.Patient, error)
 
 	// Relacionamentos
 	FindAuthorizations(ctx context.Context, patientID uint) ([]model.Authorization, error)
@@ -42,23 +42,23 @@ func NewRepository(db *gorm.DB) Repository {
 }
 
 // Create: Cadastra um novo usuário
-func (r *repository) Create(ctx context.Context, patient *model.PatientProfile) error {
+func (r *repository) Create(ctx context.Context, patient *model.Patient) error {
 	return r.db.WithContext(ctx).Create(patient).Error
 }
 
 // Update: Atualiza dados do paciente
-func (r *repository) Update(ctx context.Context, patient *model.PatientProfile) error {
+func (r *repository) Update(ctx context.Context, patient *model.Patient) error {
 	return r.db.WithContext(ctx).Save(patient).Error
 }
 
 // Delete remove paciente (soft delete se configurado)
 func (r *repository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.PatientProfile{}, id).Error
+	return r.db.WithContext(ctx).Delete(&model.Patient{}, id).Error
 }
 
 // List retorna lista de pacientes com paginação
-func (r *repository) List(ctx context.Context, limit, offset int) ([]model.PatientProfile, error) {
-	var patients []model.PatientProfile
+func (r *repository) List(ctx context.Context, limit, offset int) ([]model.Patient, error) {
+	var patients []model.Patient
 	err := r.db.WithContext(ctx).
 		Limit(limit).
 		Offset(offset).
@@ -67,8 +67,8 @@ func (r *repository) List(ctx context.Context, limit, offset int) ([]model.Patie
 }
 
 // FindByUserID busca paciente por user_id
-func (r *repository) FindByUserID(ctx context.Context, userID uint) (*model.PatientProfile, error) {
-	var p model.PatientProfile
+func (r *repository) FindByUserID(ctx context.Context, userID uint) (*model.Patient, error) {
+	var p model.Patient
 	if err := r.db.WithContext(ctx).
 		Preload("Authorizations").
 		Preload("MedicalRecords").
@@ -81,8 +81,8 @@ func (r *repository) FindByUserID(ctx context.Context, userID uint) (*model.Pati
 	return &p, nil
 }
 
-func (r *repository) FindByCPF(ctx context.Context, cpf string) (*model.PatientProfile, error) {
-	var p model.PatientProfile
+func (r *repository) FindByCPF(ctx context.Context, cpf string) (*model.Patient, error) {
+	var p model.Patient
 	if err := r.db.WithContext(ctx).First(&p, "cpf = ?", cpf).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

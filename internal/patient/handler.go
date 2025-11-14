@@ -32,7 +32,7 @@ func (h *Handler) Create(ctx *gin.Context) {
 		return
 	}
 
-	SubjectID := claims.SubjectID
+	SubjectID := claims.ID
 	patient, err := h.svc.CreatePatientAsPatient(ctx, SubjectID, input)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
