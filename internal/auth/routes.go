@@ -2,16 +2,12 @@ package auth
 
 import (
 	"sonnda-api/internal/core/jwt"
-	"sonnda-api/internal/database"
 	"sonnda-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Routes(rg *gin.RouterGroup, jwt *jwt.JWTManager) {
-	repo := NewRepository(database.DB)
-	svc := NewService(repo, jwt)
-	h := NewHandler(svc)
+func Routes(rg *gin.RouterGroup, h *Handler, jwt *jwt.JWTManager) {
 
 	// Rotas públicas de autenticação
 	// POST /api/v1/auth/login
