@@ -1,9 +1,24 @@
 package patient
 
-import "gorm.io/gorm"
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
 
-func Build(db *gorm.DB) *Handler {
+type Module struct {
+	handler *Handler
+}
+
+func NewModule(db *gorm.DB) *Module {
 	repo := NewRepository(db)
 	svc := NewService(repo)
-	return NewHandler(svc)
+	handler := NewHandler(svc)
+
+	return &Module{
+		handler: handler,
+	}
+}
+
+func (m *Module) SetupRoutes(rg *gin.RouterGroup) {
+	Routes(rg, m.handler)
 }

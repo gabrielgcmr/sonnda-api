@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -14,11 +15,15 @@ import (
 	"sonnda-api/internal/middleware"
 	"sonnda-api/internal/patient"
 
+	"cloud.google.com/go/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func main() {
+	//Contexto raiz
+	ctx := context.Background()
+
 	//carregar .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  .env não carregado automaticamente")
@@ -27,6 +32,12 @@ func main() {
 	//conectar db
 	database.Connect()
 	db := database.DB
+
+	//GCS
+	storage, err := storage.NewClient(ctx)
+	if err != nil {
+		log.Fatalf("erro ao criar storage client: %v", err)
+	}
 
 	//montar o gin e rotas
 	r := gin.New()
@@ -56,23 +67,20 @@ func main() {
 
 	//Modules
 	//Auth
-	authHandler := auth.Build(db, jwtMgr)
-	auth.Routes(apiV1, authHandler, jwtMgr)
+	authModule := auth.NewModule(db, jwtMgr)
+	authModule.SetupRoutes(apiV1)
 
 	//Patient
-	patientHandler := patient.Build(db)
-	patient.Routes(apiV1, patientHandler)
+	patientModule := patient.NewModule(db)
+	patientModule.SetupRoutes(apiV1)
 
 	//Exam
-	examModule, _ := exam.NewModule(ctx, "sonnda.firebasestorage.app")
-	exam.RegisterRoutes(apiV1, examModule.Handler)
+	examModule := exam.NewModule(storage, "sonnda.firebasestorage.app")
+	examModule.SetupRoutes(apiV1)
 
 	// FUTUROS:
 	// doctorHandler := doctor.Build(db)
 	// doctor.Routes(api, doctorHandler)
-
-	// examsHandler := exams.Build(db)
-	// exams.Routes(api, examsHandler)
 
 	//migrations
 	if err := db.AutoMigrate(

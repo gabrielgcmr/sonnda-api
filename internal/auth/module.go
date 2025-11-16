@@ -3,11 +3,26 @@ package auth
 import (
 	"sonnda-api/internal/core/jwt"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func Build(db *gorm.DB, jwtMgr *jwt.JWTManager) *Handler {
+type Module struct {
+	Handler *Handler
+	jwtMgr  *jwt.JWTManager
+}
+
+func NewModule(db *gorm.DB, jwtMgr *jwt.JWTManager) *Module {
 	repo := NewRepository(db)
 	svc := NewService(repo, jwtMgr)
-	return NewHandler(svc)
+	handler := NewHandler(svc)
+
+	return &Module{
+		Handler: handler,
+		jwtMgr:  jwtMgr,
+	}
+}
+
+func (m *Module) SetupRoutes(rg *gin.RouterGroup) {
+	Routes(rg, m.Handler, m.jwtMgr)
 }
