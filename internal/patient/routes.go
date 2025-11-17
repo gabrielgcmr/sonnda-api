@@ -11,16 +11,16 @@ func Routes(rg *gin.RouterGroup, h *Handler) {
 	// patients.Use(authMiddleware)
 
 	patients.POST("", h.Create)
+
 	patients.GET("", h.List)
 
 	// Rotas que mexem com identificação individual
-	patients.GET("/:id", h.GetByID)
-	patients.PUT("/:id", h.Update)
+	//patients.GET("/:id", h.GetByID)
 	//patients.PATCH("/:id", h.PartialUpdate)
 
 	// Rotas relativas ao próprio usuário logado
-	me := rg.Group("/me")
+	//me := rg.Group("/me")
 	// me.Use(authMiddleware)
 	//me.GET("", h.SelfGet)
-	me.PATCH("", h.SelfUpdate)
+	//me.PATCH("", h.SelfUpdate)
 }

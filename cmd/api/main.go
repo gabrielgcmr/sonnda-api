@@ -1,16 +1,11 @@
 package main
 
 import (
+	//"context"
 	"log"
-	"os"
 
-	"time"
-
-	"sonnda-api/internal/auth"
-	"sonnda-api/internal/core/jwt"
-	"sonnda-api/internal/core/model"
 	"sonnda-api/internal/database"
-	"sonnda-api/internal/exam"
+	//"sonnda-api/internal/exam"
 	"sonnda-api/internal/middleware"
 	"sonnda-api/internal/patient"
 
@@ -19,6 +14,9 @@ import (
 )
 
 func main() {
+	//context
+	//ctx := context.Background()
+
 	//carregar .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  .env não carregado automaticamente")
@@ -36,12 +34,7 @@ func main() {
 	// 🌐 Aplica o middleware de CORS
 	r.Use(middleware.SetupCors())
 
-	//config
-	jwtMgr := jwt.NewJWTManager(
-		os.Getenv("JWT_SECRET"),
-		"sonnda-api",
-		24*time.Hour,
-	)
+	middleware.InitSupabaseAuth()
 
 	//routes
 	apiV1 := r.Group("/api/v1")
@@ -55,17 +48,17 @@ func main() {
 	})
 
 	//Modules
-	//Auth
-	authHandler := auth.Build(db, jwtMgr)
-	auth.Routes(apiV1, authHandler, jwtMgr)
+	//AuthSupabase
+	protected := apiV1.Group("")
+	protected.Use(middleware.SupabaseAuth())
 
 	//Patient
 	patientHandler := patient.Build(db)
-	patient.Routes(apiV1, patientHandler)
+	patient.Routes(protected, patientHandler)
 
 	//Exam
-	examModule, _ := exam.NewModule(ctx, "sonnda.firebasestorage.app")
-	exam.RegisterRoutes(apiV1, examModule.Handler)
+	//examModule, _ := exam.NewModule(ctx, "sonnda.firebasestorage.app")
+	//exam.RegisterRoutes(protected, examModule.Handler)
 
 	// FUTUROS:
 	// doctorHandler := doctor.Build(db)
@@ -73,14 +66,6 @@ func main() {
 
 	// examsHandler := exams.Build(db)
 	// exams.Routes(api, examsHandler)
-
-	//migrations
-	if err := db.AutoMigrate(
-		&model.User{},
-		&model.Patient{},
-	); err != nil {
-		log.Fatalf("Erro ao migrar tabela users: %v", err)
-	}
 
 	log.Println("🚀 API running at http://localhost:8080")
 	r.Run(":8080")

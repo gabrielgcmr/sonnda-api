@@ -5,24 +5,21 @@ import (
 )
 
 type Patient struct {
-	ID     uint `gorm:"primaryKey" json:"id"`
-	UserID uint `gorm:"uniqueIndex;not null" json:"user_id"`
-	User   User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
-
-	CPF       string     `gorm:"size:11;not null;uniqueIndex" json:"cpf"`
-	CNS       *string    `gorm:"size:15" json:"cns,omitempty"`
-	FullName  string     `gorm:"size:255;not null" json:"full_name"`
-	BirthDate time.Time  `json:"birth_date"`
-	Gender    Gender     `gorm:"type:varchar(20)" json:"gender"`
-	Race      Race       `gorm:"type:varchar(50)" json:"race"`
-	AvatarURL string     `json:"avatar_url"`
-	Phone     *string    `gorm:"size:20" json:"phone,omitempty"`
-	CreatedAt *time.Time `gorm:"autoCreateTime" json:"created_at,omitempty"`
-	UpdatedAt *time.Time `gorm:"autoUpdateTime" json:"updated_at,omitempty"`
+	ID        uint      `json:"id"`
+	CPF       string    `json:"cpf"`
+	CNS       *string   `json:"cns,omitempty"`
+	FullName  string    `json:"full_name"`
+	BirthDate time.Time `json:"birth_date"`
+	Gender    Gender    `json:"gender"`
+	Race      Race      `json:"race"`
+	AvatarURL string    `json:"avatar_url"`
+	Phone     *string   `json:"phone,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// Relacionamentos
-	MedicalRecords []MedicalRecord `gorm:"foreignKey:PatientID" json:"medical_records"`
-	Authorizations []Authorization `gorm:"foreignKey:PatientID" json:"authorizations"`
+	MedicalRecords []MedicalRecord `json:"medical_records"`
+	Authorizations []Authorization `json:"authorizations"`
 }
 
 type Gender string
@@ -47,15 +44,15 @@ const (
 
 // Mantendo a mesma estrutura do seu Kotlin
 type MedicalRecord struct {
-	ID        uint    `gorm:"primaryKey" json:"id"`
-	PatientID uint    `gorm:"not null" json:"patient_id"`
+	ID        uint    `json:"id"`
+	PatientID uint    `json:"patient_id"`
 	Patient   Patient `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 
-	CreatedBy   uint              `gorm:"not null" json:"created_by"` // UserID de quem criou
-	EntryType   MedicalRecordType `gorm:"type:varchar(50);not null" json:"entry_type"`
-	Title       string            `gorm:"not null" json:"title"`
+	CreatedBy   uint              `json:"created_by"` // UserID de quem criou
+	EntryType   MedicalRecordType `json:"entry_type"`
+	Title       string            `json:"title"`
 	Description string            `json:"description"`
-	Date        time.Time         `gorm:"not null" json:"date"`
+	Date        time.Time         `json:"date"`
 	CreatedAt   time.Time         `json:"created_at"`
 
 	// Campos específicos por tipo

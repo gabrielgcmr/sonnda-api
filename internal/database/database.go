@@ -1,61 +1,43 @@
 package database
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"os"
 	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *gorm.DB
+var DB *pgxpool.Pool
 
 func Connect() {
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
-
-	// DEBUG: Mostre as variáveis que estão sendo usadas
-	log.Printf("🔍 Configuração do Banco:")
-	log.Printf("   DB_HOST: %s", host)
-	log.Printf("   DB_PORT: %s", port)
-	log.Printf("   DB_USER: %s", user)
-	log.Printf("   DB_NAME: %s", dbname)
-
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=America/Sao_Paulo",
-		host, port, user, password, dbname,
-	)
-
-	log.Printf("🔄 Tentando conectar no banco...")
-
-	var db *gorm.DB
-	var err error
-
-	for i := 0; i < 5; i++ {
-		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-		if err != nil {
-			log.Printf("⚠️  Tentativa %d/5 falhou: %v", i+1, err)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		break
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL não foi definida")
 	}
 
+	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		log.Fatalf("❌ Erro ao conectar no banco após várias tentativas: %v", err)
+		log.Fatalf("Erro no parse da DSN: %v", err)
 	}
 
-	sqlDB, _ := db.DB()
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	cfg.MaxConns = 10
+	cfg.MinConns = 2
+	cfg.MaxConnLifetime = time.Hour
+	cfg.MaxConnIdleTime = time.Minute * 30
 
-	DB = db
-	log.Println("✅ Banco de dados conectado com sucesso!")
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		log.Fatalf("Falha ao conectar no banco: %v", err)
+	}
+	defer pool.Close()
 
+	if err := pool.Ping(context.Background()); err != nil {
+		log.Fatalf("Erro ao pingar o banco: %v", err)
+	}
+
+	DB = pool
+
+	log.Println("Conectado ao PostgreSQL via pgxpool")
 }

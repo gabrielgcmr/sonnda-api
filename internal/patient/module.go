@@ -1,8 +1,10 @@
 package patient
 
-import "gorm.io/gorm"
+import (
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
-func Build(db *gorm.DB) *Handler {
+func Build(db *pgxpool.Pool) *Handler {
 	repo := NewRepository(db)
 	svc := NewService(repo)
 	return NewHandler(svc)

@@ -1,9 +1,7 @@
 package patient
 
 import (
-	"fmt"
 	"net/http"
-	"sonnda-api/internal/core/jwt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,71 +19,33 @@ func NewHandler(svc Service) *Handler {
 func (h *Handler) Create(ctx *gin.Context) {
 	var input CreatePatientInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid_input", "details": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_input",
+			"details": err.Error()})
 		return
 	}
 
-	claims, ok := ctx.MustGet("claims").(*jwt.Claims)
-
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	SubjectID := claims.ID
-	patient, err := h.svc.CreatePatientAsPatient(ctx, SubjectID, input)
+	patient, err := h.svc.Create(ctx, input)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(ctx, err)
 		return
 	}
 
 	ctx.JSON(http.StatusCreated, patient)
 }
 
-func (h *Handler) Update(ctx *gin.Context) {
+func (h *Handler) UpdateByCPF(ctx *gin.Context) {
+	cpf := ctx.Param("cpf")
+
 	var input UpdatePatientInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid_input", "details": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_input",
+			"details": err.Error()})
 		return
 	}
 
-	userID := parseUintParam(ctx, "id")
-	actorID := getUserID(ctx)
-	actorRole := getUserRole(ctx)
-
-	patient, err := h.svc.Update(ctx, actorID, actorRole, userID, input)
-	if err != nil {
-		handleServiceError(ctx, err)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, patient)
-}
-
-func (h *Handler) SelfUpdate(ctx *gin.Context) {
-	var input SelfUpdateInput
-	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid_input", "details": err.Error()})
-		return
-	}
-
-	userID := getUserID(ctx)
-
-	patient, err := h.svc.SelfUpdate(ctx, userID, input)
-	if err != nil {
-		handleServiceError(ctx, err)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, patient)
-}
-
-func (h *Handler) GetByID(ctx *gin.Context) {
-	userID := parseUintParam(ctx, "id")
-	actorID := getUserID(ctx)
-	actorRole := getUserRole(ctx)
-
-	patient, err := h.svc.GetByUserID(ctx, actorID, actorRole, userID)
+	patient, err := h.svc.UpdateByCPF(ctx, cpf, input)
 	if err != nil {
 		handleServiceError(ctx, err)
 		return
@@ -95,41 +55,21 @@ func (h *Handler) GetByID(ctx *gin.Context) {
 }
 
 func (h *Handler) List(ctx *gin.Context) {
-	// Poderia usar query param pra paginação
-	patients, err := h.svc.List(ctx, 100, 0)
+	list, err := h.svc.List(ctx, 100, 0)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_list_patients"})
 		return
 	}
-	ctx.JSON(http.StatusOK, patients)
-}
 
-// Helpers
-func getUserID(ctx *gin.Context) uint {
-	uid, _ := ctx.Get("userID")
-	return uid.(uint)
-}
-
-func getUserRole(ctx *gin.Context) string {
-	role, _ := ctx.Get("role")
-	return role.(string)
-}
-
-func parseUintParam(ctx *gin.Context, param string) uint {
-	id, _ := ctx.Params.Get(param)
-	var uid uint
-	fmt.Sscanf(id, "%d", &uid)
-	return uid
+	ctx.JSON(http.StatusOK, list)
 }
 
 func handleServiceError(ctx *gin.Context, err error) {
 	switch err {
-	case ErrUnauthorizedAccess:
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "unauthorized"})
-	case ErrPatientEditRestricted:
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot_edit_other_profile"})
 	case ErrCPFAlreadyExists:
 		ctx.JSON(http.StatusConflict, gin.H{"error": "cpf_already_exists"})
+	case ErrPatientNotFound:
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "patient_not_found"})
 	default:
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 	}

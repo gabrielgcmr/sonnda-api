@@ -5,144 +5,148 @@ import (
 	"errors"
 	"sonnda-api/internal/core/model"
 
-	"gorm.io/gorm"
-)
-
-var (
-	ErrPatientNotFound = errors.New("patient not found")
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
 	// Operações CRUD básicas
-	Create(ctx context.Context, patient *model.Patient) error
-	Update(ctx context.Context, patient *model.Patient) error
+	Create(ctx context.Context, p *model.Patient) error
+	Update(ctx context.Context, p *model.Patient) error
 	Delete(ctx context.Context, id uint) error
-	List(ctx context.Context, limit, offset int) ([]model.Patient, error)
 
 	// Finders
-	FindByUserID(ctx context.Context, userID uint) (*model.Patient, error)
 	FindByCPF(ctx context.Context, cpf string) (*model.Patient, error)
-
-	// Relacionamentos
-	FindAuthorizations(ctx context.Context, patientID uint) ([]model.Authorization, error)
-	CreateAuthorization(ctx context.Context, auth *model.Authorization) error
-	UpdateAuthorization(ctx context.Context, auth *model.Authorization) error
-
-	// Medical Records
-	CreateMedicalRecord(ctx context.Context, record *model.MedicalRecord) error
-	FindMedicalRecords(ctx context.Context, patientID uint) ([]model.MedicalRecord, error)
+	List(ctx context.Context, limit, offset int) ([]model.Patient, error)
 }
 
 type repository struct {
-	db *gorm.DB
+	db *pgxpool.Pool
 }
 
-func NewRepository(db *gorm.DB) Repository {
+func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db}
 }
 
 // Create: Cadastra um novo usuário
-func (r *repository) Create(ctx context.Context, patient *model.Patient) error {
-	return r.db.WithContext(ctx).Create(patient).Error
+func (r *repository) Create(ctx context.Context, p *model.Patient) error {
+	query := `
+	INSERT INTO patients (
+		cpf, cns, full_name, birth_date, gender, race, avatar_url, phone
+	)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+	RETURNING id, created_at, updated_at;
+	`
+
+	return r.db.QueryRow(ctx, query,
+		p.CPF,
+		p.CNS,
+		p.FullName,
+		p.BirthDate,
+		p.Gender,
+		p.Race,
+		p.AvatarURL,
+		p.Phone,
+	).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+
 }
 
 // Update: Atualiza dados do paciente
-func (r *repository) Update(ctx context.Context, patient *model.Patient) error {
-	return r.db.WithContext(ctx).Save(patient).Error
+func (r *repository) Update(ctx context.Context, p *model.Patient) error {
+	query := `
+	UPDATE patients
+	SET full_name=$1, birth_date=$2, gender=$3, race=$4, avatar_url=$5, phone=$6, updated_at=NOW()
+	WHERE id=$7;
+	`
+	_, err := r.db.Exec(ctx, query,
+		p.FullName,
+		p.BirthDate,
+		p.Gender,
+		p.Race,
+		p.AvatarURL,
+		p.Phone,
+		p.ID,
+	)
+
+	return err
 }
 
 // Delete remove paciente (soft delete se configurado)
 func (r *repository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.Patient{}, id).Error
+	_, err := r.db.Exec(ctx, "DELETE FROM patients WHERE id=$1", id)
+	return err
+}
+
+// FindByUserID busca paciente por user_id
+func (r *repository) FindByCPF(ctx context.Context, cpf string) (*model.Patient, error) {
+	query := `
+        SELECT id, cpf, cns, full_name, birth_date, gender, race, avatar_url, phone, created_at, updated_at
+        FROM patients
+        WHERE cpf=$1
+        LIMIT 1;
+    `
+	var p model.Patient
+	err := r.db.QueryRow(ctx, query, cpf).Scan(
+		&p.ID,
+		&p.CPF,
+		&p.CNS,
+		&p.FullName,
+		&p.BirthDate,
+		&p.Gender,
+		&p.Race,
+		&p.AvatarURL,
+		&p.Phone,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
 }
 
 // List retorna lista de pacientes com paginação
 func (r *repository) List(ctx context.Context, limit, offset int) ([]model.Patient, error) {
-	var patients []model.Patient
-	err := r.db.WithContext(ctx).
-		Limit(limit).
-		Offset(offset).
-		Find(&patients).Error
-	return patients, err
-}
+	query := `
+	SELECT id, cpf, cns, full_name, birth_date, gender, race, avatar_url, phone, created_at, updated_at
+	FROM patients
+	ORDER BY id DESC
+	LIMIT $1 OFFSET $2;
+	`
 
-// FindByUserID busca paciente por user_id
-func (r *repository) FindByUserID(ctx context.Context, userID uint) (*model.Patient, error) {
-	var p model.Patient
-	if err := r.db.WithContext(ctx).
-		Preload("Authorizations").
-		Preload("MedicalRecords").
-		First(&p, "user_id = ?", userID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrPatientNotFound
-		}
+	rows, err := r.db.Query(ctx, query, limit, offset)
+	if err != nil {
 		return nil, err
 	}
-	return &p, nil
-}
+	defer rows.Close()
 
-func (r *repository) FindByCPF(ctx context.Context, cpf string) (*model.Patient, error) {
-	var p model.Patient
-	if err := r.db.WithContext(ctx).First(&p, "cpf = ?", cpf).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+	var out []model.Patient
+
+	for rows.Next() {
+		var p model.Patient
+		if err := rows.Scan(&p.ID, &p.CPF, &p.CNS, &p.FullName,
+			&p.BirthDate, &p.Gender, &p.Race, &p.AvatarURL,
+			&p.Phone, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
 		}
-		return nil, err
+		out = append(out, p)
 	}
-	return &p, nil
+
+	return out, nil
+
 }
 
 // FindAuthorizations retorna todas as autorizações do paciente
-func (r *repository) FindAuthorizations(ctx context.Context, patientID uint) ([]model.Authorization, error) {
-	var auths []model.Authorization
-	err := r.db.WithContext(ctx).
-		Where("patient_id = ?", patientID).
-		Order("requested_at DESC").
-		Find(&auths).Error
-	return auths, err
-}
 
 // FindAuthorizationByUser busca autorização específica
-func (r *repository) FindAuthorizationByUser(ctx context.Context, userID, patientID uint) (*model.Authorization, error) {
-	var auth model.Authorization
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND patient_id = ?", userID, patientID).
-		Order("requested_at DESC").
-		First(&auth).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &auth, nil
-}
 
 // CreateAuthorization cria nova autorização
-func (r *repository) CreateAuthorization(ctx context.Context, auth *model.Authorization) error {
-	return r.db.WithContext(ctx).Create(auth).Error
-}
 
 // UpdateAuthorization atualiza autorização
-func (r *repository) UpdateAuthorization(ctx context.Context, auth *model.Authorization) error {
-	return r.db.WithContext(ctx).Save(auth).Error
-}
 
 // CreateMedicalRecord cria registro médico
-func (r *repository) CreateMedicalRecord(ctx context.Context, record *model.MedicalRecord) error {
-	return r.db.WithContext(ctx).Create(record).Error
-}
 
 // FindMedicalRecords retorna histórico médico do paciente
-func (r *repository) FindMedicalRecords(ctx context.Context, patientID uint) ([]model.MedicalRecord, error) {
-	var records []model.MedicalRecord
-	err := r.db.WithContext(ctx).
-		Where("patient_id = ?", patientID).
-		Preload("PreventionData").
-		Preload("ProblemData").
-		Preload("ExamData").
-		Preload("PhysicalExamData").
-		Order("date DESC").
-		Find(&records).Error
-	return records, err
-}

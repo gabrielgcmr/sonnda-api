@@ -1,8 +1,6 @@
 package admin
 
 import (
-	"sonnda-api/internal/middleware"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,9 +10,9 @@ func Routes(rg *gin.RouterGroup) {
 	//handler := NewHandler(svc)
 
 	// Todas as rotas de admin requerem autenticação e role de admin
-	admin := rg.Group("/admin")
+	//admin := rg.Group("/admin")
 
-	admin.Use(middleware.RequireAdmin())
+	//admin.Use(middleware.RequireAdmin())
 	{
 		// Gestão de usuários
 		// GET /api/v1/admin/users

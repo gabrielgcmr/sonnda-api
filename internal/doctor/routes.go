@@ -1,8 +1,8 @@
 package doctor
 
 import (
-	user "sonnda-api/internal/core/model"
-	"sonnda-api/internal/middleware"
+	//user "sonnda-api/internal/core/model"
+	//"sonnda-api/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,7 +12,7 @@ func Routes(rg *gin.RouterGroup) {
 	//svc := NewService(repo)
 	//handler := NewHandler(svc)
 
-	doctors := rg.Group("/doctors")
+	//doctors := rg.Group("/doctors")
 	{
 		// Rotas públicas (listagem para pacientes escolherem médicos)
 		// GET /api/v1/doctors
@@ -22,9 +22,9 @@ func Routes(rg *gin.RouterGroup) {
 		//doctors.GET("/:id", handler.GetByID)
 
 		// Rotas protegidas - apenas médicos
-		protected := doctors.Group("")
+		//protected := doctors.Group("")
 
-		protected.Use(middleware.RequireRole(user.RoleDoctor))
+		//protected.Use(middleware.RequireRole(user.RoleDoctor))
 		{
 			// GET /api/v1/doctors/me
 			//protected.GET("/me", handler.Me)
@@ -43,9 +43,9 @@ func Routes(rg *gin.RouterGroup) {
 		}
 
 		// Rotas apenas para admins
-		adminOnly := doctors.Group("")
+		//adminOnly := doctors.Group("")
 
-		adminOnly.Use(middleware.RequireAdmin())
+		//adminOnly.Use(middleware.RequireAdmin())
 		{
 			// POST /api/v1/doctors
 			//adminOnly.POST("", handler.Create)
