@@ -27,6 +27,7 @@ func (h *Handler) Create(ctx *gin.Context) {
 
 	patient, err := h.svc.Create(ctx, input)
 	if err != nil {
+		println("Error creating patient:", err.Error())
 		handleServiceError(ctx, err)
 		return
 	}
@@ -71,6 +72,9 @@ func handleServiceError(ctx *gin.Context, err error) {
 	case ErrPatientNotFound:
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "patient_not_found"})
 	default:
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "server_error",
+			"details": err.Error(), // ← Adicione isso temporariamente
+		})
 	}
 }

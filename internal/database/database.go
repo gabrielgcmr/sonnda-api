@@ -31,7 +31,6 @@ func Connect() {
 	if err != nil {
 		log.Fatalf("Falha ao conectar no banco: %v", err)
 	}
-	defer pool.Close()
 
 	if err := pool.Ping(context.Background()); err != nil {
 		log.Fatalf("Erro ao pingar o banco: %v", err)
@@ -40,4 +39,11 @@ func Connect() {
 	DB = pool
 
 	log.Println("Conectado ao PostgreSQL via pgxpool")
+}
+
+func Close() {
+	if DB != nil {
+		DB.Close()
+		log.Println("Conexão com PostgreSQL fechada")
+	}
 }

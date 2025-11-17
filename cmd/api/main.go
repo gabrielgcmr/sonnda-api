@@ -25,6 +25,7 @@ func main() {
 	//conectar db
 	database.Connect()
 	db := database.DB
+	defer database.Close()
 
 	//montar o gin e rotas
 	r := gin.New()
