@@ -54,8 +54,8 @@ func main() {
 	protected.Use(middleware.SupabaseAuth())
 
 	//Patient
-	patientHandler := patient.Build(db)
-	patient.Routes(protected, patientHandler)
+	patientModule := patient.NewModule(db)
+	patientModule.SetupRoutes(protected)
 
 	//Exam
 	//examModule, _ := exam.NewModule(ctx, "sonnda.firebasestorage.app")
