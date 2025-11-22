@@ -1,8 +1,6 @@
 package exam
 
 import (
-	"context"
-
 	"cloud.google.com/go/storage"
 )
 
@@ -10,18 +8,15 @@ type Module struct {
 	Handler *Handler
 }
 
-func NewModule(ctx context.Context, bucket string) (*Module, error) {
-	gcsClient, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, err
-	}
+func NewModule(gcsClient *storage.Client) *Module {
+	bucket := "sonnda.firebasestorage.app"
 
-	StorageClient := NewGCSStorage(gcsClient, bucket)
-	svc := NewService(StorageClient)
+	storage := NewGCSStorage(gcsClient, bucket)
+	svc := NewService(storage)
 	handle := NewHandler(svc)
 
 	return &Module{
 		Handler: handle,
-	}, nil
+	}
 
 }

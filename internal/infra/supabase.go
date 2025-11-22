@@ -1,4 +1,4 @@
-package database
+package infra
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 var DB *pgxpool.Pool
 
-func Connect() {
+func ConnectSupabase() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("DATABASE_URL não foi definida")
@@ -41,7 +41,7 @@ func Connect() {
 	log.Println("Conectado ao PostgreSQL via pgxpool")
 }
 
-func Close() {
+func CloseSupabase() {
 	if DB != nil {
 		DB.Close()
 		log.Println("Conexão com PostgreSQL fechada")

@@ -1,11 +1,10 @@
 package main
 
 import (
-	//"context"
 	"log"
 
-	"sonnda-api/internal/database"
-	//"sonnda-api/internal/exam"
+	"sonnda-api/internal/exam"
+	"sonnda-api/internal/infra"
 	"sonnda-api/internal/middleware"
 	"sonnda-api/internal/patient"
 
@@ -14,18 +13,22 @@ import (
 )
 
 func main() {
-	//context
-	//ctx := context.Background()
-
 	//carregar .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  .env não carregado automaticamente")
 	}
 
 	//conectar db
-	database.Connect()
-	db := database.DB
-	defer database.Close()
+	infra.ConnectSupabase()
+	db := infra.DB
+	defer infra.CloseSupabase()
+
+	//storage
+	gcsClient, err := infra.NewGCSClient()
+	if err != nil {
+		log.Fatalf("falha ao criar GCS client: %v", err)
+	}
+	defer gcsClient.Close()
 
 	//montar o gin e rotas
 	r := gin.New()
@@ -58,8 +61,8 @@ func main() {
 	patientModule.SetupRoutes(protected)
 
 	//Exam
-	//examModule, _ := exam.NewModule(ctx, "sonnda.firebasestorage.app")
-	//exam.RegisterRoutes(protected, examModule.Handler)
+	examModule := exam.NewModule(gcsClient)
+	exam.RegisterRoutes(protected, examModule.Handler)
 
 	// FUTUROS:
 	// doctorHandler := doctor.Build(db)
