@@ -1,8 +1,10 @@
 <!-- docs/architecture/problem-permissions.md -->
 # Permissões de problemas do paciente — A1.1
 
-Status: contrato documental concluído. A aplicação das políticas em código ocorre
-na etapa A2; este documento não altera as permissões atuais da API.
+Status: contrato documental concluído. A matriz de atores e ações também está
+codificada em `internal/features/authz/problem_policy.go`, ainda sem ligação aos
+endpoints. A integração das consultas e das regras clínicas ocorre em A2 e na
+Parte B; este documento não altera as permissões atuais da API.
 
 ## Atores e contexto
 
@@ -20,7 +22,8 @@ O tipo da conta e sua relação com um paciente são informações diferentes.
 Uma conta pode ser o próprio paciente de um prontuário e cuidadora em outro.
 Uma conta profissional também pode ser paciente ou cuidadora; sua condição
 profissional continua permitindo ações profissionais quando houver acesso.
-A1.2 define como consultar e validar esses contextos usando os dados existentes.
+A1.2 define como consultar e validar esses contextos e a confirmação
+profissional necessária para reconhecer o próprio paciente.
 
 ## Condições comuns
 

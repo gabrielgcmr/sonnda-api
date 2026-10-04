@@ -75,7 +75,9 @@ cada entrega e A3 verifica o conjunto.
 
 #### A1.1 — Matriz de ações e permissões
 
-Status: **concluída como contrato documental**. Implementação das políticas em A2.
+Status: **concluída como contrato documental**. Matriz codificada em `authz` e
+testada de forma isolada; integração das políticas com dados confiáveis e
+endpoints permanece em A2.
 
 Entrega: [Permissões de problemas do paciente](problem-permissions.md), contendo:
 
@@ -91,11 +93,19 @@ senha de habilitação fica na A1.3; gestão de vínculos na A1.4; interfaces na
 
 #### A1.2 — Identidade e vínculo com o paciente
 
+Status: **concluída como contrato documental**. Implementação das consultas e
+operações em A2, após definição das interfaces em A1.5.
+
+- Entrega: [Identidade e vínculo com o paciente](problem-identity-and-access.md).
 - Manter os tipos de conta `professional` e `basic_care`.
-- Formalizar como reconhecer o próprio paciente: identidade vinculada confiável;
-  criador do cadastro, familiar ou qualquer conta com acesso não é automaticamente paciente.
+- Reconhecer o próprio paciente somente por vínculo confirmado por outro
+  profissional com acesso prévio, com autoria e vigência registradas. Criador,
+  `owner_user_id` e `self` legados não comprovam identidade por si sós.
 - Formalizar como recuperar o vínculo ativo e sua relação (`self`, `caregiver`,
-  `family`, `professional`), pois o checker atual informa apenas se há acesso.
+  `family`, `professional`) e a proveniência da confirmação/concessão, pois o
+  checker atual informa apenas se há acesso.
+- A confirmação profissional concede acesso ao paciente na mesma operação;
+  revogação e substituição preservam autoria e não promovem registros antigos.
 - Definir tratamento de ausência/revogação do vínculo, conta profissional que
   também é paciente/cuidador e dados inconsistentes.
 - Preservar a checagem de acesso para profissionais; a condição profissional
@@ -146,6 +156,8 @@ em `patient/access`, com política aplicada por `authz` durante A2.
 - `patient/problem`: regras clínicas e mudanças de estado, incluindo cronicidade,
   com auditoria; implementação durante a Parte B.
 - Definir as interfaces entre os serviços e sua composição no bootstrap.
+- Definir endpoint e persistência da confirmação/revogação de identidade,
+  preservando os outros vínculos de acesso e o histórico de autoria.
 - Definir erros e observabilidade seguindo `AppError`/`humaerror` existentes.
 - Conferir os contratos de A1.1–A1.4 em conjunto, sem mover regras clínicas para
   autenticação ou para o checker de acesso.
