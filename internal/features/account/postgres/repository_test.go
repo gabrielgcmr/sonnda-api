@@ -96,6 +96,28 @@ func TestUpdateUsesReturnedDatabaseValues(t *testing.T) {
 	}
 }
 
+func TestActivateProfessionalUsesAtomicQueryAndMapsErrors(t *testing.T) {
+	profile := testProfile()
+	row := profileRow(profile)
+	row.AccountType = string(accountdomain.AccountTypeProfessional)
+	queries := &stubQueries{row: row}
+	repository := &Repository{queries: queries}
+
+	activated, err := repository.ActivateProfessional(t.Context(), profile.ID)
+	if err != nil || activated == nil || activated.AccountType != accountdomain.AccountTypeProfessional {
+		t.Fatalf("activation result=%+v error=%v", activated, err)
+	}
+	queries.err = fmt.Errorf("activate: %w", pgx.ErrNoRows)
+	if _, err := repository.ActivateProfessional(t.Context(), profile.ID); !errors.Is(err, account.ErrUserNotFound) {
+		t.Fatalf("missing account error=%v", err)
+	}
+	failure := errors.New("database unavailable")
+	queries.err = failure
+	if _, err := repository.ActivateProfessional(t.Context(), profile.ID); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, failure) {
+		t.Fatalf("persistence error=%v", err)
+	}
+}
+
 func TestWriteErrorsPreserveRepositoryContract(t *testing.T) {
 	unique := fmt.Errorf("query: %w", &pgconn.PgError{Code: "23505"})
 	failure := errors.New("database unavailable")
@@ -170,6 +192,10 @@ type stubQueries struct {
 	rows    int64
 	created usersqlc.CreateUserParams
 	updated usersqlc.UpdateUserParams
+}
+
+func (q *stubQueries) ActivateUserAsProfessional(context.Context, uuid.UUID) (usersqlc.User, error) {
+	return q.row, q.err
 }
 
 func (q *stubQueries) CreateUser(_ context.Context, params usersqlc.CreateUserParams) error {

@@ -12,6 +12,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activateUserAsProfessional = `-- name: ActivateUserAsProfessional :one
+UPDATE
+  users
+SET
+  account_type = 'professional',
+  updated_at = now()
+WHERE
+  id = $1
+  AND deleted_at IS NULL RETURNING id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) ActivateUserAsProfessional(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, activateUserAsProfessional, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.AuthIssuer,
+		&i.AuthSubject,
+		&i.Email,
+		&i.FullName,
+		&i.BirthDate,
+		&i.Cpf,
+		&i.Phone,
+		&i.AccountType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO
   users (

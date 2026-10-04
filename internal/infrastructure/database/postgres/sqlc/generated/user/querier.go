@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ActivateUserAsProfessional(ctx context.Context, id uuid.UUID) (User, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeleteUser(ctx context.Context, id uuid.UUID) (int64, error)
 	FindUserByAuthIdentity(ctx context.Context, arg FindUserByAuthIdentityParams) (User, error)

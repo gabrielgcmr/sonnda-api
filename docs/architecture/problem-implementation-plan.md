@@ -117,6 +117,12 @@ exclusivamente do backend. Nenhuma permissão vem de um papel enviado no payload
 
 #### A1.3 — Habilitação profissional por senha
 
+Status: **concluída no contrato e no código**. O endpoint Huma, a validação bcrypt,
+a persistência em `account` e o limite distribuído de tentativas com Redis estão
+implementados e testados.
+
+Entrega: [Habilitação profissional por senha](problem-professional-activation.md).
+
 - Formalizar `POST /me/professional-activation` para a própria conta autenticada
   e registrada; validar senha e persistir `account_type=professional`.
 - Manter senha de habilitação separada da senha de login.
@@ -130,8 +136,8 @@ exclusivamente do backend. Nenhuma permissão vem de um papel enviado no payload
   a condição profissional persistida. Ativação não concede vínculos com pacientes.
 - Documentar que trocar o hash afeta novas ativações e não rebaixa contas existentes.
 
-Entrega: contrato do endpoint, configuração e critérios de aceitação, preparado
-para implementação em `account` durante A2.
+Entrega: contrato e implementação do endpoint, configuração e critérios de
+aceitação. A autorização posterior consulta o tipo persistido da conta.
 
 #### A1.4 — Concessão e revogação de cuidador
 
@@ -177,8 +183,8 @@ quem pode agir, como obter seu contexto e quais dados cada operação aceita.
   a profissionais com acesso.
 - Autorizar resolução pelo próprio paciente ou cuidador autorizado daquele paciente,
   sujeita à regra clínica de agudo e ao vínculo ativo no momento da operação.
-- Implementar habilitação profissional em `account` e gerenciamento de cuidadores
-  em `patient/access`, com as rotas e os contratos definidos em A1.
+- Reutilizar a habilitação profissional implementada em `account` e implementar o
+  gerenciamento de cuidadores em `patient/access`, conforme os contratos de A1.
 - Autorizar concessão/revogação de cuidador exclusivamente a profissional com
   acesso prévio ao paciente; impedir autoatribuição de acesso por essa operação.
 - Aplicar a permissão de classificação também na criação e unificação.

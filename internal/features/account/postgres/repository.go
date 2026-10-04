@@ -189,6 +189,22 @@ func (r *Repository) Update(ctx context.Context, u *accountdomain.User) error {
 	return nil
 }
 
+func (r *Repository) ActivateProfessional(ctx context.Context, id uuid.UUID) (*accountdomain.User, error) {
+	row, err := r.queries.ActivateUserAsProfessional(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, account.ErrUserNotFound
+		}
+		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	return &accountdomain.User{
+		ID: row.ID, AuthIssuer: row.AuthIssuer, AuthSubject: row.AuthSubject,
+		Email: row.Email, FullName: row.FullName, BirthDate: row.BirthDate.Time,
+		CPF: row.Cpf, Phone: row.Phone, AccountType: accountdomain.AccountType(row.AccountType),
+		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+	}, nil
+}
+
 func (r *Repository) FindByEmail(ctx context.Context, email string) (*accountdomain.User, error) {
 	row, err := r.queries.FindUserByEmail(ctx, email)
 	if err != nil {

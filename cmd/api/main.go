@@ -27,6 +27,8 @@ import (
 	postgress "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
 	filestorage "github.com/gabrielgcmr/sonnda/internal/infrastructure/filestorage"
 	geminiinfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/gemini"
+	redisstore "github.com/gabrielgcmr/sonnda/internal/infrastructure/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 // version is overridden via -ldflags in build/release pipelines.
@@ -69,6 +71,15 @@ func main() {
 	}
 	defer dbClient.Close()
 
+	var redisClient *redis.Client
+	if cfg.Database.RedisURL != "" {
+		redisClient, err = redisstore.NewClient(cfg.Database.RedisURL)
+		if err != nil {
+			logInfraFatal("falha ao criar client do Redis", err)
+		}
+		defer redisClient.Close()
+	}
+
 	//6. Conectando outros servicos
 	//6.1 Storage Service (GCS)
 	gcpOpts := buildGCPClientOptions(cfg)
@@ -101,7 +112,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, labTextExtractor, storageService, cfg.OCR)
+	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, cfg.OCR, cfg.ProfessionalActivation)
 
 	//8 Middlewares
 	//8.1 API

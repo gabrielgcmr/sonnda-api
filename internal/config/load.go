@@ -20,16 +20,21 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	professionalActivationCfg, err := loadProfessionalActivationConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := &Config{
-		App:      appCfg,
-		HTTP:     loadHTTPConfig(),
-		Database: loadDatabaseConfig(),
-		Auth:     loadAuthConfig(),
-		Storage:  loadStorageConfig(),
-		CORS:     loadCORSConfig(appCfg.Env),
-		Gemini:   geminiCfg,
-		OCR:      ocrCfg,
+		App:                    appCfg,
+		HTTP:                   loadHTTPConfig(),
+		Database:               loadDatabaseConfig(),
+		Auth:                   loadAuthConfig(),
+		Storage:                loadStorageConfig(),
+		CORS:                   loadCORSConfig(appCfg.Env),
+		Gemini:                 geminiCfg,
+		OCR:                    ocrCfg,
+		ProfessionalActivation: professionalActivationCfg,
 	}
 
 	var violations []apperr.Violation

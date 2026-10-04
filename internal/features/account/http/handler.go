@@ -3,6 +3,7 @@ package accounthttp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/features/account"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
 
@@ -21,9 +23,14 @@ type userService interface {
 	Delete(ctx context.Context, userID uuid.UUID) error
 }
 
+type professionalActivator interface {
+	Activate(ctx context.Context, accountID uuid.UUID, password, origin string) (*accountdomain.User, error)
+}
+
 type Handler struct {
 	onboarding account.Onboarding
 	userSvc    userService
+	activation professionalActivator
 }
 
 type createAccountInput struct {
@@ -48,6 +55,14 @@ type updateAccountRequest struct {
 	Phone     *string `json:"phone,omitempty" doc:"Telefone" pattern:"^\\+?[0-9]{10,15}$"`
 }
 
+type professionalActivationInput struct {
+	Body professionalActivationRequest
+}
+
+type professionalActivationRequest struct {
+	Password string `json:"password" doc:"Senha de habilitação profissional" minLength:"1"`
+}
+
 type accountUserResponse struct {
 	ID          uuid.UUID `json:"id" format:"uuid"`
 	AuthIssuer  string    `json:"auth_issuer"`
@@ -66,8 +81,8 @@ type accountUserOutput struct {
 	Body accountUserResponse
 }
 
-func NewHandler(onboarding account.Onboarding, userSvc userService) *Handler {
-	return &Handler{onboarding: onboarding, userSvc: userSvc}
+func NewHandler(onboarding account.Onboarding, userSvc userService, activation professionalActivator) *Handler {
+	return &Handler{onboarding: onboarding, userSvc: userSvc, activation: activation}
 }
 
 // RegisterHumaRoutes registers all account operations into the application's
@@ -83,6 +98,16 @@ func (h *Handler) RegisterHumaRoutes(authenticated huma.API, registered huma.API
 		Errors:        []int{http.StatusUnauthorized, http.StatusConflict, http.StatusUnprocessableEntity},
 		Security:      security,
 	}, h.createCurrentAccount)
+
+	huma.Register(registered, huma.Operation{
+		OperationID: "activateCurrentAccountAsProfessional",
+		Method:      http.MethodPost,
+		Path:        "/me/professional-activation",
+		Summary:     "Habilitar a conta autenticada como profissional",
+		Tags:        []string{"Account"},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusInternalServerError},
+		Security:    security,
+	}, h.activateCurrentAccountAsProfessional)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getCurrentAccount",
@@ -114,6 +139,21 @@ func (h *Handler) RegisterHumaRoutes(authenticated huma.API, registered huma.API
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden},
 		Security:      security,
 	}, h.deleteCurrentAccount)
+}
+
+func (h *Handler) activateCurrentAccountAsProfessional(ctx context.Context, input *professionalActivationInput) (*accountUserOutput, error) {
+	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	if !ok {
+		return nil, huma.Error403Forbidden("conta registrada necessária")
+	}
+	if h == nil || h.activation == nil {
+		return nil, humaerror.From(apperr.Internal("habilitação profissional indisponível", errors.New("professional activation service is not configured")))
+	}
+	activated, err := h.activation.Activate(ctx, currentUser.ID, input.Body.Password, helpers.GetClientOriginFromContext(ctx))
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	return &accountUserOutput{Body: accountUserResponseFromDomain(activated)}, nil
 }
 
 func (h *Handler) createCurrentAccount(ctx context.Context, input *createAccountInput) (*accountUserOutput, error) {

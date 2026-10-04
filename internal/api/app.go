@@ -51,6 +51,7 @@ func New(opts Options) *App {
 	var humaAPI huma.API
 	r.Use(
 		middleware.RequestID(),
+		middleware.ClientOrigin(),
 		middleware.AccessLog(logger),
 		middleware.Recovery(logger, func(c *gin.Context, err error) {
 			op := &huma.Operation{Method: c.Request.Method, Path: c.FullPath()}

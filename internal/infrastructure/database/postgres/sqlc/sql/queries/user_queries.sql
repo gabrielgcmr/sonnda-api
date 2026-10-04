@@ -88,3 +88,13 @@ SET
 WHERE
   id = $1
   AND deleted_at IS NULL RETURNING *;
+
+-- name: ActivateUserAsProfessional :one
+UPDATE
+  users
+SET
+  account_type = 'professional',
+  updated_at = now()
+WHERE
+  id = $1
+  AND deleted_at IS NULL RETURNING *;

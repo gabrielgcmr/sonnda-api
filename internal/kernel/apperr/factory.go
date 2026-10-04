@@ -51,6 +51,13 @@ func Forbidden(msg string) *AppError {
 	}
 }
 
+func RateLimited(msg string) *AppError {
+	return &AppError{
+		Kind:    RATE_LIMIT_EXCEEDED,
+		Message: msg,
+	}
+}
+
 // NotFound para recursos não encontrados (404)
 func NotFound(msg string) *AppError {
 	return &AppError{

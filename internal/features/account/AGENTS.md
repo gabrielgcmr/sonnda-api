@@ -13,4 +13,4 @@
 - Patient access services, HTTP handlers, interfaces and adapters live in `internal/features/patient/access`; account must not depend on them.
 - Onboarding registers accounts without a separate professional profile or professional service.
 - Account types are account data, not permissions. Patient access is limited to ownership or active grants checked by `internal/features/patient/access`.
-- Account endpoints are unversioned and registered through the application's single Huma API: `POST`, `GET`, `PUT` and `DELETE /me`. The `/users` creation alias does not exist. The `/me/patients` route belongs to `patient/access`.
+- Account endpoints are unversioned and registered through the application's single Huma API: `POST`, `GET`, `PUT` and `DELETE /me`, plus `POST /me/professional-activation`. The `/users` creation alias does not exist. The `/me/patients` route belongs to `patient/access`.

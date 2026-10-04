@@ -22,6 +22,7 @@ type Repository interface {
 	// CRUD basico
 	Create(ctx context.Context, u *accountdomain.User) error
 	Update(ctx context.Context, u *accountdomain.User) error
+	ActivateProfessional(ctx context.Context, id uuid.UUID) (*accountdomain.User, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 
