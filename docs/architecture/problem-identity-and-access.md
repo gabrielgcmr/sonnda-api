@@ -1,9 +1,10 @@
 <!-- docs/architecture/problem-identity-and-access.md -->
 # Identidade e vínculo com o paciente — A1.2
 
-Status: contrato documental concluído. A consulta e a comprovação dos vínculos
-para autorização por ação serão implementadas em A2. As permissões atuais da API
-não mudam com este documento.
+Status: contrato documental concluído. A consulta do contexto, o serviço de
+confirmação/revogação e a persistência local foram implementados sem endpoint.
+A aplicação da política às rotas permanece em A2; as permissões atuais da API
+não mudam com esta etapa.
 
 ## Decisão de identidade
 
@@ -82,11 +83,11 @@ relação declarado no request concede permissão.
 - Uma confirmação não pode ser criada a partir de `owner_user_id`, `granted_by`
   ou `relation_type` históricos sem nova verificação e registro de autoria.
 
-O registro da confirmação deve permitir auditar quem confirmou, quando, a qual
+O registro da confirmação permite auditar quem confirmou, quando, a qual
 conta e paciente se referia, e quem revogou ou substituiu o vínculo. A escrita
-deve ser atômica com a concessão de acesso e não sobrescrever silenciosamente
-um vínculo de outro tipo. O formato de persistência, a interface de consulta e
-o endpoint de confirmação/revogação serão definidos na A1.5. A gestão de
+é atômica com a concessão de acesso e não sobrescreve silenciosamente
+um vínculo de outro tipo. A1.5 revisará as interfaces e definirá o endpoint
+de confirmação/revogação. A gestão de
 cuidador, inclusive vínculos antigos e conflitos entre relações, será detalhada
 na A1.4.
 

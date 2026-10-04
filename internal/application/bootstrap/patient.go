@@ -3,6 +3,8 @@ package bootstrap
 
 import (
 	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
+	accountpostgres "github.com/gabrielgcmr/sonnda/internal/features/account/postgres"
+	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	accesspostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/access/postgres"
 	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
@@ -17,6 +19,8 @@ type PatientModule struct {
 	Service         patientprofile.Service
 	ProfileHandler  *profilehttp.Handler
 	CreationHandler *patienthttp.CreationHandler
+	SelfIdentity    *patientaccess.SelfIdentityService
+	ProblemContext  *authz.PatientContextResolver
 }
 
 func NewPatientModule(db *postgress.Client) *PatientModule {
@@ -26,10 +30,14 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 	accessChecker := patientaccess.NewChecker(patientRepo, accessRepo)
 	svc := patientprofile.New(patientRepo, accessRepo, accessChecker)
 	creator := patientcreation.New(patientcreationpostgres.NewRepository(db))
+	accounts := accountpostgres.New(db.Pool())
+	selfIdentity := accesspostgres.NewSelfIdentityRepository(db)
 
 	return &PatientModule{
 		Service:         svc,
 		ProfileHandler:  profilehttp.NewHandler(svc),
 		CreationHandler: patienthttp.NewCreationHandler(creator),
+		SelfIdentity:    patientaccess.NewSelfIdentityService(accounts, accessChecker, selfIdentity),
+		ProblemContext:  authz.NewPatientContextResolver(accounts, accessChecker, accessRepo, selfIdentity),
 	}
 }

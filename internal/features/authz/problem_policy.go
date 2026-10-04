@@ -3,6 +3,7 @@ package authz
 
 import (
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
+	accessdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/access/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
@@ -35,6 +36,7 @@ type PatientContext struct {
 	HasAccess           bool
 	SelfVerified        bool
 	CaregiverAuthorized bool
+	RelationshipType    *accessdomain.RelationshipType
 }
 
 // RequireProblemAction applies actor permissions to the requested patient.

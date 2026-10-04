@@ -24,7 +24,7 @@ type Repository struct {
 
 var _ patientaccess.Repository = (*Repository)(nil)
 
-func NewRepository(client *postgress.Client) patientaccess.Repository {
+func NewRepository(client *postgress.Client) *Repository {
 	return &Repository{
 		client:  client,
 		queries: patientaccesssqlc.New(client.Pool()),
@@ -92,6 +92,27 @@ func (p *Repository) HasActiveAccess(ctx context.Context, patientID uuid.UUID, g
 
 	// Verifica se não está revogado
 	return !access.RevokedAt.Valid, nil
+}
+
+func (p *Repository) FindActiveRelationship(ctx context.Context, patientID, granteeID uuid.UUID) (*accessdomain.RelationshipType, error) {
+	access, err := p.queries.FindPatientAccess(ctx, patientaccesssqlc.FindPatientAccessParams{
+		PatientID: pgtype.UUID{Bytes: patientID, Valid: true},
+		GranteeID: pgtype.UUID{Bytes: granteeID, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errors.Join(persistence.ErrPersistenceFailure, fmt.Errorf("find patient relationship: %w", err))
+	}
+	if access.RevokedAt.Valid {
+		return nil, nil
+	}
+	relation := accessdomain.RelationshipType(access.RelationType)
+	if !relation.IsValid() {
+		return nil, errors.Join(persistence.ErrPersistenceFailure, fmt.Errorf("invalid patient relationship %q", access.RelationType))
+	}
+	return &relation, nil
 }
 
 // Upsert implements [patientaccess.Repository].

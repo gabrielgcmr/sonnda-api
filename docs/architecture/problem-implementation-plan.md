@@ -93,8 +93,9 @@ senha de habilitação fica na A1.3; gestão de vínculos na A1.4; interfaces na
 
 #### A1.2 — Identidade e vínculo com o paciente
 
-Status: **concluída como contrato documental**. Implementação das consultas e
-operações em A2, após definição das interfaces em A1.5.
+Status: **concluída como contrato documental**. Consulta do contexto, serviço de
+confirmação/revogação e persistência local implementados sem endpoint. A1.5
+revisará as interfaces; integração com rotas e políticas permanece em A2.
 
 - Entrega: [Identidade e vínculo com o paciente](problem-identity-and-access.md).
 - Manter os tipos de conta `professional` e `basic_care`.
