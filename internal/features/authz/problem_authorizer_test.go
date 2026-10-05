@@ -47,6 +47,53 @@ func TestProblemAuthorizerPropagatesContextFailure(t *testing.T) {
 	}
 }
 
+func TestProblemAuthorizerRejectsUnauthorizedRequests(t *testing.T) {
+	patientID := uuid.New()
+	professionalID := uuid.New()
+	professional := contextAccounts{user: &accountdomain.User{
+		ID:          professionalID,
+		AccountType: accountdomain.AccountTypeProfessional,
+	}}
+
+	for _, tc := range []struct {
+		name      string
+		accountID uuid.UUID
+		action    ProblemAction
+		accessErr error
+		wantKind  apperr.ErrorKind
+	}{
+		{
+			name:      "professional without access",
+			accountID: professionalID,
+			action:    CreateProblem,
+			accessErr: apperr.Forbidden("acesso negado"),
+			wantKind:  apperr.ACCESS_DENIED,
+		},
+		{
+			name:      "unknown action",
+			accountID: professionalID,
+			action:    ProblemAction("unknown"),
+			wantKind:  apperr.ACCESS_DENIED,
+		},
+		{
+			name:     "missing identity",
+			action:   ReadProblem,
+			wantKind: apperr.AUTH_REQUIRED,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			authorizer := NewProblemAuthorizer(NewPatientContextResolver(
+				professional,
+				contextAccess{err: tc.accessErr},
+			))
+			err := authorizer.Authorize(t.Context(), tc.accountID, patientID, tc.action)
+			if contextErrorKind(err) != tc.wantKind {
+				t.Fatalf("expected %s, got %v", tc.wantKind, err)
+			}
+		})
+	}
+}
+
 func TestProblemAuthorizerRequiresConfiguredContext(t *testing.T) {
 	authorizer := NewProblemAuthorizer(nil)
 	if err := authorizer.Authorize(context.Background(), uuid.New(), uuid.New(), ReadProblem); contextErrorKind(err) != apperr.INTERNAL_ERROR {

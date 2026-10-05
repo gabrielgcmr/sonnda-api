@@ -162,35 +162,43 @@ sobre quem pode agir ou como obter seu contexto.
 
 ### A2 — Políticas por ação
 
-- Implementar uma política pequena em `authz`, conforme as instruções do repositório,
-  reutilizando `RequireAccess` e mantendo autorização fora de `patient/access`.
-- Reconhecer profissionais por dados confiáveis da conta; não aceitar papel
-  profissional no payload nem em metadados editáveis pelo usuário.
-- Autorizar criação, edição, classificação, reabertura, retificação e unificação somente
-  a profissionais com acesso.
-- Autorizar resolução por qualquer conta registrada com acesso ativo, sujeita à
-  regra clínica de problema agudo no momento da operação.
-- Reutilizar a habilitação profissional implementada em `account`.
-- Aplicar a permissão de classificação também na criação e unificação.
-- Definir uma interface consumível pela feature de problemas, sem exigir que
-  suas tabelas ou endpoints já existam.
+Status: **concluída no código**.
 
-Conclusão: política verificável de forma independente, com entradas e negativas
-explícitas. A regra de cronicidade continua pertencendo ao domínio de problemas.
+- Política implementada em `authz`, reutilizando `RequireAccess` e mantendo a
+  autorização por ação fora de `patient/access`.
+- Profissionais são reconhecidos por dados confiáveis da conta; papéis informados
+  no payload ou em metadados editáveis pelo usuário não são aceitos.
+- Criação, edição, classificação, reabertura, retificação e unificação são
+  autorizadas somente para profissionais com acesso.
+- Resolução é autorizada para qualquer conta registrada com acesso ativo, sujeita à
+  regra clínica de problema agudo no momento da operação.
+- A habilitação profissional implementada em `account` fornece o tipo persistido
+  consultado pela política.
+- A permissão de classificação também cobre criação e unificação.
+- `authz.ProblemAuthorizer` fornece a interface consumível pela futura feature de
+  problemas, sem depender de suas tabelas ou endpoints.
+
+Conclusão: política implementada e verificável de forma independente, com entradas
+e negativas explícitas. A regra de cronicidade continua pertencendo ao domínio de
+problemas. A A3 fará a verificação consolidada da autorização.
 
 ### A3 — Verificação da autorização
 
-- Testar contas `professional` e `basic_care` com e sem acesso, inclusive vínculos
-  revogados e acesso a prontuário diferente.
-- Verificar que `relation_type` não muda a decisão e que `account_type` continua
-  restringindo as ações profissionais.
-- Testar falhas de consulta sem concessão de permissões.
-- Testar habilitação com senha válida/inválida, limite de tentativas e configuração
-  ausente; verificar que a senha não aparece em respostas ou observabilidade.
-- Usar o contrato central `AppError`; consumidores HTTP traduzem com `humaerror`.
+Status: **concluída nos testes automatizados**.
 
-Conclusão: Parte A pronta para ser integrada, sem liberar novas ações clínicas
-nos endpoints existentes.
+- Contas `professional` e `basic_care` foram verificadas com e sem acesso,
+  inclusive para paciente divergente e ausência de vínculo ativo.
+- O contexto de autorização não recebe `relation_type`; `account_type` continua
+  restringindo as ações profissionais.
+- Falhas de consulta, identidade ausente, ação desconhecida e dependências não
+  configuradas foram verificadas sem concessão de permissão.
+- A habilitação profissional cobre senha válida e inválida, limite de tentativas,
+  configuração ausente ou inválida e falha do limitador.
+- Os erros usam o contrato `AppError`; consumidores HTTP traduzem com `humaerror`.
+
+Conclusão: Parte A verificada e pronta para integração, sem liberar novas ações
+clínicas nos endpoints existentes. Os testes HTTP das operações de problemas
+serão adicionados com os endpoints das etapas B2 e B3.
 
 ## Parte B — Lógica dos problemas
 
