@@ -19,7 +19,6 @@ type PatientModule struct {
 	Service         patientprofile.Service
 	ProfileHandler  *profilehttp.Handler
 	CreationHandler *patienthttp.CreationHandler
-	SelfIdentity    *patientaccess.SelfIdentityService
 	ProblemContext  *authz.PatientContextResolver
 }
 
@@ -31,13 +30,11 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 	svc := patientprofile.New(patientRepo, accessRepo, accessChecker)
 	creator := patientcreation.New(patientcreationpostgres.NewRepository(db))
 	accounts := accountpostgres.New(db.Pool())
-	selfIdentity := accesspostgres.NewSelfIdentityRepository(db)
 
 	return &PatientModule{
 		Service:         svc,
 		ProfileHandler:  profilehttp.NewHandler(svc),
 		CreationHandler: patienthttp.NewCreationHandler(creator),
-		SelfIdentity:    patientaccess.NewSelfIdentityService(accounts, accessChecker, selfIdentity),
-		ProblemContext:  authz.NewPatientContextResolver(accounts, accessChecker, accessRepo, selfIdentity),
+		ProblemContext:  authz.NewPatientContextResolver(accounts, accessChecker),
 	}
 }

@@ -14,12 +14,12 @@ Cada etapa deve resultar em uma entrega pequena e verificável.
 - Cronicidade representada por um campo simples, definido somente por profissionais.
 - Somente profissionais criam problemas, editam nome/CID, unificam, retificam
   e reabrem problemas. Paciente não pode criar problemas.
-- O próprio paciente ou seu cuidador autorizado pode resolver apenas problemas
-  explicitamente classificados como agudos pelo profissional; nenhum deles pode
-  classificar problemas por conta própria.
-- A única alteração permitida ao paciente e ao cuidador é marcar como resolvido.
-  Leitura segue as regras de acesso existentes. A resolução registra o autor real,
-  distinguindo paciente, cuidador e profissional, e o paciente ao qual se refere.
+- Qualquer conta registrada com acesso ativo pode resolver apenas problemas
+  explicitamente classificados como agudos pelo profissional. `relation_type`
+  e a relação da conta com o paciente não participam dessa autorização.
+- A única alteração permitida a `basic_care` é marcar como resolvido. Leitura
+  segue as regras de acesso existentes. A resolução registra a conta autora e o
+  paciente ao qual se refere.
 - Problemas crônicos não podem ser resolvidos, nem por profissionais.
 - Na unificação, o profissional escolhe nome livre, CID, situação clínica e
   cronicidade finais. Não há herança automática dessas escolhas.
@@ -27,14 +27,12 @@ Cada etapa deve resultar em uma entrega pequena e verificável.
 - Unificação e retificação são condições administrativas, não resolução clínica.
 - Nesta fase inicial, uma conta registrada pode ser habilitada como profissional
   mediante uma senha de habilitação validada exclusivamente pelo backend.
-- Somente profissionais com acesso ao paciente podem conceder ou revogar seu
-  vínculo de cuidador; essa ação não concede acesso profissional a outros pacientes.
 
 ## Contrato proposto para cronicidade
 
 Usar um único campo `is_chronic`, sem catálogo de classificações:
 
-| Valor | Significado | Paciente/cuidador autorizado pode resolver? |
+| Valor | Significado | Conta com acesso pode resolver? |
 | --- | --- | --- |
 | `true` | Crônico | Não |
 | `false` | Agudo, classificado explicitamente pelo profissional | Sim |
@@ -42,10 +40,10 @@ Usar um único campo `is_chronic`, sem catálogo de classificações:
 
 A representação anulável é uma proposta de implementação para distinguir ausência
 de classificação de classificação explícita. Não usar `false` como padrão, pois
-isso permitiria resolução pelo paciente/cuidador sem classificação profissional.
+isso permitiria resolução sem classificação profissional.
 Como a criação é exclusiva de profissionais, se a classificação for obrigatória
 na criação, um booleano obrigatório será suficiente. A obrigatoriedade ainda
-precisa ser definida; classificação ausente nunca libera resolução pelo paciente/cuidador.
+precisa ser definida; classificação ausente nunca libera resolução.
 
 ## Estrutura existente e dependências
 
@@ -60,9 +58,8 @@ precisa ser definida; classificação ausente nunca libera resolução pelo paci
 - `AccountTypeProfessional` existe, mas o cadastro HTTP atual cria `basic_care`.
   A habilitação inicial usará senha validada no backend e atualizará o tipo da conta.
 - Os tipos atuais são `professional` e `basic_care`; não há tipo de conta `patient`.
-  `basic_care` pode representar paciente ou cuidador. O vínculo com cada paciente
-  possui metadados `self`, `caregiver`, `family` ou `professional`, que atualmente
-  não concedem permissões por ação.
+  O vínculo com cada paciente possui metadados `self`, `caregiver`, `family` ou
+  `professional`, sem efeito sobre permissões por ação.
 - Encontros/evoluções e outros vínculos clínicos serão integrados quando existirem.
 
 ## Parte A — Autorização
@@ -75,40 +72,31 @@ cada entrega e A3 verifica o conjunto.
 
 #### A1.1 — Matriz de ações e permissões
 
-Status: **concluída como contrato documental**. Matriz codificada em `authz` e
+Status: **concluída e revisada pela A1.4**. Matriz codificada em `authz` e
 testada de forma isolada; integração das políticas com dados confiáveis e
 endpoints permanece em A2.
 
 Entrega: [Permissões de problemas do paciente](problem-permissions.md), contendo:
 
-- Matriz consolidada de ações para profissional, paciente, cuidador e outros vinculados.
+- Matriz consolidada para contas `professional` e `basic_care` com acesso.
 - Condições de acesso e regras específicas de resolução, reabertura, retificação,
-  unificação e concessão/reativação/revogação de cuidador.
+  unificação e resolução.
 - Separação entre autorização por ação e validação clínica do problema.
 - Exemplos de aceitação para operações permitidas e negadas, incluindo vínculo
   revogado, ausência de classificação e ações em prontuários diferentes.
 
-As definições de identidade e consulta ao vínculo ficam na A1.2. O contrato da
-senha de habilitação fica na A1.3; gestão de vínculos na A1.4; interfaces na A1.5.
+O contexto de conta e acesso fica na A1.2. O contrato da senha de habilitação
+fica na A1.3; a simplificação da autorização, na A1.4; interfaces, na A1.5.
 
-#### A1.2 — Identidade e vínculo com o paciente
+#### A1.2 — Contexto de conta e acesso
 
-Status: **concluída como contrato documental**. Consulta do contexto, serviço de
-confirmação/revogação e persistência local implementados sem endpoint. A1.5
-revisará as interfaces; integração com rotas e políticas permanece em A2.
+Status: **revisada pela A1.4**. O contrato de identidade confirmada foi revogado;
+o contexto agora depende somente da conta registrada e do acesso ativo.
 
-- Entrega: [Identidade e vínculo com o paciente](problem-identity-and-access.md).
+- Entrega: [Contexto de conta e acesso](problem-identity-and-access.md).
 - Manter os tipos de conta `professional` e `basic_care`.
-- Reconhecer o próprio paciente somente por vínculo confirmado por outro
-  profissional com acesso prévio, com autoria e vigência registradas. Criador,
-  `owner_user_id` e `self` legados não comprovam identidade por si sós.
-- Formalizar como recuperar o vínculo ativo e sua relação (`self`, `caregiver`,
-  `family`, `professional`) e a proveniência da confirmação/concessão, pois o
-  checker atual informa apenas se há acesso.
-- A confirmação profissional concede acesso ao paciente na mesma operação;
-  revogação e substituição preservam autoria e não promovem registros antigos.
-- Definir tratamento de ausência/revogação do vínculo, conta profissional que
-  também é paciente/cuidador e dados inconsistentes.
+- Consultar o `account_type` persistido e exigir acesso ativo ao paciente.
+- Manter `relation_type` como metadado sem efeito autorizador.
 - Preservar a checagem de acesso para profissionais; a condição profissional
   não concede acesso automático a prontuários.
 
@@ -139,32 +127,28 @@ Entrega: [Habilitação profissional por senha](problem-professional-activation.
 Entrega: contrato e implementação do endpoint, configuração e critérios de
 aceitação. A autorização posterior consulta o tipo persistido da conta.
 
-#### A1.4 — Concessão e revogação de cuidador
+#### A1.4 — Simplificação da autorização por acesso
 
-- Formalizar `PUT /patients/{patientId}/caregivers/{accountId}` para conceder ou
-  reativar vínculo de cuidador de uma conta já cadastrada.
-- Formalizar `DELETE /patients/{patientId}/caregivers/{accountId}` para revogação.
-- Exigir profissional com acesso prévio ao paciente em ambas as operações;
-  impedir autoatribuição de acesso por essa operação.
-- Registrar quem concedeu/revogou e quando; revogação impede resoluções posteriores.
-- Definir repetição das operações e o caso de vínculo existente de outro tipo,
-  preservando identidades e relações sem sobrescrita ou revogação acidental.
-- Não estender resolução automaticamente a familiares, qualquer conta `basic_care`
-  ou qualquer vínculo ativo.
+Status: **concluída no contrato e no código de autorização**.
 
-Entrega: contratos HTTP e transições do vínculo, preparados para implementação
-em `patient/access`, com política aplicada por `authz` durante A2.
+- Revogar o fluxo especial de identidade própria e cuidador autorizado.
+- Permitir resolução de problema agudo para qualquer conta com acesso ativo.
+- Remover identidade, condição de cuidador e `relation_type` do contexto de
+  autorização.
+- Remover o serviço e o adaptador de confirmação de identidade própria.
+- Preservar a migration já criada no histórico; retirar a tabela física somente
+  por migration compensatória após verificar os ambientes e a retenção dos dados.
+
+Entrega: [Simplificação da autorização por acesso](problem-access-simplification.md).
 
 #### A1.5 — Limites arquiteturais e integração
 
 - `account`: habilitação e persistência do tipo da conta.
-- `patient/access`: consulta, concessão e revogação dos vínculos.
+- `patient/access`: consulta do acesso e manutenção dos vínculos existentes.
 - `authz`: decisões por ação a partir de conta confiável e contexto do paciente.
 - `patient/problem`: regras clínicas e mudanças de estado, incluindo cronicidade,
   com auditoria; implementação durante a Parte B.
 - Definir as interfaces entre os serviços e sua composição no bootstrap.
-- Definir endpoint e persistência da confirmação/revogação de identidade,
-  preservando os outros vínculos de acesso e o histórico de autoria.
 - Definir erros e observabilidade seguindo `AppError`/`humaerror` existentes.
 - Conferir os contratos de A1.1–A1.4 em conjunto, sem mover regras clínicas para
   autenticação ou para o checker de acesso.
@@ -181,12 +165,9 @@ quem pode agir, como obter seu contexto e quais dados cada operação aceita.
   profissional no payload nem em metadados editáveis pelo usuário.
 - Autorizar criação, edição, classificação, reabertura, retificação e unificação somente
   a profissionais com acesso.
-- Autorizar resolução pelo próprio paciente ou cuidador autorizado daquele paciente,
-  sujeita à regra clínica de agudo e ao vínculo ativo no momento da operação.
-- Reutilizar a habilitação profissional implementada em `account` e implementar o
-  gerenciamento de cuidadores em `patient/access`, conforme os contratos de A1.
-- Autorizar concessão/revogação de cuidador exclusivamente a profissional com
-  acesso prévio ao paciente; impedir autoatribuição de acesso por essa operação.
+- Autorizar resolução por qualquer conta registrada com acesso ativo, sujeita à
+  regra clínica de problema agudo no momento da operação.
+- Reutilizar a habilitação profissional implementada em `account`.
 - Aplicar a permissão de classificação também na criação e unificação.
 - Definir uma interface consumível pela feature de problemas, sem exigir que
   suas tabelas ou endpoints já existam.
@@ -196,16 +177,13 @@ explícitas. A regra de cronicidade continua pertencendo ao domínio de problema
 
 ### A3 — Verificação da autorização
 
-- Testar profissional com e sem acesso, próprio paciente, cuidador autorizado,
-  cuidador com vínculo revogado e outros vinculados. Familiar com acesso não recebe
-  automaticamente a permissão de cuidador.
-- Verificar que um paciente que também seja profissional pode exercer permissões
-  profissionais quando sua classificação e acesso forem válidos.
-- Testar falhas de consulta e ausência de identidade, sem concessão de permissões.
+- Testar contas `professional` e `basic_care` com e sem acesso, inclusive vínculos
+  revogados e acesso a prontuário diferente.
+- Verificar que `relation_type` não muda a decisão e que `account_type` continua
+  restringindo as ações profissionais.
+- Testar falhas de consulta sem concessão de permissões.
 - Testar habilitação com senha válida/inválida, limite de tentativas e configuração
   ausente; verificar que a senha não aparece em respostas ou observabilidade.
-- Testar concessão/revogação por profissional com acesso e negativa para profissional
-  sem acesso, paciente, cuidador ou familiar; preservar autoria e outros vínculos.
 - Usar o contrato central `AppError`; consumidores HTTP traduzem com `humaerror`.
 
 Conclusão: Parte A pronta para ser integrada, sem liberar novas ações clínicas
@@ -244,8 +222,8 @@ com autoria e histórico preservados.
 ### B3 — Edição, classificação, resolução e reabertura
 
 - Permitir a profissionais editar nome/CID e cronicidade, mantendo ID e histórico.
-- Paciente ou cuidador autorizado resolve somente quando `is_chronic` for
-  explicitamente `false`; registrar a identidade real de quem realizou a operação.
+- Qualquer conta com acesso ativo resolve somente quando `is_chronic` for
+  explicitamente `false`; registrar a conta que realizou a operação.
 - Reabertura exclusiva de profissionais; resolução de crônicos proibida para todos.
 - Impedir mudança de resolvido para crônico sem reabertura válida; validar o
   estado final de requests que alterem mais de um campo.
@@ -282,8 +260,8 @@ sem perder autoria, nomes, códigos ou estados anteriores.
 
 ### B6 — Validação integrada e entrega
 
-- Testar fluxos completos com múltiplos profissionais, paciente, cuidador autorizado
-  e outros vinculados, incluindo a autoria da resolução pelo cuidador.
+- Testar fluxos completos com contas `professional` e `basic_care`, diferentes
+  tipos de vínculo e autoria da resolução.
 - Testar rollback, concorrência e repetição de requests de resolução/unificação.
 - Validar migrations em banco descartável e operações transacionais em PostgreSQL.
 - Gerar/compilar sqlc com a configuração vigente e executar checks do repositório.

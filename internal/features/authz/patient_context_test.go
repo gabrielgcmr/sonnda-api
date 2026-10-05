@@ -7,70 +7,49 @@ import (
 	"testing"
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
-	accessdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/access/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
 
-type contextAccounts struct{ user *accountdomain.User }
+type contextAccounts struct {
+	user *accountdomain.User
+	err  error
+}
 
 func (a contextAccounts) FindByID(context.Context, uuid.UUID) (*accountdomain.User, error) {
-	return a.user, nil
+	return a.user, a.err
 }
 
 type contextAccess struct{ err error }
 
 func (a contextAccess) RequireAccess(context.Context, uuid.UUID, uuid.UUID) error { return a.err }
 
-type contextRelationships struct {
-	relation *accessdomain.RelationshipType
-}
-
-func (r contextRelationships) FindActiveRelationship(context.Context, uuid.UUID, uuid.UUID) (*accessdomain.RelationshipType, error) {
-	return r.relation, nil
-}
-
-type contextIdentity struct {
-	verified bool
-	err      error
-}
-
-func (i contextIdentity) HasActiveSelf(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
-	return i.verified, i.err
-}
-
-func TestPatientContextUsesVerifiedIdentityNotLegacyRelationship(t *testing.T) {
+func TestPatientContextUsesRegisteredAccountAndActiveAccess(t *testing.T) {
 	accountID, patientID := uuid.New(), uuid.New()
-	self := accessdomain.RelationshipTypeSelf
 	resolver := NewPatientContextResolver(
 		contextAccounts{user: &accountdomain.User{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}},
-		contextAccess{}, contextRelationships{relation: &self}, contextIdentity{},
+		contextAccess{},
 	)
+
 	actor, err := resolver.Resolve(context.Background(), accountID, patientID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actor.SelfVerified || actor.CaregiverAuthorized || actor.RelationshipType == nil || *actor.RelationshipType != self {
-		t.Fatalf("legacy relationship must remain metadata: %+v", actor)
+	if actor.AccountID != accountID || actor.PatientID != patientID || actor.AccountType != accountdomain.AccountTypeBasicCare || !actor.HasAccess {
+		t.Fatalf("unexpected context: %+v", actor)
 	}
-	assertProblemAction(t, "unverified self", ResolveProblem, patientID, actor, false)
-	resolver.selfIdentity = contextIdentity{verified: true}
-	actor, err = resolver.Resolve(context.Background(), accountID, patientID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertProblemAction(t, "professionally confirmed self", ResolveProblem, patientID, actor, true)
+	assertProblemAction(t, "basic care with access", ResolveProblem, patientID, actor, true)
 }
 
 func TestPatientContextFailsClosed(t *testing.T) {
 	accountID, patientID := uuid.New(), uuid.New()
 	accounts := contextAccounts{user: &accountdomain.User{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}}
-	resolver := NewPatientContextResolver(accounts, contextAccess{err: apperr.Forbidden("acesso negado")}, contextRelationships{}, contextIdentity{verified: true})
+	resolver := NewPatientContextResolver(accounts, contextAccess{err: apperr.Forbidden("acesso negado")})
 	if _, err := resolver.Resolve(context.Background(), accountID, patientID); contextErrorKind(err) != apperr.ACCESS_DENIED {
 		t.Fatalf("expected access denial: %v", err)
 	}
 	resolver.access = contextAccess{}
-	resolver.selfIdentity = contextIdentity{err: errors.New("database unavailable")}
+	resolver.accounts = contextAccounts{err: errors.New("database unavailable")}
 	if _, err := resolver.Resolve(context.Background(), accountID, patientID); contextErrorKind(err) != apperr.INFRA_DATABASE_ERROR {
 		t.Fatalf("expected database error: %v", err)
 	}

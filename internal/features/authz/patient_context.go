@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
-	accessdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/access/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
@@ -20,25 +19,14 @@ type accessChecker interface {
 	RequireAccess(ctx context.Context, accountID, patientID uuid.UUID) error
 }
 
-type relationshipLookup interface {
-	FindActiveRelationship(ctx context.Context, patientID, accountID uuid.UUID) (*accessdomain.RelationshipType, error)
-}
-
-type selfIdentityLookup interface {
-	HasActiveSelf(ctx context.Context, patientID, accountID uuid.UUID) (bool, error)
-}
-
 // PatientContextResolver loads current authorization facts from backend stores.
-// Caregiver authorization remains false until A1.4 defines a trusted grant.
 type PatientContextResolver struct {
-	accounts      accountLookup
-	access        accessChecker
-	relationships relationshipLookup
-	selfIdentity  selfIdentityLookup
+	accounts accountLookup
+	access   accessChecker
 }
 
-func NewPatientContextResolver(accounts accountLookup, access accessChecker, relationships relationshipLookup, selfIdentity selfIdentityLookup) *PatientContextResolver {
-	return &PatientContextResolver{accounts: accounts, access: access, relationships: relationships, selfIdentity: selfIdentity}
+func NewPatientContextResolver(accounts accountLookup, access accessChecker) *PatientContextResolver {
+	return &PatientContextResolver{accounts: accounts, access: access}
 }
 
 func (r *PatientContextResolver) Resolve(ctx context.Context, accountID, patientID uuid.UUID) (PatientContext, error) {
@@ -48,7 +36,7 @@ func (r *PatientContextResolver) Resolve(ctx context.Context, accountID, patient
 	if patientID == uuid.Nil {
 		return PatientContext{}, apperr.Forbidden("acesso negado")
 	}
-	if r == nil || r.accounts == nil || r.access == nil || r.relationships == nil || r.selfIdentity == nil {
+	if r == nil || r.accounts == nil || r.access == nil {
 		return PatientContext{}, apperr.Internal("erro inesperado", errors.New("patient context dependencies not configured"))
 	}
 	account, err := r.accounts.FindByID(ctx, accountID)
@@ -61,21 +49,11 @@ func (r *PatientContextResolver) Resolve(ctx context.Context, accountID, patient
 	if err := r.access.RequireAccess(ctx, accountID, patientID); err != nil {
 		return PatientContext{}, err
 	}
-	relation, err := r.relationships.FindActiveRelationship(ctx, patientID, accountID)
-	if err != nil {
-		return PatientContext{}, contextStoreError("relationships.FindActiveRelationship", err)
-	}
-	verified, err := r.selfIdentity.HasActiveSelf(ctx, patientID, accountID)
-	if err != nil {
-		return PatientContext{}, contextStoreError("selfIdentity.HasActiveSelf", err)
-	}
 	return PatientContext{
-		AccountID:        accountID,
-		PatientID:        patientID,
-		AccountType:      account.AccountType,
-		HasAccess:        true,
-		SelfVerified:     verified,
-		RelationshipType: relation,
+		AccountID:   accountID,
+		PatientID:   patientID,
+		AccountType: account.AccountType,
+		HasAccess:   true,
 	}, nil
 }
 

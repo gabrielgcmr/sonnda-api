@@ -13,56 +13,37 @@ import (
 func TestProblemPolicy(t *testing.T) {
 	patientID := uuid.New()
 	professional := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeProfessional, HasAccess: true}
-	self := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true, SelfVerified: true}
-	caregiver := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true, CaregiverAuthorized: true}
-	other := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true}
+	basicCare := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true}
 
-	readActions := []ProblemAction{ListProblems, ReadProblem, ReadHistory}
-	professionalActions := []ProblemAction{CreateProblem, EditProblem, ClassifyProblem, ReopenProblem, RectifyProblem, MergeProblems, GrantCaregiver, RevokeCaregiver}
-	for name, actor := range map[string]PatientContext{"professional": professional, "self": self, "caregiver": caregiver, "other": other} {
-		for _, action := range readActions {
-			assertProblemAction(t, name, action, patientID, actor, true)
-		}
-	}
-	for _, action := range professionalActions {
+	for _, action := range []ProblemAction{ListProblems, ReadProblem, ReadHistory, ResolveProblem} {
 		assertProblemAction(t, "professional", action, patientID, professional, true)
-		assertProblemAction(t, "self", action, patientID, self, false)
-		assertProblemAction(t, "caregiver", action, patientID, caregiver, false)
-		assertProblemAction(t, "other", action, patientID, other, false)
+		assertProblemAction(t, "basic care", action, patientID, basicCare, true)
 	}
-	assertProblemAction(t, "professional", ResolveProblem, patientID, professional, true)
-	assertProblemAction(t, "self", ResolveProblem, patientID, self, true)
-	assertProblemAction(t, "caregiver", ResolveProblem, patientID, caregiver, true)
-	assertProblemAction(t, "other", ResolveProblem, patientID, other, false)
+	for _, action := range []ProblemAction{CreateProblem, EditProblem, ClassifyProblem, ReopenProblem, RectifyProblem, MergeProblems} {
+		assertProblemAction(t, "professional", action, patientID, professional, true)
+		assertProblemAction(t, "basic care", action, patientID, basicCare, false)
+	}
+}
+
+func TestProblemPolicyResolutionDependsOnActiveAccess(t *testing.T) {
+	patientID := uuid.New()
+	actor := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true}
+
+	assertProblemAction(t, "active access", ResolveProblem, patientID, actor, true)
+	actor.HasAccess = false
+	assertProblemAction(t, "no access", ResolveProblem, patientID, actor, false)
+	actor.HasAccess = true
+	assertProblemAction(t, "another patient", ResolveProblem, uuid.New(), actor, false)
 }
 
 func TestProblemPolicyRequiresAccessToThisPatient(t *testing.T) {
 	patientID := uuid.New()
-	otherPatientID := uuid.New()
 	actor := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeProfessional, HasAccess: true}
-	assertProblemAction(t, "other patient", CreateProblem, otherPatientID, actor, false)
+	assertProblemAction(t, "other patient", CreateProblem, uuid.New(), actor, false)
 	assertProblemAction(t, "no access", ListProblems, patientID, PatientContext{AccountID: actor.AccountID, PatientID: patientID, AccountType: actor.AccountType}, false)
 	assertProblemAction(t, "invalid action", ProblemAction("unknown"), patientID, actor, false)
 	assertProblemAction(t, "invalid account type", ListProblems, patientID, PatientContext{AccountID: actor.AccountID, PatientID: patientID, HasAccess: true}, false)
 	assertProblemAction(t, "missing patient", ListProblems, uuid.Nil, actor, false)
-}
-
-func TestProblemPolicyDoesNotTreatUnverifiedLegacyLinksAsIdentity(t *testing.T) {
-	patientID := uuid.New()
-	actor := PatientContext{AccountID: uuid.New(), PatientID: patientID, AccountType: accountdomain.AccountTypeBasicCare, HasAccess: true}
-	assertProblemAction(t, "legacy self or caregiver", ResolveProblem, patientID, actor, false)
-	actor.SelfVerified = true
-	assertProblemAction(t, "verified self", ResolveProblem, patientID, actor, true)
-	actor.SelfVerified = false
-	actor.CaregiverAuthorized = true
-	assertProblemAction(t, "authorized caregiver", ResolveProblem, patientID, actor, true)
-	actor.CaregiverAuthorized = false
-	assertProblemAction(t, "revoked context", ResolveProblem, patientID, actor, false)
-	actor.CaregiverAuthorized = true
-	actor.HasAccess = false
-	assertProblemAction(t, "caregiver without access", ResolveProblem, patientID, actor, false)
-	actor.HasAccess = true
-	assertProblemAction(t, "caregiver in another patient", ResolveProblem, uuid.New(), actor, false)
 }
 
 func TestProblemPolicyRequiresAccount(t *testing.T) {
