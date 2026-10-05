@@ -1,4 +1,4 @@
-<!-- docs/architecture/problem-professional-activation.md -->
+<!-- docs/architecture/account/professional-activation.md -->
 # Habilitação profissional por senha — A1.3
 
 Status: contrato e implementação concluídos. O endpoint, a validação bcrypt, a
@@ -46,4 +46,4 @@ SHA-256 antes de compor as chaves do Redis.
 Falha no Redis não é interpretada como contador vazio: a ativação falha com erro
 técnico. A habilitação não cria acesso a pacientes nem qualquer outro vínculo.
 
-Plano geral: [Plano de implementação de problemas](problem-implementation-plan.md).
+Plano geral: [Plano de implementação de problemas](../../../problem-implementation-plan.md).

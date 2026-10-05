@@ -1,8 +1,9 @@
 <!-- docs/architecture/access-control.md -->
 # Controle de acesso aos pacientes
 
-O acesso atual verifica a quais pacientes uma conta está vinculada. Políticas
-de autorização por ação, tipo de conta e profissão ficam para uma etapa futura.
+O acesso verifica a quais pacientes uma conta está vinculada. Ele não decide
+quais ações a conta pode executar. A política por ação para problemas fica em
+[`authz`](authz/README.md).
 
 A autenticação continua em `internal/features/auth`: valida a identidade externa.
 O middleware de account resolve o cadastro local. O checker em
@@ -37,10 +38,11 @@ Ser médico ou ter `AccountType=professional` não concede acesso a outros pacie
 - `internal/features/patient/access/postgres`: adaptador PostgreSQL de acesso.
 
 A entidade, o serviço e o repositório antigos de profissionais e as políticas
-RBAC foram removidos. `AccountType` e o tipo de relacionamento permanecem como
-dados existentes, sem políticas de permissão associadas. `relation_type` é
-metadado do relacionamento, não concede ações e não faz parte das listagens. O contrato HTTP de
-cadastro continua criando `basic_care`; ele não foi alterado nesta etapa.
+RBAC antigas foram removidos. `AccountType` e o tipo de relacionamento permanecem
+como dados existentes. `relation_type` é metadado do relacionamento, não concede
+ações e não faz parte das listagens. `authz` pode usar o `AccountType` persistido
+depois que este checker confirmar o acesso. O contrato HTTP de cadastro continua
+criando `basic_care`; ele não foi alterado nesta etapa.
 
 Tabelas, migrações e código SQLC gerado de profissionais foram preservados.
 A remoção desses artefatos de persistência deve ocorrer em uma etapa própria.

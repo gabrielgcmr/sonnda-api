@@ -6,6 +6,14 @@ Descrição da arquitetura da Sonnda API, sua migração gradual por contexto, f
 Este documento descreve **como a arquitetura está organizada**.  
 As decisões não óbvias (o *porquê*) são registradas separadamente em ADRs.
 
+## Documentação por contexto
+
+- [Account](account/professional-activation.md): habilitação e mudança do tipo da conta.
+- [Autorização](authz/README.md): política por ação e contrato `ProblemAuthorizer`.
+- [Acesso a pacientes](access-control.md): vínculo e verificação de acesso ao prontuário.
+- [Plano de problemas](../../problem-implementation-plan.md): sequência de implementação
+  da autorização e da feature `patient/problem`.
+
 ---
 
 ## Visão geral
@@ -224,9 +232,8 @@ laudos compartilham essa regra.
 A mesma feature atende `GET /v1/me/patients`. A rota permanece estável, enquanto
 o serviço, o handler e os DTOs deixam de pertencer a `account`.
 
-As políticas por ação e profissão foram removidas, junto com a entidade, serviço
-e repositório antigos de profissionais. `AccountType` permanece como dado da
-conta e não concede acesso a pacientes. Tabelas, migrações e código SQLC gerado
-foram preservados; sua limpeza é uma etapa separada.
+O checker não decide permissões por ação. Para problemas do paciente, `authz`
+combina o acesso confirmado pelo checker com o `AccountType` persistido. O tipo
+da conta continua sem conceder acesso automático a pacientes.
 
 Detalhes: `docs/architecture/access-control.md`.

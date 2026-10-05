@@ -16,10 +16,10 @@ import (
 )
 
 type PatientModule struct {
-	Service         patientprofile.Service
-	ProfileHandler  *profilehttp.Handler
-	CreationHandler *patienthttp.CreationHandler
-	ProblemContext  *authz.PatientContextResolver
+	Service           patientprofile.Service
+	ProfileHandler    *profilehttp.Handler
+	CreationHandler   *patienthttp.CreationHandler
+	ProblemAuthorizer authz.ProblemAuthorizer
 }
 
 func NewPatientModule(db *postgress.Client) *PatientModule {
@@ -35,6 +35,8 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 		Service:         svc,
 		ProfileHandler:  profilehttp.NewHandler(svc),
 		CreationHandler: patienthttp.NewCreationHandler(creator),
-		ProblemContext:  authz.NewPatientContextResolver(accounts, accessChecker),
+		ProblemAuthorizer: authz.NewProblemAuthorizer(
+			authz.NewPatientContextResolver(accounts, accessChecker),
+		),
 	}
 }

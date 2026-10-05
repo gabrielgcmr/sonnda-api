@@ -1,4 +1,4 @@
-<!-- docs/architecture/problem-implementation-plan.md -->
+<!-- problem-implementation-plan.md -->
 # Plano de implementação de problemas do paciente
 
 Este documento organiza a implementação futura da API em duas partes:
@@ -76,7 +76,7 @@ Status: **concluída e revisada pela A1.4**. Matriz codificada em `authz` e
 testada de forma isolada; integração das políticas com dados confiáveis e
 endpoints permanece em A2.
 
-Entrega: [Permissões de problemas do paciente](problem-permissions.md), contendo:
+Entrega: [Contrato de autorização](docs/architecture/authz/README.md), contendo:
 
 - Matriz consolidada para contas `professional` e `basic_care` com acesso.
 - Condições de acesso e regras específicas de resolução, reabertura, retificação,
@@ -93,7 +93,7 @@ fica na A1.3; a simplificação da autorização, na A1.4; interfaces, na A1.5.
 Status: **revisada pela A1.4**. O contrato de identidade confirmada foi revogado;
 o contexto agora depende somente da conta registrada e do acesso ativo.
 
-- Entrega: [Contexto de conta e acesso](problem-identity-and-access.md).
+- Entrega: [Contrato de autorização](docs/architecture/authz/README.md).
 - Manter os tipos de conta `professional` e `basic_care`.
 - Consultar o `account_type` persistido e exigir acesso ativo ao paciente.
 - Manter `relation_type` como metadado sem efeito autorizador.
@@ -109,7 +109,7 @@ Status: **concluída no contrato e no código**. O endpoint Huma, a validação 
 a persistência em `account` e o limite distribuído de tentativas com Redis estão
 implementados e testados.
 
-Entrega: [Habilitação profissional por senha](problem-professional-activation.md).
+Entrega: [Habilitação profissional por senha](docs/architecture/account/professional-activation.md).
 
 - Formalizar `POST /me/professional-activation` para a própria conta autenticada
   e registrada; validar senha e persistir `account_type=professional`.
@@ -139,9 +139,11 @@ Status: **concluída no contrato e no código de autorização**.
 - Preservar a migration já criada no histórico; retirar a tabela física somente
   por migration compensatória após verificar os ambientes e a retenção dos dados.
 
-Entrega: [Simplificação da autorização por acesso](problem-access-simplification.md).
+Entrega: [Contrato de autorização](docs/architecture/authz/README.md).
 
 #### A1.5 — Limites arquiteturais e integração
+
+Status: **concluída no contrato e no código de autorização**.
 
 - `account`: habilitação e persistência do tipo da conta.
 - `patient/access`: consulta do acesso e manutenção dos vínculos existentes.
@@ -153,9 +155,10 @@ Entrega: [Simplificação da autorização por acesso](problem-access-simplifica
 - Conferir os contratos de A1.1–A1.4 em conjunto, sem mover regras clínicas para
   autenticação ou para o checker de acesso.
 
-Entrega: interfaces propostas, fluxo de chamadas e contratos consolidados.
-A1 está concluída quando A2 puder ser implementada sem decisões implícitas sobre
-quem pode agir, como obter seu contexto e quais dados cada operação aceita.
+Entrega: [Contrato de autorização](docs/architecture/authz/README.md),
+com `authz.ProblemAuthorizer` como interface única consumida pela futura feature
+de problemas. A1 está concluída: A2 pode ser implementada sem decisões implícitas
+sobre quem pode agir ou como obter seu contexto.
 
 ### A2 — Políticas por ação
 
