@@ -11,7 +11,8 @@ Cada etapa deve resultar em uma entrega pequena e verificável.
 - Nome livre obrigatório; sem catálogo ou detecção/aviso automático de duplicidade.
 - CID-11 opcional, preservando código, sistema e versão quando informado.
 - Situação clínica: `active` ou `resolved`; criação inicialmente ativa.
-- Cronicidade representada por um campo simples, definido somente por profissionais.
+- Classificação clínica do problema definida somente por profissionais; nesta fase,
+  os valores são `acute` e `chronic`.
 - Somente profissionais criam problemas, editam nome/CID, unificam, retificam
   e reabrem problemas. Paciente não pode criar problemas.
 - Qualquer conta registrada com acesso ativo pode resolver apenas problemas
@@ -22,28 +23,26 @@ Cada etapa deve resultar em uma entrega pequena e verificável.
   paciente ao qual se refere.
 - Problemas crônicos não podem ser resolvidos, nem por profissionais.
 - Na unificação, o profissional escolhe nome livre, CID, situação clínica e
-  cronicidade finais. Não há herança automática dessas escolhas.
+  classificação finais. Não há herança automática dessas escolhas.
 - Retificação de registro indevido exige motivo e preserva auditoria.
 - Unificação e retificação são condições administrativas, não resolução clínica.
 - Nesta fase inicial, uma conta registrada pode ser habilitada como profissional
   mediante uma senha de habilitação validada exclusivamente pelo backend.
 
-## Contrato proposto para cronicidade
+## Contrato de classificação clínica
 
-Usar um único campo `is_chronic`, sem catálogo de classificações:
+Usar `classification` com valores explícitos, sem booleano `is_chronic`:
 
 | Valor | Significado | Conta com acesso pode resolver? |
 | --- | --- | --- |
-| `true` | Crônico | Não |
-| `false` | Agudo, classificado explicitamente pelo profissional | Sim |
-| `null` | Ainda não classificado | Não |
+| `acute` | Agudo, classificado explicitamente pelo profissional | Sim |
+| `chronic` | Crônico | Não |
 
-A representação anulável é uma proposta de implementação para distinguir ausência
-de classificação de classificação explícita. Não usar `false` como padrão, pois
-isso permitiria resolução sem classificação profissional.
-Como a criação é exclusiva de profissionais, se a classificação for obrigatória
-na criação, um booleano obrigatório será suficiente. A obrigatoriedade ainda
-precisa ser definida; classificação ausente nunca libera resolução.
+Somente `acute` libera resolução. Não atribuir `acute` como padrão, pois isso
+permitiria resolução sem classificação profissional. A classificação é obrigatória
+na criação por profissional; ausência e valores desconhecidos são rejeitados.
+`latent` pode ser estudado no futuro, inclusive quanto a ser uma classificação
+exclusiva ou uma dimensão clínica separada; não faz parte do contrato atual.
 
 ## Estrutura existente e dependências
 
@@ -148,7 +147,7 @@ Status: **concluída no contrato e no código de autorização**.
 - `account`: habilitação e persistência do tipo da conta.
 - `patient/access`: consulta do acesso e manutenção dos vínculos existentes.
 - `authz`: decisões por ação a partir de conta confiável e contexto do paciente.
-- `patient/problem`: regras clínicas e mudanças de estado, incluindo cronicidade,
+- `patient/problem`: regras clínicas e mudanças de estado, incluindo classificação,
   com auditoria; implementação durante a Parte B.
 - Definir as interfaces entre os serviços e sua composição no bootstrap.
 - Definir erros e observabilidade seguindo `AppError`/`humaerror` existentes.
@@ -179,7 +178,7 @@ Status: **concluída no código**.
   problemas, sem depender de suas tabelas ou endpoints.
 
 Conclusão: política implementada e verificável de forma independente, com entradas
-e negativas explícitas. A regra de cronicidade continua pertencendo ao domínio de
+e negativas explícitas. A regra de classificação continua pertencendo ao domínio de
 problemas. A A3 fará a verificação consolidada da autorização.
 
 ### A3 — Verificação da autorização
@@ -204,26 +203,51 @@ serão adicionados com os endpoints das etapas B2 e B3.
 
 ### B1 — Domínio, persistência e auditoria
 
-- Definir problema, situação clínica, cronicidade e condição administrativa
-  (`valid`, `merged`, `entered_in_error`). Os nomes são propostas de contrato.
-- Criar problemas e histórico com autoria, timestamps, versão, valores anteriores/
-  novos e motivo quando aplicável; cada mudança e seu evento ficam na mesma transação.
-- Criar migration em `supabase/migrations`, schemas/queries do sqlc e adaptador
-  PostgreSQL; gerar arquivos pelo tooling, sem edição manual dos gerados.
-- Impedir crônico resolvido na aplicação e na persistência.
-- Permitir nomes/CIDs repetidos: duplicidade clínica é decisão do usuário.
+#### B1.1 — Contrato e regras do domínio
+
+Status: **concluída no domínio e nos testes**. A classificação `classification`
+é obrigatória na criação, com valores `acute` e `chronic`.
+
+- Definir o problema, a situação clínica (`active`, `resolved`), a classificação
+  (`acute`, `chronic`) e a condição administrativa (`valid`, `merged`,
+  `entered_in_error`).
+- Rejeitar criação sem classificação explícita.
+- Modelar autoria, timestamps, versão, valores anteriores/novos e motivo quando
+  aplicável no histórico. Definir as transições e invariantes de domínio que
+  serão aplicados às futuras operações.
+- Impedir a combinação `chronic` + `resolved`; permitir nomes e CIDs repetidos,
+  pois a avaliação de duplicidade clínica pertence ao usuário.
+- Testar as regras do domínio, inclusive ausência e valor desconhecido de
+  classificação, resolução, reabertura e condições administrativas.
+
+Conclusão: contrato e invariantes definidos e testados em
+`internal/features/patient/problem/domain`, sem dependência do banco. A
+autorização profissional continua em `authz`; B1.2 ainda precisa garantir
+versões e eventos na mesma transação PostgreSQL.
+
+#### B1.2 — Persistência transacional e auditoria
+
+- Criar migration em `supabase/migrations` para problemas e histórico, com
+  autoria, timestamps, versão, valores anteriores/novos e motivo quando aplicável.
+- Criar schemas/queries do sqlc e adaptador PostgreSQL; gerar arquivos pelo
+  tooling, sem edição manual dos gerados.
+- Gravar cada alteração e seu evento de histórico na mesma transação; preparar
+  controle de versão e operações atômicas para as etapas seguintes.
+- Reforçar no banco a proibição de `chronic` + `resolved`, conforme o contrato
+  de B1.1, sem impor unicidade a nome ou CID.
 - Manter tabelas protegidas, inclusive via RLS em schemas expostos, sem acesso
   direto do cliente que contorne regras da API.
+- Verificar migration, restrições e rollback das operações transacionais em
+  PostgreSQL descartável; compilar a geração do sqlc.
 
-Conclusão: invariantes e persistência verificadas; base pronta para os endpoints.
+Conclusão: persistência e auditoria verificadas; base pronta para os endpoints.
 
 ### B2 — Criação e consultas
 
 - Implementar criação, listagem paginada, detalhe e consulta ao histórico.
 - Aplicar autorização da Parte A: apenas profissionais com acesso podem criar.
 - Aceitar nome livre e CID opcional, iniciando como ativo.
-- Receber classificação profissional conforme o contrato final de B1;
-  se não informada e permitida, não assumir que o problema é agudo.
+- Exigir classificação profissional `acute` ou `chronic` na criação.
 - Listar registros válidos por padrão e oferecer filtros para situação e histórico
   administrativo; conectar bootstrap e rotas Huma.
 
@@ -232,14 +256,14 @@ com autoria e histórico preservados.
 
 ### B3 — Edição, classificação, resolução e reabertura
 
-- Permitir a profissionais editar nome/CID e cronicidade, mantendo ID e histórico.
-- Qualquer conta com acesso ativo resolve somente quando `is_chronic` for
-  explicitamente `false`; registrar a conta que realizou a operação.
+- Permitir a profissionais editar nome/CID e classificação, mantendo ID e histórico.
+- Qualquer conta com acesso ativo resolve somente quando a classificação for
+  explicitamente `acute`; registrar a conta que realizou a operação.
 - Reabertura exclusiva de profissionais; resolução de crônicos proibida para todos.
 - Impedir mudança de resolvido para crônico sem reabertura válida; validar o
   estado final de requests que alterem mais de um campo.
 - Proteger mudanças com controle de versão e transações; conferir a classificação
-  atual ao resolver, evitando corrida com uma alteração profissional de cronicidade.
+  atual ao resolver, evitando corrida com uma alteração profissional da classificação.
 
 Conclusão: transições corretas e autoria registrada; requests simultâneos não
 contornam a proibição de crônico resolvido nem sobrescrevem alterações.
@@ -255,7 +279,7 @@ Conclusão: motivo e autoria recuperáveis; registro indevido não aparece como 
 ### B5 — Unificação manual
 
 - Operação exclusiva de profissionais com destino e origens do mesmo paciente.
-- Exigir nome final livre e escolhas explícitas de CID, situação e cronicidade,
+- Exigir nome final livre e escolhas explícitas de CID, situação e classificação,
   mesmo se os valores dos registros originais forem iguais.
 - Como CID é opcional, definir a representação da escolha final sem código,
   distinguindo escolha explícita de omissão no payload.
@@ -285,14 +309,12 @@ verificadas. Testes pertinentes acompanham cada etapa, não ficam todos para B6.
 
 ## Ordem e divisão das entregas
 
-A1.1 → A1.2 → A1.3 → A1.4 → A1.5 → A2 → A3 → B1 → B2 → B3 → B4 → B5 → B6.
+A1.1 → A1.2 → A1.3 → A1.4 → A1.5 → A2 → A3 → B1.1 → B1.2 → B2 → B3 → B4 → B5 → B6.
 A1 pode ser entregue em incrementos documentais no mesmo PR. Para implementação,
-uma entrega/PR por etapa; separar domínio e persistência em B1 se ficar grande.
+uma entrega/PR por etapa; B1.1 fecha o domínio antes da migration de B1.2.
 O primeiro incremento utilizável chega ao final de B3. O escopo completo inclui B4 e B5.
 
 Pendências de contrato: representação da escolha sem CID na unificação.
-A forma anulável ou obrigatória do booleano depende da obrigatoriedade de
-classificação na criação e é proposta técnica.
 
 Interface mobile, notificações semanais, catálogo de terminologia, consulta externa
 CID-11 e implementação de encontros/evoluções/prescrições ficam fora deste plano.

@@ -34,7 +34,7 @@ type PatientContext struct {
 }
 
 // RequireProblemAction applies actor permissions to the requested patient.
-// Clinical and administrative rules, including chronicity, state transitions,
+// Clinical and administrative rules, including classification, state transitions,
 // rectification reason and same-patient merge validation, belong to patient/problem.
 func RequireProblemAction(action ProblemAction, patientID uuid.UUID, actor PatientContext) error {
 	if actor.AccountID == uuid.Nil {
