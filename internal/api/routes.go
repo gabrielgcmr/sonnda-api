@@ -12,6 +12,7 @@ import (
 	accesshttp "github.com/gabrielgcmr/sonnda/internal/features/patient/access/http"
 	laboratoryhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/http"
 	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
+	problemhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/http"
 	profilehttp "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/http"
 	"github.com/gabrielgcmr/sonnda/static"
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,7 @@ type APIDependencies struct {
 	PatientAccessHandler           *accesshttp.Handler
 	PatientCreationHandler         *patienthttp.CreationHandler
 	PatientHandler                 *profilehttp.Handler
+	PatientProblemHandler          *problemhttp.Handler
 	LaboratoryHandler              *laboratoryhttp.Handler
 	ExamsHandler                   *documentprocessinghttp.ExamsHandler
 	StandaloneLabExtractionHandler *documentprocessinghttp.StandaloneLabExtractionHandler
@@ -55,6 +57,7 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	deps.PatientAccessHandler.RegisterHumaRoutes(registered, bearerSecurity())
 	deps.PatientCreationHandler.RegisterHumaRoutes(registered, bearerSecurity())
 	deps.PatientHandler.RegisterHumaRoutes(registered, bearerSecurity())
+	deps.PatientProblemHandler.RegisterHumaRoutes(registered, bearerSecurity())
 	deps.ExamsHandler.RegisterHumaRoutes(registered, bearerSecurity())
 	deps.StandaloneLabExtractionHandler.RegisterHumaRoutes(registered, bearerSecurity())
 	deps.LaboratoryHandler.RegisterHumaRoutes(registered, bearerSecurity())

@@ -72,3 +72,24 @@ func TestAppTracesCORSResponses(t *testing.T) {
 		})
 	}
 }
+
+func TestProblemRoutesRequireBearerAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New(Options{
+		Deps:       &APIDependencies{},
+		Logger:     slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		CORSConfig: config.CORSConfig{AllowOrigins: []string{"https://app.example.test"}},
+	})
+	base := "/patients/af4c0732-3480-4076-a93d-d5c6d26e07db/problems"
+	id := "/76b550c7-4fdd-4b5b-8c40-c34ef31e363c"
+	for _, operation := range []struct{ method, path string }{
+		{http.MethodPost, base}, {http.MethodGet, base},
+		{http.MethodGet, base + id}, {http.MethodGet, base + id + "/history"},
+	} {
+		response := httptest.NewRecorder()
+		app.router.ServeHTTP(response, httptest.NewRequest(operation.method, operation.path, nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s: %d %s", operation.method, operation.path, response.Code, response.Body.String())
+		}
+	}
+}

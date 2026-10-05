@@ -9,9 +9,12 @@ import (
 )
 
 type Querier interface {
-	// internal/infrastructure/database/postgres/sqlc/sql/queries/problem_queries.sql
 	CreatePatientProblem(ctx context.Context, arg CreatePatientProblemParams) error
 	CreatePatientProblemHistory(ctx context.Context, arg CreatePatientProblemHistoryParams) error
+	// internal/infrastructure/database/postgres/sqlc/sql/queries/problem_queries.sql
+	GetPatientProblem(ctx context.Context, arg GetPatientProblemParams) (PatientProblem, error)
+	ListPatientProblemHistory(ctx context.Context, arg ListPatientProblemHistoryParams) ([]PatientProblemHistory, error)
+	ListPatientProblems(ctx context.Context, arg ListPatientProblemsParams) ([]PatientProblem, error)
 	UpdatePatientProblemVersion(ctx context.Context, arg UpdatePatientProblemVersionParams) (int64, error)
 }
 

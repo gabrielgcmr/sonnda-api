@@ -1,4 +1,22 @@
 -- internal/infrastructure/database/postgres/sqlc/sql/queries/problem_queries.sql
+-- name: GetPatientProblem :one
+SELECT * FROM patient_problems
+WHERE patient_id = sqlc.arg(patient_id) AND id = sqlc.arg(id);
+
+-- name: ListPatientProblems :many
+SELECT * FROM patient_problems
+WHERE patient_id = sqlc.arg(patient_id)
+  AND (sqlc.arg(clinical_filter)::text = 'all' OR clinical_status = sqlc.arg(clinical_filter)::text)
+  AND (sqlc.arg(administrative_filter)::text = 'all' OR administrative_status = sqlc.arg(administrative_filter)::text)
+ORDER BY updated_at DESC, id DESC
+LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
+
+-- name: ListPatientProblemHistory :many
+SELECT * FROM patient_problem_history
+WHERE patient_id = sqlc.arg(patient_id) AND problem_id = sqlc.arg(problem_id)
+ORDER BY version DESC
+LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
+
 -- name: CreatePatientProblem :exec
 INSERT INTO patient_problems (
     id, patient_id, name, cid11_code, cid11_system, cid11_version,

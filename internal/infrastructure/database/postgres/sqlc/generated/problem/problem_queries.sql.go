@@ -42,7 +42,6 @@ type CreatePatientProblemParams struct {
 	Version              int64              `json:"version"`
 }
 
-// internal/infrastructure/database/postgres/sqlc/sql/queries/problem_queries.sql
 func (q *Queries) CreatePatientProblem(ctx context.Context, arg CreatePatientProblemParams) error {
 	_, err := q.db.Exec(ctx, createPatientProblem,
 		arg.ID,
@@ -104,6 +103,148 @@ func (q *Queries) CreatePatientProblemHistory(ctx context.Context, arg CreatePat
 		arg.SourceProblemIds,
 	)
 	return err
+}
+
+const getPatientProblem = `-- name: GetPatientProblem :one
+SELECT id, patient_id, name, cid11_code, cid11_system, cid11_version, classification, clinical_status, administrative_status, merged_into_id, created_by_account_id, created_at, updated_at, version FROM patient_problems
+WHERE patient_id = $1 AND id = $2
+`
+
+type GetPatientProblemParams struct {
+	PatientID uuid.UUID `json:"patient_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// internal/infrastructure/database/postgres/sqlc/sql/queries/problem_queries.sql
+func (q *Queries) GetPatientProblem(ctx context.Context, arg GetPatientProblemParams) (PatientProblem, error) {
+	row := q.db.QueryRow(ctx, getPatientProblem, arg.PatientID, arg.ID)
+	var i PatientProblem
+	err := row.Scan(
+		&i.ID,
+		&i.PatientID,
+		&i.Name,
+		&i.Cid11Code,
+		&i.Cid11System,
+		&i.Cid11Version,
+		&i.Classification,
+		&i.ClinicalStatus,
+		&i.AdministrativeStatus,
+		&i.MergedIntoID,
+		&i.CreatedByAccountID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
+const listPatientProblemHistory = `-- name: ListPatientProblemHistory :many
+SELECT id, problem_id, patient_id, version, action, actor_account_id, occurred_at, before_snapshot, after_snapshot, reason, source_problem_ids FROM patient_problem_history
+WHERE patient_id = $1 AND problem_id = $2
+ORDER BY version DESC
+LIMIT $4::int OFFSET $3::int
+`
+
+type ListPatientProblemHistoryParams struct {
+	PatientID  uuid.UUID `json:"patient_id"`
+	ProblemID  uuid.UUID `json:"problem_id"`
+	PageOffset int32     `json:"page_offset"`
+	PageLimit  int32     `json:"page_limit"`
+}
+
+func (q *Queries) ListPatientProblemHistory(ctx context.Context, arg ListPatientProblemHistoryParams) ([]PatientProblemHistory, error) {
+	rows, err := q.db.Query(ctx, listPatientProblemHistory,
+		arg.PatientID,
+		arg.ProblemID,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PatientProblemHistory
+	for rows.Next() {
+		var i PatientProblemHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProblemID,
+			&i.PatientID,
+			&i.Version,
+			&i.Action,
+			&i.ActorAccountID,
+			&i.OccurredAt,
+			&i.BeforeSnapshot,
+			&i.AfterSnapshot,
+			&i.Reason,
+			&i.SourceProblemIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPatientProblems = `-- name: ListPatientProblems :many
+SELECT id, patient_id, name, cid11_code, cid11_system, cid11_version, classification, clinical_status, administrative_status, merged_into_id, created_by_account_id, created_at, updated_at, version FROM patient_problems
+WHERE patient_id = $1
+  AND ($2::text = 'all' OR clinical_status = $2::text)
+  AND ($3::text = 'all' OR administrative_status = $3::text)
+ORDER BY updated_at DESC, id DESC
+LIMIT $5::int OFFSET $4::int
+`
+
+type ListPatientProblemsParams struct {
+	PatientID            uuid.UUID `json:"patient_id"`
+	ClinicalFilter       string    `json:"clinical_filter"`
+	AdministrativeFilter string    `json:"administrative_filter"`
+	PageOffset           int32     `json:"page_offset"`
+	PageLimit            int32     `json:"page_limit"`
+}
+
+func (q *Queries) ListPatientProblems(ctx context.Context, arg ListPatientProblemsParams) ([]PatientProblem, error) {
+	rows, err := q.db.Query(ctx, listPatientProblems,
+		arg.PatientID,
+		arg.ClinicalFilter,
+		arg.AdministrativeFilter,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PatientProblem
+	for rows.Next() {
+		var i PatientProblem
+		if err := rows.Scan(
+			&i.ID,
+			&i.PatientID,
+			&i.Name,
+			&i.Cid11Code,
+			&i.Cid11System,
+			&i.Cid11Version,
+			&i.Classification,
+			&i.ClinicalStatus,
+			&i.AdministrativeStatus,
+			&i.MergedIntoID,
+			&i.CreatedByAccountID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updatePatientProblemVersion = `-- name: UpdatePatientProblemVersion :execrows

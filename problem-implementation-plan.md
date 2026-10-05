@@ -251,6 +251,14 @@ para os endpoints de B2.
 
 ### B2 — Criação e consultas
 
+Status: **concluída nos serviços, consultas PostgreSQL e endpoints Huma**.
+Criação, listagem, detalhe e histórico usam a autorização da Parte A e estão
+conectados ao bootstrap. A listagem usa `limit`/`offset`, `has_more`, filtros
+`clinical_status` e `administrative_status`, com `valid` por padrão.
+Histórico paginado por versão decrescente preserva snapshots e autoria.
+Contrato e exemplos: `internal/features/patient/problem/README.md`.
+A execução requer a migration de B1.2 aplicada no ambiente.
+
 - Implementar criação, listagem paginada, detalhe e consulta ao histórico.
 - Aplicar autorização da Parte A: apenas profissionais com acesso podem criar.
 - Aceitar nome livre e CID opcional, iniciando como ativo.

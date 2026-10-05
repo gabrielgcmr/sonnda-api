@@ -137,6 +137,7 @@ func main() {
 			PatientAccessHandler:           modules.PatientAccess.Handler,
 			PatientCreationHandler:         modules.Patient.CreationHandler,
 			PatientHandler:                 modules.Patient.ProfileHandler,
+			PatientProblemHandler:          modules.Patient.ProblemHandler,
 			LaboratoryHandler:              modules.Labs.LaboratoryHandler,
 			ExamsHandler:                   modules.Exams.Handler,
 			StandaloneLabExtractionHandler: modules.Exams.StandaloneLabExtractionHandler,

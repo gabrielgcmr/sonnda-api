@@ -8,6 +8,9 @@ import (
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	accesspostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/access/postgres"
 	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
+	"github.com/gabrielgcmr/sonnda/internal/features/patient/problem"
+	problemhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/http"
+	problempostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/postgres"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
 	profilehttp "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/http"
 	patientpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/postgres"
@@ -20,6 +23,7 @@ type PatientModule struct {
 	ProfileHandler    *profilehttp.Handler
 	CreationHandler   *patienthttp.CreationHandler
 	ProblemAuthorizer authz.ProblemAuthorizer
+	ProblemHandler    *problemhttp.Handler
 }
 
 func NewPatientModule(db *postgress.Client) *PatientModule {
@@ -30,13 +34,14 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 	svc := patientprofile.New(patientRepo, accessRepo, accessChecker)
 	creator := patientcreation.New(patientcreationpostgres.NewRepository(db))
 	accounts := accountpostgres.New(db.Pool())
+	problemAuthorizer := authz.NewProblemAuthorizer(authz.NewPatientContextResolver(accounts, accessChecker))
+	problemService := problem.New(problempostgres.NewRepository(db), problemAuthorizer)
 
 	return &PatientModule{
-		Service:         svc,
-		ProfileHandler:  profilehttp.NewHandler(svc),
-		CreationHandler: patienthttp.NewCreationHandler(creator),
-		ProblemAuthorizer: authz.NewProblemAuthorizer(
-			authz.NewPatientContextResolver(accounts, accessChecker),
-		),
+		Service:           svc,
+		ProfileHandler:    profilehttp.NewHandler(svc),
+		CreationHandler:   patienthttp.NewCreationHandler(creator),
+		ProblemAuthorizer: problemAuthorizer,
+		ProblemHandler:    problemhttp.NewHandler(problemService),
 	}
 }
