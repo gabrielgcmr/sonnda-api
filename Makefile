@@ -6,7 +6,7 @@ APP_NAME := sonnda
 MAIN     := ./cmd/api
 VERSION ?= 1.0.0
 LDFLAGS := -s -w -X github.com/gabrielgcmr/sonnda/cmd/api.version=$(VERSION)
-SQLC_SPEC := internal/infrastructure/persistence/postgres/sqlc/sqlc.yaml
+SQLC_SPEC := internal/infrastructure/database/postgres/sqlc/sqlc.yaml
 
 # ==============================================================================
 # 🎯 TARGETS PRINCIPAIS

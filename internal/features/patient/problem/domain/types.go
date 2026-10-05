@@ -82,8 +82,12 @@ func (s Snapshot) Validate(problemID uuid.UUID) error {
 	if strings.TrimSpace(s.Name) == "" {
 		return ErrInvalidName
 	}
-	if s.CID11 != nil && strings.TrimSpace(s.CID11.Code) == "" {
-		return ErrInvalidCID11
+	if s.CID11 != nil {
+		if strings.TrimSpace(s.CID11.Code) == "" ||
+			strings.TrimSpace(s.CID11.System) == "" ||
+			strings.TrimSpace(s.CID11.Version) == "" {
+			return ErrInvalidCID11
+		}
 	}
 	if !s.Classification.IsValid() {
 		return ErrInvalidClassification

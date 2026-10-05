@@ -74,6 +74,22 @@ func TestNewProblemPreservesCodingAndCreationAudit(t *testing.T) {
 	}
 }
 
+func TestNewProblemRejectsIncompleteCID11(t *testing.T) {
+	for _, coding := range []*CID11{
+		{Code: "", System: "ICD-11", Version: "2026"},
+		{Code: "CA23", System: "", Version: "2026"},
+		{Code: "CA23", System: "ICD-11", Version: ""},
+	} {
+		_, _, err := NewProblem(NewProblemParams{
+			PatientID: testPatientID, ActorAccountID: testActorID,
+			Name: "Problema", CID11: coding, Classification: ClassificationAcute, OccurredAt: testTime,
+		})
+		if !errors.Is(err, ErrInvalidCID11) {
+			t.Fatalf("coding %+v: expected ErrInvalidCID11, got %v", coding, err)
+		}
+	}
+}
+
 func TestProblemRejectsChronicResolvedEvenOnDirectStateValidation(t *testing.T) {
 	problem := newTestProblem(t, ClassificationChronic)
 	problem.State.ClinicalStatus = ClinicalStatusResolved

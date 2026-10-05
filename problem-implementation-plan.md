@@ -227,6 +227,10 @@ versões e eventos na mesma transação PostgreSQL.
 
 #### B1.2 — Persistência transacional e auditoria
 
+Status: **concluída na migration, sqlc e adaptador PostgreSQL**. Criação e
+alteração usam transações que gravam a versão do problema e seu evento de
+histórico em conjunto; alterações exigem a versão anterior esperada.
+
 - Criar migration em `supabase/migrations` para problemas e histórico, com
   autoria, timestamps, versão, valores anteriores/novos e motivo quando aplicável.
 - Criar schemas/queries do sqlc e adaptador PostgreSQL; gerar arquivos pelo
@@ -240,7 +244,10 @@ versões e eventos na mesma transação PostgreSQL.
 - Verificar migration, restrições e rollback das operações transacionais em
   PostgreSQL descartável; compilar a geração do sqlc.
 
-Conclusão: persistência e auditoria verificadas; base pronta para os endpoints.
+Conclusão: persistência e auditoria verificadas em PostgreSQL descartável,
+incluindo rollback, conflito de versão, restrição de crônico resolvido,
+duplicidades permitidas, RLS, privilégios e histórico imutável. Base pronta
+para os endpoints de B2.
 
 ### B2 — Criação e consultas
 
