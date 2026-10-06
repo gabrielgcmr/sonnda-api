@@ -80,6 +80,7 @@ func (h *Handler) RegisterHumaRoutes(api huma.API, security []map[string][]strin
 	history := operation("listPatientProblemHistory", http.MethodGet, base+"/{problemId}/history", "Consultar histórico do problema")
 	history.Description = "Eventos em ordem de versão decrescente, com snapshots anteriores e posteriores. Problema inexistente ou de outro paciente retorna 404."
 	huma.Register(api, history, h.history)
+	h.registerChangeRoutes(api, security)
 }
 
 func (h *Handler) create(ctx context.Context, input *createInput) (*createOutput, error) {

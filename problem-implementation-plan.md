@@ -271,6 +271,17 @@ com autoria e histórico preservados.
 
 ### B3 — Edição, classificação, resolução e reabertura
 
+Status: **concluída nos serviços e endpoints Huma**. Edição de nome/CID,
+classificação, resolução e reabertura são operações separadas, exigindo a
+versão atual no payload. Usam as transições do domínio de B1.1 e a atualização
+transacional com auditoria de B1.2; conflitos retornam `409`.
+Contrato e exemplos: `internal/features/patient/problem/README.md`.
+Testes HTTP cobrem permissões, regras clínicas, autoria, CID, conflitos e
+mudança de classificação entre leitura e escrita. Testes PostgreSQL cobrem
+operações simultâneas, mas exigem `PROBLEMS_TEST_DATABASE_URL` local para execução.
+Verificação desta entrega: suíte Go e exportação OpenAPI executadas com sucesso;
+testes de integração PostgreSQL pendentes por ausência de instância local configurada.
+
 - Permitir a profissionais editar nome/CID e classificação, mantendo ID e histórico.
 - Qualquer conta com acesso ativo resolve somente quando a classificação for
   explicitamente `acute`; registrar a conta que realizou a operação.

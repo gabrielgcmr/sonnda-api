@@ -152,5 +152,8 @@ func storeError(err error) error {
 	if errors.Is(err, ErrNotFound) {
 		return apperr.NotFound("problema não encontrado")
 	}
+	if errors.Is(err, ErrVersionConflict) {
+		return apperr.Conflict("problema alterado por outra operação; consulte a versão atual")
+	}
 	return &apperr.AppError{Kind: apperr.INFRA_DATABASE_ERROR, Message: "falha técnica", Cause: err}
 }

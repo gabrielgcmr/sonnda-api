@@ -25,12 +25,14 @@ import (
 
 type testStore struct {
 	problem.Repository
-	p      problemdomain.Problem
-	events []problemdomain.HistoryEvent
-	calls  int
-	filter problem.ListFilter
-	page   problem.Pagination
-	err    error
+	p            problemdomain.Problem
+	events       []problemdomain.HistoryEvent
+	calls        int
+	filter       problem.ListFilter
+	page         problem.Pagination
+	err          error
+	updateErr    error
+	beforeUpdate func()
 }
 
 func (r *testStore) Create(_ context.Context, p problemdomain.Problem, event problemdomain.HistoryEvent) error {
