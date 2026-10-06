@@ -1,24 +1,25 @@
--- Users table: stores core user information
-CREATE TABLE users (
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/users.sql
+CREATE TABLE accounts (
   id UUID PRIMARY KEY,
-  auth_issuer TEXT NOT NULL,
-  auth_subject TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  full_name TEXT NOT NULL,
-  birth_date DATE NOT NULL,
-  cpf TEXT NOT NULL UNIQUE,
-  phone TEXT NOT NULL,
-  account_type TEXT NOT NULL CHECK (account_type IN ('professional', 'basic_care')),
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  deleted_at TIMESTAMP WITH TIME ZONE
+  full_name TEXT,
+  birth_date DATE,
+  cpf TEXT UNIQUE,
+  phone TEXT,
+  account_type TEXT NOT NULL DEFAULT 'basic_care' CHECK (account_type IN ('professional', 'basic_care')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ
 );
-
--- Índices de busca rápida e unicidade de identidade
-CREATE UNIQUE INDEX idx_users_auth_identity ON users(auth_provider, auth_subject);
-
-CREATE INDEX idx_users_email ON users(email);
-
-CREATE INDEX idx_users_cpf ON users(cpf);
-
-CREATE INDEX idx_users_deleted_at ON users (deleted_at);
+CREATE INDEX idx_accounts_deleted_at ON accounts (deleted_at);
+CREATE TABLE account_identities (
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  issuer TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (issuer, subject),
+  CHECK (btrim(issuer) <> ''),
+  CHECK (btrim(subject) <> '')
+);
+CREATE INDEX account_identities_account_id_idx ON account_identities (account_id);

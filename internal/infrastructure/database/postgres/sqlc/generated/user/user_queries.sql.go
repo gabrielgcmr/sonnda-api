@@ -12,25 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const activateUserAsProfessional = `-- name: ActivateUserAsProfessional :one
-UPDATE
-  users
-SET
-  account_type = 'professional',
-  updated_at = now()
-WHERE
-  id = $1
-  AND deleted_at IS NULL RETURNING id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
+const activateAccountAsProfessional = `-- name: ActivateAccountAsProfessional :one
+UPDATE accounts SET account_type = 'professional', updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL RETURNING id, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) ActivateUserAsProfessional(ctx context.Context, id uuid.UUID) (User, error) {
-	row := q.db.QueryRow(ctx, activateUserAsProfessional, id)
-	var i User
+func (q *Queries) ActivateAccountAsProfessional(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, activateAccountAsProfessional, id)
+	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
 		&i.FullName,
 		&i.BirthDate,
 		&i.Cpf,
@@ -43,263 +34,220 @@ func (q *Queries) ActivateUserAsProfessional(ctx context.Context, id uuid.UUID) 
 	return i, err
 }
 
-const createUser = `-- name: CreateUser :exec
-INSERT INTO
-  users (
-    id,
-    auth_issuer,
-    auth_subject,
-    email,
-    full_name,
-    birth_date,
-    cpf,
-    phone,
-    account_type,
-    created_at,
-    updated_at
-  )
-VALUES
-  ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+const createAccount = `-- name: CreateAccount :exec
+INSERT INTO accounts (id, account_type, created_at, updated_at)
+VALUES ($1, 'basic_care', now(), now())
 `
 
-type CreateUserParams struct {
-	ID          uuid.UUID          `json:"id"`
-	AuthIssuer  string             `json:"auth_issuer"`
-	AuthSubject string             `json:"auth_subject"`
-	Email       string             `json:"email"`
-	FullName    string             `json:"full_name"`
-	BirthDate   pgtype.Date        `json:"birth_date"`
-	Cpf         string             `json:"cpf"`
-	Phone       string             `json:"phone"`
-	AccountType string             `json:"account_type"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+// internal/infrastructure/database/postgres/sqlc/sql/queries/user_queries.sql
+func (q *Queries) CreateAccount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, createAccount, id)
+	return err
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.Exec(ctx, createUser,
-		arg.ID,
-		arg.AuthIssuer,
-		arg.AuthSubject,
+const createAccountIdentity = `-- name: CreateAccountIdentity :exec
+INSERT INTO account_identities (account_id, issuer, subject, email)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateAccountIdentityParams struct {
+	AccountID uuid.UUID   `json:"account_id"`
+	Issuer    string      `json:"issuer"`
+	Subject   string      `json:"subject"`
+	Email     pgtype.Text `json:"email"`
+}
+
+func (q *Queries) CreateAccountIdentity(ctx context.Context, arg CreateAccountIdentityParams) error {
+	_, err := q.db.Exec(ctx, createAccountIdentity,
+		arg.AccountID,
+		arg.Issuer,
+		arg.Subject,
 		arg.Email,
-		arg.FullName,
-		arg.BirthDate,
-		arg.Cpf,
-		arg.Phone,
-		arg.AccountType,
-		arg.CreatedAt,
-		arg.UpdatedAt,
 	)
 	return err
 }
 
-const deleteUser = `-- name: DeleteUser :execrows
-DELETE FROM
-  users
-WHERE
-  id = $1
+const findAccountByAuthIdentity = `-- name: FindAccountByAuthIdentity :one
+SELECT a.id, a.full_name, a.birth_date, a.cpf, a.phone, a.account_type, a.created_at, a.updated_at, a.deleted_at FROM accounts a
+JOIN account_identities i ON i.account_id = a.id
+WHERE i.issuer = $1 AND i.subject = $2
 `
 
-func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteUser, id)
+type FindAccountByAuthIdentityParams struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
+}
+
+func (q *Queries) FindAccountByAuthIdentity(ctx context.Context, arg FindAccountByAuthIdentityParams) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByAuthIdentity, arg.Issuer, arg.Subject)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.FullName,
+		&i.BirthDate,
+		&i.Cpf,
+		&i.Phone,
+		&i.AccountType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const findAccountByCPF = `-- name: FindAccountByCPF :one
+SELECT id, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at FROM accounts WHERE cpf = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) FindAccountByCPF(ctx context.Context, cpf pgtype.Text) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByCPF, cpf)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.FullName,
+		&i.BirthDate,
+		&i.Cpf,
+		&i.Phone,
+		&i.AccountType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const findAccountByID = `-- name: FindAccountByID :one
+SELECT id, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at FROM accounts WHERE id = $1
+`
+
+func (q *Queries) FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByID, id)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.FullName,
+		&i.BirthDate,
+		&i.Cpf,
+		&i.Phone,
+		&i.AccountType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const findAccountIdentity = `-- name: FindAccountIdentity :one
+SELECT account_id, issuer, subject, email, created_at, updated_at FROM account_identities WHERE issuer = $1 AND subject = $2
+`
+
+type FindAccountIdentityParams struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
+}
+
+func (q *Queries) FindAccountIdentity(ctx context.Context, arg FindAccountIdentityParams) (AccountIdentity, error) {
+	row := q.db.QueryRow(ctx, findAccountIdentity, arg.Issuer, arg.Subject)
+	var i AccountIdentity
+	err := row.Scan(
+		&i.AccountID,
+		&i.Issuer,
+		&i.Subject,
+		&i.Email,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listAccountIdentities = `-- name: ListAccountIdentities :many
+SELECT account_id, issuer, subject, email, created_at, updated_at FROM account_identities WHERE account_id = $1 ORDER BY created_at, issuer, subject
+`
+
+func (q *Queries) ListAccountIdentities(ctx context.Context, accountID uuid.UUID) ([]AccountIdentity, error) {
+	rows, err := q.db.Query(ctx, listAccountIdentities, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AccountIdentity
+	for rows.Next() {
+		var i AccountIdentity
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Issuer,
+			&i.Subject,
+			&i.Email,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const softDeleteAccount = `-- name: SoftDeleteAccount :execrows
+UPDATE accounts SET deleted_at = now(), updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteAccount(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteAccount, id)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
 
-const findUserByAuthIdentity = `-- name: FindUserByAuthIdentity :one
-SELECT
-  id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
-FROM
-  users
-WHERE
-  auth_issuer = $1
-  AND auth_subject = $2
-  AND deleted_at IS NULL
+const updateAccountIdentityEmail = `-- name: UpdateAccountIdentityEmail :execrows
+UPDATE account_identities SET email = $3, updated_at = now()
+WHERE issuer = $1 AND subject = $2 AND email IS DISTINCT FROM $3
 `
 
-type FindUserByAuthIdentityParams struct {
-	AuthIssuer  string `json:"auth_issuer"`
-	AuthSubject string `json:"auth_subject"`
+type UpdateAccountIdentityEmailParams struct {
+	Issuer  string      `json:"issuer"`
+	Subject string      `json:"subject"`
+	Email   pgtype.Text `json:"email"`
 }
 
-func (q *Queries) FindUserByAuthIdentity(ctx context.Context, arg FindUserByAuthIdentityParams) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByAuthIdentity, arg.AuthIssuer, arg.AuthSubject)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
-		&i.FullName,
-		&i.BirthDate,
-		&i.Cpf,
-		&i.Phone,
-		&i.AccountType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const findUserByCPF = `-- name: FindUserByCPF :one
-SELECT
-  id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
-FROM
-  users
-WHERE
-  cpf = $1
-  AND deleted_at IS NULL
-LIMIT
-  1
-`
-
-func (q *Queries) FindUserByCPF(ctx context.Context, cpf string) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByCPF, cpf)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
-		&i.FullName,
-		&i.BirthDate,
-		&i.Cpf,
-		&i.Phone,
-		&i.AccountType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT
-  id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
-FROM
-  users
-WHERE
-  email = $1
-  AND deleted_at IS NULL
-LIMIT
-  1
-`
-
-func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByEmail, email)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
-		&i.FullName,
-		&i.BirthDate,
-		&i.Cpf,
-		&i.Phone,
-		&i.AccountType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const findUserByID = `-- name: FindUserByID :one
-SELECT
-  id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
-FROM
-  users
-WHERE
-  id = $1
-  AND deleted_at IS NULL
-LIMIT
-  1
-`
-
-func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByID, id)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
-		&i.FullName,
-		&i.BirthDate,
-		&i.Cpf,
-		&i.Phone,
-		&i.AccountType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const softDeleteUser = `-- name: SoftDeleteUser :execrows
-UPDATE
-  users
-SET
-  deleted_at = now(),
-  updated_at = now()
-WHERE
-  id = $1
-  AND deleted_at IS NULL
-`
-
-func (q *Queries) SoftDeleteUser(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeleteUser, id)
+func (q *Queries) UpdateAccountIdentityEmail(ctx context.Context, arg UpdateAccountIdentityEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAccountIdentityEmail, arg.Issuer, arg.Subject, arg.Email)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
 
-const updateUser = `-- name: UpdateUser :one
-UPDATE
-  users
-SET
-  email = $2,
-  full_name = $3,
-  birth_date = $4,
-  cpf = $5,
-  phone = $6,
-  updated_at = $7
-WHERE
-  id = $1
-  AND deleted_at IS NULL RETURNING id, auth_issuer, auth_subject, email, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
+const updateAccountProfile = `-- name: UpdateAccountProfile :one
+UPDATE accounts
+SET full_name = $2, birth_date = $3, cpf = $4, phone = $5, updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL RETURNING id, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at
 `
 
-type UpdateUserParams struct {
-	ID        uuid.UUID          `json:"id"`
-	Email     string             `json:"email"`
-	FullName  string             `json:"full_name"`
-	BirthDate pgtype.Date        `json:"birth_date"`
-	Cpf       string             `json:"cpf"`
-	Phone     string             `json:"phone"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+type UpdateAccountProfileParams struct {
+	ID        uuid.UUID   `json:"id"`
+	FullName  pgtype.Text `json:"full_name"`
+	BirthDate pgtype.Date `json:"birth_date"`
+	Cpf       pgtype.Text `json:"cpf"`
+	Phone     pgtype.Text `json:"phone"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUser,
+func (q *Queries) UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (Account, error) {
+	row := q.db.QueryRow(ctx, updateAccountProfile,
 		arg.ID,
-		arg.Email,
 		arg.FullName,
 		arg.BirthDate,
 		arg.Cpf,
 		arg.Phone,
-		arg.UpdatedAt,
 	)
-	var i User
+	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.AuthIssuer,
-		&i.AuthSubject,
-		&i.Email,
 		&i.FullName,
 		&i.BirthDate,
 		&i.Cpf,

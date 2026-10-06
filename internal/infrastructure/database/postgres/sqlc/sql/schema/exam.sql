@@ -1,11 +1,12 @@
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/exam.sql
 -- internal/infrastructure/persistence/postgres/sqlc/sql/schema/exam.sql
 CREATE TABLE exam_documents (
     id                  UUID PRIMARY KEY,
     patient_id          UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    uploaded_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    uploaded_by_user_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     review_status TEXT CHECK (review_status IN ('pending', 'confirmed', 'deleting')),
     lab_report_id UUID,
-    confirmed_by_user_id UUID REFERENCES users(id),
+    confirmed_by_user_id UUID REFERENCES accounts(id),
     confirmed_at TIMESTAMPTZ,
     storage_uri         TEXT NOT NULL,
     original_filename   TEXT NOT NULL,
@@ -39,7 +40,7 @@ CREATE TABLE exam_document_texts (
     id                  UUID PRIMARY KEY,
     exam_document_id    UUID UNIQUE REFERENCES exam_documents(id) ON DELETE SET NULL,
     patient_id          UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    uploaded_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    uploaded_by_user_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     category            TEXT NOT NULL,
     title               TEXT,
     modality            TEXT,

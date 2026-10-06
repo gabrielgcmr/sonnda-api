@@ -31,6 +31,7 @@ type CreateProfessionalParams struct {
 	Status             string      `json:"status"`
 }
 
+// internal/infrastructure/database/postgres/sqlc/sql/queries/professional_queries.sql
 // Profissionais
 // Cria apenas a parte "profissional" (O ID vem do User já criado)
 func (q *Queries) CreateProfessional(ctx context.Context, arg CreateProfessionalParams) (Professional, error) {
@@ -62,10 +63,9 @@ const getFullProfessionalDetails = `-- name: GetFullProfessionalDetails :one
 SELECT 
     p.user_id, p.kind, p.registration_number, p.registration_issuer, p.registration_state, p.status, p.verified_at, p.deleted_at, p.created_at, p.updated_at,
     u.full_name,
-    u.email,
     u.phone
 FROM professionals p
-JOIN users u ON u.id = p.user_id
+JOIN accounts u ON u.id = p.user_id
 WHERE p.user_id = $1 AND p.deleted_at IS NULL
 LIMIT 1
 `
@@ -81,9 +81,8 @@ type GetFullProfessionalDetailsRow struct {
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	FullName           string             `json:"full_name"`
-	Email              string             `json:"email"`
-	Phone              string             `json:"phone"`
+	FullName           pgtype.Text        `json:"full_name"`
+	Phone              pgtype.Text        `json:"phone"`
 }
 
 // Query especial para telas de perfil: Retorna TUDO junto
@@ -102,7 +101,6 @@ func (q *Queries) GetFullProfessionalDetails(ctx context.Context, userID uuid.UU
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.FullName,
-		&i.Email,
 		&i.Phone,
 	)
 	return i, err
@@ -136,7 +134,7 @@ func (q *Queries) GetProfessionalByUserID(ctx context.Context, userID uuid.UUID)
 const listProfessionalsByName = `-- name: ListProfessionalsByName :many
 SELECT p.user_id, p.kind, p.registration_number, p.registration_issuer, p.registration_state, p.status, p.verified_at, p.deleted_at, p.created_at, p.updated_at
 FROM professionals p
-JOIN users u ON u.id = p.user_id
+JOIN accounts u ON u.id = p.user_id
 WHERE u.full_name ILIKE '%' || $3 || '%'
   AND p.deleted_at IS NULL
 LIMIT $1 OFFSET $2

@@ -9,17 +9,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type User struct {
+type Account struct {
 	ID          uuid.UUID          `json:"id"`
-	AuthIssuer  string             `json:"auth_issuer"`
-	AuthSubject string             `json:"auth_subject"`
-	Email       string             `json:"email"`
-	FullName    string             `json:"full_name"`
+	FullName    pgtype.Text        `json:"full_name"`
 	BirthDate   pgtype.Date        `json:"birth_date"`
-	Cpf         string             `json:"cpf"`
-	Phone       string             `json:"phone"`
+	Cpf         pgtype.Text        `json:"cpf"`
+	Phone       pgtype.Text        `json:"phone"`
 	AccountType string             `json:"account_type"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type AccountIdentity struct {
+	AccountID uuid.UUID          `json:"account_id"`
+	Issuer    string             `json:"issuer"`
+	Subject   string             `json:"subject"`
+	Email     pgtype.Text        `json:"email"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

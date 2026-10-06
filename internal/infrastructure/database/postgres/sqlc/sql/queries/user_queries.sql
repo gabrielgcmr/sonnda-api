@@ -1,100 +1,42 @@
--- name: CreateUser :exec
-INSERT INTO
-  users (
-    id,
-    auth_issuer,
-    auth_subject,
-    email,
-    full_name,
-    birth_date,
-    cpf,
-    phone,
-    account_type,
-    created_at,
-    updated_at
-  )
-VALUES
-  ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+-- internal/infrastructure/database/postgres/sqlc/sql/queries/user_queries.sql
+-- name: CreateAccount :exec
+INSERT INTO accounts (id, account_type, created_at, updated_at)
+VALUES ($1, 'basic_care', now(), now());
 
--- name: FindUserByAuthIdentity :one
-SELECT
-  *
-FROM
-  users
-WHERE
-  auth_issuer = $1
-  AND auth_subject = $2
-  AND deleted_at IS NULL;
+-- name: CreateAccountIdentity :exec
+INSERT INTO account_identities (account_id, issuer, subject, email)
+VALUES ($1, $2, $3, $4);
 
--- name: FindUserByEmail :one
-SELECT
-  *
-FROM
-  users
-WHERE
-  email = $1
-  AND deleted_at IS NULL
-LIMIT
-  1;
+-- name: FindAccountByAuthIdentity :one
+SELECT a.* FROM accounts a
+JOIN account_identities i ON i.account_id = a.id
+WHERE i.issuer = $1 AND i.subject = $2;
 
--- name: FindUserByID :one
-SELECT
-  *
-FROM
-  users
-WHERE
-  id = $1
-  AND deleted_at IS NULL
-LIMIT
-  1;
+-- name: FindAccountByID :one
+SELECT * FROM accounts WHERE id = $1;
 
--- name: FindUserByCPF :one
-SELECT
-  *
-FROM
-  users
-WHERE
-  cpf = $1
-  AND deleted_at IS NULL
-LIMIT
-  1;
+-- name: FindAccountByCPF :one
+SELECT * FROM accounts WHERE cpf = $1 AND deleted_at IS NULL;
 
--- name: SoftDeleteUser :execrows
-UPDATE
-  users
-SET
-  deleted_at = now(),
-  updated_at = now()
-WHERE
-  id = $1
-  AND deleted_at IS NULL;
+-- name: FindAccountIdentity :one
+SELECT * FROM account_identities WHERE issuer = $1 AND subject = $2;
 
--- name: DeleteUser :execrows
-DELETE FROM
-  users
-WHERE
-  id = $1;
+-- name: ListAccountIdentities :many
+SELECT * FROM account_identities WHERE account_id = $1 ORDER BY created_at, issuer, subject;
 
--- name: UpdateUser :one
-UPDATE
-  users
-SET
-  email = $2,
-  full_name = $3,
-  birth_date = $4,
-  cpf = $5,
-  phone = $6,
-  updated_at = $7
-WHERE
-  id = $1
-  AND deleted_at IS NULL RETURNING *;
+-- name: UpdateAccountIdentityEmail :execrows
+UPDATE account_identities SET email = $3, updated_at = now()
+WHERE issuer = $1 AND subject = $2 AND email IS DISTINCT FROM $3;
 
--- name: ActivateUserAsProfessional :one
-UPDATE
-  users
-SET
-  account_type = 'professional',
-  updated_at = now()
-WHERE
-  id = $1
-  AND deleted_at IS NULL RETURNING *;
+-- name: UpdateAccountProfile :one
+UPDATE accounts
+SET full_name = $2, birth_date = $3, cpf = $4, phone = $5, updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL RETURNING *;
+
+-- name: SoftDeleteAccount :execrows
+UPDATE accounts SET deleted_at = now(), updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: ActivateAccountAsProfessional :one
+UPDATE accounts SET account_type = 'professional', updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL RETURNING *;

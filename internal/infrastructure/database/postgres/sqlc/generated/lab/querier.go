@@ -32,7 +32,6 @@ type Querier interface {
 	// ============================================================
 	GetLabReportByID(ctx context.Context, id uuid.UUID) (GetLabReportByIDRow, error)
 	GetLabReportByPatientAndFingerprint(ctx context.Context, arg GetLabReportByPatientAndFingerprintParams) (GetLabReportByPatientAndFingerprintRow, error)
-	GetLabReportWithPanelsByID(ctx context.Context, id uuid.UUID) ([]GetLabReportWithPanelsByIDRow, error)
 	// internal/infrastructure/persistence/postgres/sqlc/sql/queries/lab_queries.sql
 	LabDocumentBelongsToPatient(ctx context.Context, arg LabDocumentBelongsToPatientParams) (bool, error)
 	ListLabPanelsByReportID(ctx context.Context, labReportID uuid.UUID) ([]LabPanel, error)

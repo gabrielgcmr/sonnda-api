@@ -8,18 +8,22 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	ActivateUserAsProfessional(ctx context.Context, id uuid.UUID) (User, error)
-	CreateUser(ctx context.Context, arg CreateUserParams) error
-	DeleteUser(ctx context.Context, id uuid.UUID) (int64, error)
-	FindUserByAuthIdentity(ctx context.Context, arg FindUserByAuthIdentityParams) (User, error)
-	FindUserByCPF(ctx context.Context, cpf string) (User, error)
-	FindUserByEmail(ctx context.Context, email string) (User, error)
-	FindUserByID(ctx context.Context, id uuid.UUID) (User, error)
-	SoftDeleteUser(ctx context.Context, id uuid.UUID) (int64, error)
-	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	ActivateAccountAsProfessional(ctx context.Context, id uuid.UUID) (Account, error)
+	// internal/infrastructure/database/postgres/sqlc/sql/queries/user_queries.sql
+	CreateAccount(ctx context.Context, id uuid.UUID) error
+	CreateAccountIdentity(ctx context.Context, arg CreateAccountIdentityParams) error
+	FindAccountByAuthIdentity(ctx context.Context, arg FindAccountByAuthIdentityParams) (Account, error)
+	FindAccountByCPF(ctx context.Context, cpf pgtype.Text) (Account, error)
+	FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error)
+	FindAccountIdentity(ctx context.Context, arg FindAccountIdentityParams) (AccountIdentity, error)
+	ListAccountIdentities(ctx context.Context, accountID uuid.UUID) ([]AccountIdentity, error)
+	SoftDeleteAccount(ctx context.Context, id uuid.UUID) (int64, error)
+	UpdateAccountIdentityEmail(ctx context.Context, arg UpdateAccountIdentityEmailParams) (int64, error)
+	UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (Account, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -1,3 +1,4 @@
+-- internal/infrastructure/database/postgres/sqlc/sql/queries/professional_queries.sql
 -- Profissionais
 
 -- name: CreateProfessional :one
@@ -19,7 +20,7 @@ LIMIT 1;
 -- AQUI ESTÁ O TRUQUE: Fazemos JOIN para filtrar, mas retornamos dados do profissional
 SELECT p.*
 FROM professionals p
-JOIN users u ON u.id = p.user_id
+JOIN accounts u ON u.id = p.user_id
 WHERE u.full_name ILIKE '%' || sqlc.arg(name) || '%'
   AND p.deleted_at IS NULL
 LIMIT $1 OFFSET $2;
@@ -29,9 +30,8 @@ LIMIT $1 OFFSET $2;
 SELECT 
     p.*,
     u.full_name,
-    u.email,
     u.phone
 FROM professionals p
-JOIN users u ON u.id = p.user_id
+JOIN accounts u ON u.id = p.user_id
 WHERE p.user_id = $1 AND p.deleted_at IS NULL
 LIMIT 1;
