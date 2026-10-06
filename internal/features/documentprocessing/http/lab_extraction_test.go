@@ -57,7 +57,7 @@ func TestStandaloneLabExtractionDiscardsPDFAndReturnsStructuredResult(t *testing
 	labExtractor := &standaloneLabExtractorStub{}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
@@ -87,7 +87,7 @@ func TestStandaloneLabExtractionRejectsNonPDF(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
@@ -107,7 +107,7 @@ func TestStandaloneExtractionFailureStillRemovesPDF(t *testing.T) {
 	provider := &standaloneLabExtractorStub{err: errors.New("provider unavailable")}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New()}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 	})
 	NewStandaloneLabExtraction(extraction.New(reader, provider)).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 	body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", []byte("%PDF-1.4"))
@@ -136,7 +136,7 @@ func TestStandalonePDFValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			router := gin.New()
 			router.Use(func(c *gin.Context) {
-				c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New()}))
+				c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 			})
 			NewStandaloneLabExtraction(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{})).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 			body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", tc.content)
@@ -164,8 +164,8 @@ func TestStandaloneLabExtractionUsesInjectedService(t *testing.T) {
 		Warnings:    []labextraction.ExtractionWarning{{Code: "review", Message: "Conferir resultado."}},
 		SummaryText: "Resumo retornado pelo serviço injetado.",
 	}
-	user := &accountdomain.User{ID: uuid.New()}
-	requestContext := helpers.ContextWithCurrentUser(context.Background(), user)
+	user := &accountdomain.Account{ID: uuid.New()}
+	requestContext := helpers.ContextWithCurrentAccount(context.Background(), user)
 	var standalonePath string
 	calls := 0
 	extractor := pdfExtractorFunc(func(ctx context.Context, path, filename string) (*extraction.Result, error) {

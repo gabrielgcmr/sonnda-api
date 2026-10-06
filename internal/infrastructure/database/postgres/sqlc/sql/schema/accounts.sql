@@ -1,4 +1,4 @@
--- internal/infrastructure/database/postgres/sqlc/sql/schema/users.sql
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/accounts.sql
 CREATE TABLE accounts (
   id UUID PRIMARY KEY,
   full_name TEXT,

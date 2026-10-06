@@ -59,7 +59,7 @@ func (h *StandaloneLabExtractionHandler) RegisterHumaRoutes(registered huma.API,
 }
 
 func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *standaloneLabExtractionInput) (*standaloneLabExtractionOutput, error) {
-	if _, ok := helpers.GetCurrentUserFromContext(ctx); !ok {
+	if _, ok := helpers.GetCurrentAccountFromContext(ctx); !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
 

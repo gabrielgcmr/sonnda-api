@@ -14,7 +14,7 @@ func TestProblemAuthorizerCombinesContextAndPolicy(t *testing.T) {
 	patientID := uuid.New()
 	basicCareID := uuid.New()
 	basicCare := NewProblemAuthorizer(NewPatientContextResolver(
-		contextAccounts{user: &accountdomain.User{ID: basicCareID, AccountType: accountdomain.AccountTypeBasicCare}},
+		contextAccounts{user: &accountdomain.Account{ID: basicCareID, AccountType: accountdomain.AccountTypeBasicCare}},
 		contextAccess{},
 	))
 
@@ -27,7 +27,7 @@ func TestProblemAuthorizerCombinesContextAndPolicy(t *testing.T) {
 
 	professionalID := uuid.New()
 	professional := NewProblemAuthorizer(NewPatientContextResolver(
-		contextAccounts{user: &accountdomain.User{ID: professionalID, AccountType: accountdomain.AccountTypeProfessional}},
+		contextAccounts{user: &accountdomain.Account{ID: professionalID, AccountType: accountdomain.AccountTypeProfessional}},
 		contextAccess{},
 	))
 	if err := professional.Authorize(context.Background(), professionalID, patientID, CreateProblem); err != nil {
@@ -38,7 +38,7 @@ func TestProblemAuthorizerCombinesContextAndPolicy(t *testing.T) {
 func TestProblemAuthorizerPropagatesContextFailure(t *testing.T) {
 	accountID, patientID := uuid.New(), uuid.New()
 	authorizer := NewProblemAuthorizer(NewPatientContextResolver(
-		contextAccounts{user: &accountdomain.User{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}},
+		contextAccounts{user: &accountdomain.Account{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}},
 		contextAccess{err: apperr.Forbidden("acesso negado")},
 	))
 
@@ -50,7 +50,7 @@ func TestProblemAuthorizerPropagatesContextFailure(t *testing.T) {
 func TestProblemAuthorizerRejectsUnauthorizedRequests(t *testing.T) {
 	patientID := uuid.New()
 	professionalID := uuid.New()
-	professional := contextAccounts{user: &accountdomain.User{
+	professional := contextAccounts{user: &accountdomain.Account{
 		ID:          professionalID,
 		AccountType: accountdomain.AccountTypeProfessional,
 	}}

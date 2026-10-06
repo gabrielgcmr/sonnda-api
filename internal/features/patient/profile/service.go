@@ -1,4 +1,4 @@
-// internal/features/patient/profile/service_impl.go
+// internal/features/patient/profile/service.go
 package patientprofile
 
 import (
@@ -15,11 +15,11 @@ import (
 )
 
 type Service interface {
-	Get(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) (*profiledomain.Patient, error)
-	Update(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error)
-	SoftDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error
-	HardDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error
-	ListMyPatients(ctx context.Context, currentUser *accountdomain.User, limit, offset int) ([]*profiledomain.Patient, error)
+	Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error)
+	Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error)
+	SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
+	HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
+	ListMyPatients(ctx context.Context, currentAccount *accountdomain.Account, limit, offset int) ([]*profiledomain.Patient, error)
 }
 
 type AccessChecker interface {
@@ -46,8 +46,8 @@ func New(
 	}
 }
 
-func (s *service) Get(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) (*profiledomain.Patient, error) {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentUser), id); err != nil {
+func (s *service) Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error) {
+	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
 		return nil, err
 	}
 
@@ -61,8 +61,8 @@ func (s *service) Get(ctx context.Context, currentUser *accountdomain.User, id u
 	return p, nil
 }
 
-func (s *service) Update(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error) {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentUser), id); err != nil {
+func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error) {
+	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
 		return nil, err
 	}
 
@@ -93,8 +93,8 @@ func (s *service) Update(ctx context.Context, currentUser *accountdomain.User, i
 	return p, nil
 }
 
-func (s *service) SoftDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentUser), id); err != nil {
+func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
+	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
 		return err
 	}
 
@@ -112,8 +112,8 @@ func (s *service) SoftDelete(ctx context.Context, currentUser *accountdomain.Use
 	return nil
 }
 
-func (s *service) HardDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentUser), id); err != nil {
+func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
+	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
 		return err
 	}
 
@@ -131,15 +131,15 @@ func (s *service) HardDelete(ctx context.Context, currentUser *accountdomain.Use
 	return nil
 }
 
-func currentAccountID(currentUser *accountdomain.User) uuid.UUID {
-	if currentUser == nil {
+func currentAccountID(currentAccount *accountdomain.Account) uuid.UUID {
+	if currentAccount == nil {
 		return uuid.Nil
 	}
-	return currentUser.ID
+	return currentAccount.ID
 }
 
-func (s *service) ListMyPatients(ctx context.Context, currentUser *accountdomain.User, limit, offset int) ([]*profiledomain.Patient, error) {
-	if currentUser == nil {
+func (s *service) ListMyPatients(ctx context.Context, currentAccount *accountdomain.Account, limit, offset int) ([]*profiledomain.Patient, error) {
+	if currentAccount == nil {
 		return nil, apperr.Unauthorized("autenticação necessária")
 	}
 
@@ -147,7 +147,7 @@ func (s *service) ListMyPatients(ctx context.Context, currentUser *accountdomain
 		return nil, apperr.Internal("erro inesperado", errors.New("patient access repository not configured"))
 	}
 
-	accessible, _, err := s.accessRepo.ListAccessiblePatientsByUser(ctx, currentUser.ID, limit, offset)
+	accessible, _, err := s.accessRepo.ListAccessiblePatientsByUser(ctx, currentAccount.ID, limit, offset)
 	if err != nil {
 		return nil, &apperr.AppError{
 			Kind:    apperr.INFRA_DATABASE_ERROR,

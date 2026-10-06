@@ -1,4 +1,4 @@
-// internal/features/account/service_impl.go
+// internal/features/account/service.go
 package account
 
 import (
@@ -12,58 +12,66 @@ import (
 )
 
 type Service interface {
-	Create(ctx context.Context, input UserCreateInput) (*accountdomain.User, error)
-	Update(ctx context.Context, input UserUpdateInput) (*accountdomain.User, error)
-	Delete(ctx context.Context, userID uuid.UUID) error
+	Create(ctx context.Context, input AccountCreateInput) (*accountdomain.Account, error)
+	Update(ctx context.Context, input AccountUpdateInput) (*accountdomain.Account, error)
 	SoftDelete(ctx context.Context, userID uuid.UUID) error
 }
 type service struct {
-	userRepo Repository
+	accountRepo Repository
 }
 
 var _ Service = (*service)(nil)
 
-func New(userRepo Repository) Service {
-	return &service{userRepo: userRepo}
+func New(accountRepo Repository) Service {
+	return &service{accountRepo: accountRepo}
 }
 
-func (s *service) Create(ctx context.Context, input UserCreateInput) (*accountdomain.User, error) {
-	newUser, err := accountdomain.NewUser(accountdomain.NewUserParams{
-		AuthIssuer:  input.Issuer,
-		AuthSubject: input.Subject,
-		Email:       input.Email,
+func (s *service) Create(ctx context.Context, input AccountCreateInput) (*accountdomain.Account, error) {
+	newAccount, err := accountdomain.NewAccount(accountdomain.NewAccountParams{
 		AccountType: input.AccountType,
-		FullName:    input.FullName,
-		BirthDate:   input.BirthDate,
-		CPF:         input.CPF,
-		Phone:       input.Phone,
+		Profile:     input.Profile,
 	})
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
 
-	if err := s.userRepo.Create(ctx, newUser); err != nil {
-		return nil, mapRepoError("userRepo.Create", err)
+	identity, err := accountdomain.NewIdentity(newAccount.ID, input.Issuer, input.Subject, input.Email)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	if err := s.accountRepo.Create(ctx, newAccount, identity); err != nil {
+		return nil, mapRepoError("accountRepo.Create", err)
 	}
 
-	return newUser, nil
+	return newAccount, nil
 }
 
-func (s *service) Update(ctx context.Context, input UserUpdateInput) (*accountdomain.User, error) {
-	existingUser, err := s.userRepo.FindByID(ctx, input.UserID)
+func (s *service) Update(ctx context.Context, input AccountUpdateInput) (*accountdomain.Account, error) {
+	existingUser, err := s.accountRepo.FindByID(ctx, input.AccountID)
 	if err != nil {
-		return nil, mapRepoError("userRepo.FindByID", err)
+		return nil, mapRepoError("accountRepo.FindByID", err)
 	}
 	if existingUser == nil {
-		return nil, userNotFound()
+		return nil, accountNotFound()
 	}
 
-	changed, err := existingUser.ApplyUpdate(accountdomain.UpdateUserParams{
-		FullName:  input.FullName,
-		BirthDate: input.BirthDate,
-		CPF:       input.CPF,
-		Phone:     input.Phone,
-	})
+	if existingUser.DeletedAt != nil {
+		return nil, apperr.Forbidden("conta desativada")
+	}
+	profile := existingUser.Profile
+	if input.FullName != nil {
+		profile.FullName = input.FullName
+	}
+	if input.BirthDate != nil {
+		profile.BirthDate = input.BirthDate
+	}
+	if input.CPF != nil {
+		profile.CPF = input.CPF
+	}
+	if input.Phone != nil {
+		profile.Phone = input.Phone
+	}
+	changed, err := existingUser.ApplyProfile(profile)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
@@ -71,27 +79,11 @@ func (s *service) Update(ctx context.Context, input UserUpdateInput) (*accountdo
 		return existingUser, nil
 	}
 
-	if err := s.userRepo.Update(ctx, existingUser); err != nil {
-		return nil, mapRepoError("userRepo.Update", err)
+	if err := s.accountRepo.Update(ctx, existingUser); err != nil {
+		return nil, mapRepoError("accountRepo.Update", err)
 	}
 
 	return existingUser, nil
-}
-
-func (s *service) Delete(ctx context.Context, userID uuid.UUID) error {
-	existing, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		return mapRepoError("userRepo.FindByID", err)
-	}
-	if existing == nil {
-		return userNotFound()
-	}
-
-	if err := s.userRepo.Delete(ctx, userID); err != nil {
-		return mapRepoError("userRepo.Delete", err)
-	}
-
-	return nil
 }
 
 func (s *service) SoftDelete(ctx context.Context, userID uuid.UUID) error {
@@ -100,16 +92,16 @@ func (s *service) SoftDelete(ctx context.Context, userID uuid.UUID) error {
 	// We first load the user to return a proper NOT_FOUND when it truly doesn't exist.
 	// Then we execute the delete; if the repository reports NOT_FOUND at this stage
 	// (e.g. already deleted or a race where another request deleted it), we treat it as success.
-	existing, err := s.userRepo.FindByID(ctx, userID)
+	existing, err := s.accountRepo.FindByID(ctx, userID)
 	if err != nil {
-		return mapRepoError("userRepo.FindByID", err)
+		return mapRepoError("accountRepo.FindByID", err)
 	}
 	if existing == nil {
-		return userNotFound()
+		return accountNotFound()
 	}
 
-	if err := s.userRepo.SoftDelete(ctx, userID); err != nil {
-		mapped := mapRepoError("userRepo.SoftDelete", err)
+	if err := s.accountRepo.SoftDelete(ctx, userID); err != nil {
+		mapped := mapRepoError("accountRepo.SoftDelete", err)
 		var appErr *apperr.AppError
 		if errors.As(mapped, &appErr) && appErr != nil && appErr.Kind == apperr.NOT_FOUND {
 			return nil

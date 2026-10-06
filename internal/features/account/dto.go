@@ -9,19 +9,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type UserCreateInput struct {
+type AccountCreateInput struct {
 	Issuer      string
 	Subject     string
-	Email       string
+	Email       *string
 	AccountType accountdomain.AccountType
-	FullName    string
-	BirthDate   time.Time
-	CPF         string
-	Phone       string
+	Profile     accountdomain.Profile
 }
 
-type UserUpdateInput struct {
-	UserID    uuid.UUID
+type AccountUpdateInput struct {
+	AccountID uuid.UUID
 	FullName  *string
 	BirthDate *time.Time
 	CPF       *string

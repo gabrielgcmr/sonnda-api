@@ -12,18 +12,18 @@ type onboardingRepository struct {
 	Repository
 }
 
-func (r onboardingRepository) FindByAuthIdentity(context.Context, string, string) (*accountdomain.User, error) {
+func (r onboardingRepository) FindByAuthIdentity(context.Context, string, string) (*accountdomain.Account, error) {
 	return nil, nil
 }
 
 type onboardingUserService struct {
 	Service
-	input UserCreateInput
+	input AccountCreateInput
 }
 
-func (s *onboardingUserService) Create(_ context.Context, input UserCreateInput) (*accountdomain.User, error) {
+func (s *onboardingUserService) Create(_ context.Context, input AccountCreateInput) (*accountdomain.Account, error) {
 	s.input = input
-	return &accountdomain.User{AccountType: input.AccountType, FullName: input.FullName}, nil
+	return &accountdomain.Account{AccountType: input.AccountType, Profile: input.Profile}, nil
 }
 
 func TestOnboardingRegistersWithoutProfessionalProfile(t *testing.T) {
@@ -32,19 +32,20 @@ func TestOnboardingRegistersWithoutProfessionalProfile(t *testing.T) {
 		accountdomain.AccountTypeBasicCare,
 	} {
 		t.Run(string(accountType), func(t *testing.T) {
+			email, name := "person@example.com", "Pessoa Teste"
 			service := &onboardingUserService{}
 			onboarding := NewOnboarding(onboardingRepository{}, service)
 			created, err := onboarding.Register(context.Background(), RegisterInput{
-				Issuer: "issuer", Subject: "subject", Email: "person@example.com",
-				FullName: "Pessoa Teste", AccountType: accountType,
+				Issuer: "issuer", Subject: "subject", Email: &email,
+				Profile: accountdomain.Profile{FullName: &name}, AccountType: accountType,
 			})
 			if err != nil {
 				t.Fatalf("register: %v", err)
 			}
-			if created.AccountType != accountType || created.FullName != "Pessoa Teste" {
+			if created.AccountType != accountType || created.Profile.FullName == nil || *created.Profile.FullName != "Pessoa Teste" {
 				t.Fatalf("unexpected user: %+v", created)
 			}
-			if service.input.Issuer != "issuer" || service.input.Subject != "subject" || service.input.Email != "person@example.com" {
+			if service.input.Issuer != "issuer" || service.input.Subject != "subject" || service.input.Email == nil || *service.input.Email != "person@example.com" {
 				t.Fatalf("identity was not forwarded: %+v", service.input)
 			}
 		})

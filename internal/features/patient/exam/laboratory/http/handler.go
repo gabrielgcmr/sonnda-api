@@ -74,11 +74,11 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 }
 
 func (h *Handler) listLabReports(ctx context.Context, input *listLabReportsInput) (*listLabReportsOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, input.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	if shouldReturnFullLabsFor(input.Expand, input.Include) {
@@ -96,7 +96,7 @@ func (h *Handler) listLabReports(ctx context.Context, input *listLabReportsInput
 }
 
 func (h *Handler) getLabReport(ctx context.Context, input *labReportInput) (*labReportOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
@@ -107,7 +107,7 @@ func (h *Handler) getLabReport(ctx context.Context, input *labReportInput) (*lab
 	if report == nil {
 		return nil, huma.Error404NotFound("laudo não encontrado")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, report.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, report.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	return &labReportOutput{Body: *report}, nil

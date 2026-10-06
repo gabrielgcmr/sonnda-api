@@ -56,7 +56,7 @@ func newProblemTestDatabase(t *testing.T) (*pginfra.Client, *Repository, uuid.UU
 	}
 	t.Cleanup(client.Close)
 
-	if _, err := client.Pool().Exec(ctx, "CREATE TABLE users (id uuid PRIMARY KEY)"); err != nil {
+	if _, err := client.Pool().Exec(ctx, "CREATE TABLE accounts (id uuid PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.Pool().Exec(ctx, "CREATE TABLE patients (id uuid PRIMARY KEY)"); err != nil {
@@ -72,7 +72,7 @@ func newProblemTestDatabase(t *testing.T) (*pginfra.Client, *Repository, uuid.UU
 	}
 
 	patientID, actorID := uuid.New(), uuid.New()
-	if _, err := client.Pool().Exec(ctx, "INSERT INTO users (id) VALUES ($1)", actorID); err != nil {
+	if _, err := client.Pool().Exec(ctx, "INSERT INTO accounts (id) VALUES ($1)", actorID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.Pool().Exec(ctx, "INSERT INTO patients (id) VALUES ($1)", patientID); err != nil {

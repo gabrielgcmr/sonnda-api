@@ -10,26 +10,26 @@ import (
 )
 
 type Onboarding interface {
-	Register(ctx context.Context, input RegisterInput) (*accountdomain.User, error)
+	Register(ctx context.Context, input RegisterInput) (*accountdomain.Account, error)
 }
 
 type onboarding struct {
-	userRepo Repository
-	userSvc  Service
+	accountRepo Repository
+	accountSvc  Service
 }
 
 var _ Onboarding = (*onboarding)(nil)
 
-func NewOnboarding(userRepo Repository, userSvc Service) Onboarding {
+func NewOnboarding(accountRepo Repository, accountSvc Service) Onboarding {
 	return &onboarding{
-		userRepo: userRepo,
-		userSvc:  userSvc,
+		accountRepo: accountRepo,
+		accountSvc:  accountSvc,
 	}
 }
 
-func (u *onboarding) Register(ctx context.Context, input RegisterInput) (*accountdomain.User, error) {
+func (u *onboarding) Register(ctx context.Context, input RegisterInput) (*accountdomain.Account, error) {
 	// Verificar se usuário já existe
-	existing, err := u.userRepo.FindByAuthIdentity(ctx, input.Issuer, input.Subject)
+	existing, err := u.accountRepo.FindByAuthIdentity(ctx, input.Issuer, input.Subject)
 	if err != nil {
 		return nil, apperr.Internal("falha ao verificar registro", err)
 	}
@@ -37,15 +37,12 @@ func (u *onboarding) Register(ctx context.Context, input RegisterInput) (*accoun
 		return nil, apperr.AlreadyExists("usuário já cadastrado")
 	}
 
-	createdUser, err := u.userSvc.Create(ctx, UserCreateInput{
+	createdUser, err := u.accountSvc.Create(ctx, AccountCreateInput{
 		Issuer:      input.Issuer,
 		Subject:     input.Subject,
 		Email:       input.Email,
 		AccountType: input.AccountType,
-		FullName:    input.FullName,
-		BirthDate:   input.BirthDate,
-		CPF:         input.CPF,
-		Phone:       input.Phone,
+		Profile:     input.Profile,
 	})
 	if err != nil {
 		var appErr *apperr.AppError

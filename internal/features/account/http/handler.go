@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -18,18 +17,18 @@ import (
 	"github.com/google/uuid"
 )
 
-type userService interface {
-	Update(ctx context.Context, input account.UserUpdateInput) (*accountdomain.User, error)
-	Delete(ctx context.Context, userID uuid.UUID) error
+type accountService interface {
+	Update(ctx context.Context, input account.AccountUpdateInput) (*accountdomain.Account, error)
+	SoftDelete(ctx context.Context, accountID uuid.UUID) error
 }
 
 type professionalActivator interface {
-	Activate(ctx context.Context, accountID uuid.UUID, password, origin string) (*accountdomain.User, error)
+	Activate(ctx context.Context, accountID uuid.UUID, password, origin string) (*accountdomain.Account, error)
 }
 
 type Handler struct {
 	onboarding account.Onboarding
-	userSvc    userService
+	accountSvc accountService
 	activation professionalActivator
 }
 
@@ -63,26 +62,26 @@ type professionalActivationRequest struct {
 	Password string `json:"password" doc:"Senha de habilitação profissional" minLength:"1"`
 }
 
-type accountUserResponse struct {
+type accountResponse struct {
 	ID          uuid.UUID `json:"id" format:"uuid"`
 	AuthIssuer  string    `json:"auth_issuer"`
 	AuthSubject string    `json:"auth_subject"`
-	Email       string    `json:"email" format:"email"`
-	FullName    string    `json:"full_name"`
+	Email       *string   `json:"email" format:"email"`
+	FullName    *string   `json:"full_name"`
 	AccountType string    `json:"account_type"`
-	BirthDate   string    `json:"birth_date" format:"date"`
-	CPF         string    `json:"cpf"`
-	Phone       string    `json:"phone"`
+	BirthDate   *string   `json:"birth_date" format:"date"`
+	CPF         *string   `json:"cpf"`
+	Phone       *string   `json:"phone"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-type accountUserOutput struct {
-	Body accountUserResponse
+type accountOutput struct {
+	Body accountResponse
 }
 
-func NewHandler(onboarding account.Onboarding, userSvc userService, activation professionalActivator) *Handler {
-	return &Handler{onboarding: onboarding, userSvc: userSvc, activation: activation}
+func NewHandler(onboarding account.Onboarding, accountSvc accountService, activation professionalActivator) *Handler {
+	return &Handler{onboarding: onboarding, accountSvc: accountSvc, activation: activation}
 }
 
 // RegisterHumaRoutes registers all account operations into the application's
@@ -141,28 +140,25 @@ func (h *Handler) RegisterHumaRoutes(authenticated huma.API, registered huma.API
 	}, h.deleteCurrentAccount)
 }
 
-func (h *Handler) activateCurrentAccountAsProfessional(ctx context.Context, input *professionalActivationInput) (*accountUserOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+func (h *Handler) activateCurrentAccountAsProfessional(ctx context.Context, input *professionalActivationInput) (*accountOutput, error) {
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 	if h == nil || h.activation == nil {
 		return nil, humaerror.From(apperr.Internal("habilitação profissional indisponível", errors.New("professional activation service is not configured")))
 	}
-	activated, err := h.activation.Activate(ctx, currentUser.ID, input.Body.Password, helpers.GetClientOriginFromContext(ctx))
+	activated, err := h.activation.Activate(ctx, currentAccount.ID, input.Body.Password, helpers.GetClientOriginFromContext(ctx))
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
-	return &accountUserOutput{Body: accountUserResponseFromDomain(activated)}, nil
+	return &accountOutput{Body: accountResponseFromDomain(ctx, activated)}, nil
 }
 
-func (h *Handler) createCurrentAccount(ctx context.Context, input *createAccountInput) (*accountUserOutput, error) {
+func (h *Handler) createCurrentAccount(ctx context.Context, input *createAccountInput) (*accountOutput, error) {
 	identity, ok := authhttp.GetIdentityFromContext(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("autenticação necessária")
-	}
-	if identity.Email == nil || strings.TrimSpace(*identity.Email) == "" {
-		return nil, huma.Error422UnprocessableEntity("email é obrigatório")
 	}
 
 	birthDate, err := time.Parse(time.DateOnly, input.Body.BirthDate)
@@ -173,39 +169,41 @@ func (h *Handler) createCurrentAccount(ctx context.Context, input *createAccount
 	created, err := h.onboarding.Register(ctx, account.RegisterInput{
 		Issuer:      identity.Issuer,
 		Subject:     identity.Subject,
-		Email:       strings.TrimSpace(*identity.Email),
+		Email:       identity.Email,
 		AccountType: accountdomain.AccountTypeBasicCare,
-		FullName:    input.Body.FullName,
-		BirthDate:   birthDate,
-		CPF:         input.Body.CPF,
-		Phone:       input.Body.Phone,
+		Profile: accountdomain.Profile{
+			FullName:  &input.Body.FullName,
+			BirthDate: &birthDate,
+			CPF:       &input.Body.CPF,
+			Phone:     &input.Body.Phone,
+		},
 	})
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
 
-	return &accountUserOutput{Body: accountUserResponseFromDomain(created)}, nil
+	return &accountOutput{Body: accountResponseFromDomain(ctx, created)}, nil
 }
 
-func (h *Handler) getCurrentAccount(ctx context.Context, _ *struct{}) (*accountUserOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+func (h *Handler) getCurrentAccount(ctx context.Context, _ *struct{}) (*accountOutput, error) {
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
-	return &accountUserOutput{Body: accountUserResponseFromDomain(currentUser)}, nil
+	return &accountOutput{Body: accountResponseFromDomain(ctx, currentAccount)}, nil
 }
 
-func (h *Handler) updateCurrentAccount(ctx context.Context, input *updateAccountInput) (*accountUserOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+func (h *Handler) updateCurrentAccount(ctx context.Context, input *updateAccountInput) (*accountOutput, error) {
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 
-	update := account.UserUpdateInput{
-		UserID:   currentUser.ID,
-		FullName: input.Body.FullName,
-		CPF:      input.Body.CPF,
-		Phone:    input.Body.Phone,
+	update := account.AccountUpdateInput{
+		AccountID: currentAccount.ID,
+		FullName:  input.Body.FullName,
+		CPF:       input.Body.CPF,
+		Phone:     input.Body.Phone,
 	}
 	if input.Body.BirthDate != nil {
 		birthDate, err := time.Parse(time.DateOnly, *input.Body.BirthDate)
@@ -215,36 +213,44 @@ func (h *Handler) updateCurrentAccount(ctx context.Context, input *updateAccount
 		update.BirthDate = &birthDate
 	}
 
-	updated, err := h.userSvc.Update(ctx, update)
+	updated, err := h.accountSvc.Update(ctx, update)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
-	return &accountUserOutput{Body: accountUserResponseFromDomain(updated)}, nil
+	return &accountOutput{Body: accountResponseFromDomain(ctx, updated)}, nil
 }
 
 func (h *Handler) deleteCurrentAccount(ctx context.Context, _ *struct{}) (*struct{}, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
-	if err := h.userSvc.Delete(ctx, currentUser.ID); err != nil {
+	if err := h.accountSvc.SoftDelete(ctx, currentAccount.ID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	return &struct{}{}, nil
 }
 
-func accountUserResponseFromDomain(user *accountdomain.User) accountUserResponse {
-	return accountUserResponse{
+func accountResponseFromDomain(ctx context.Context, user *accountdomain.Account) accountResponse {
+	var birthDate *string
+	if user.Profile.BirthDate != nil {
+		value := user.Profile.BirthDate.Format(time.DateOnly)
+		birthDate = &value
+	}
+	response := accountResponse{
 		ID:          user.ID,
-		AuthIssuer:  user.AuthIssuer,
-		AuthSubject: user.AuthSubject,
-		Email:       user.Email,
-		FullName:    user.FullName,
+		FullName:    user.Profile.FullName,
 		AccountType: string(user.AccountType),
-		BirthDate:   user.BirthDate.Format(time.DateOnly),
-		CPF:         user.CPF,
-		Phone:       user.Phone,
+		BirthDate:   birthDate,
+		CPF:         user.Profile.CPF,
+		Phone:       user.Profile.Phone,
 		CreatedAt:   user.CreatedAt,
 		UpdatedAt:   user.UpdatedAt,
 	}
+	if identity, ok := authhttp.GetIdentityFromContext(ctx); ok {
+		response.AuthIssuer = identity.Issuer
+		response.AuthSubject = identity.Subject
+		response.Email = identity.Email
+	}
+	return response
 }

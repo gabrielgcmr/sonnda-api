@@ -35,19 +35,19 @@ func RequireRegisteredAccount(api huma.API, account *accounthttp.Middleware) fun
 			return
 		}
 
-		currentUser, err := account.ResolveRegisteredUser(ctx.Context(), identity)
+		currentAccount, err := account.ResolveRegisteredAccount(ctx.Context(), identity)
 		if err != nil {
 			_ = humaerror.Write(api, ctx, err)
 			return
 		}
 
-		if currentUser == nil {
+		if currentAccount == nil {
 			_ = humaerror.Write(api, ctx, apperr.ProfileNotFound())
 			return
 		}
 
 		ginContext := humagin.Unwrap(ctx)
-		ginContext.Request = ginContext.Request.WithContext(helpers.ContextWithCurrentUser(ctx.Context(), currentUser))
+		ginContext.Request = ginContext.Request.WithContext(helpers.ContextWithCurrentAccount(ctx.Context(), currentAccount))
 		next(ctx)
 	}
 }

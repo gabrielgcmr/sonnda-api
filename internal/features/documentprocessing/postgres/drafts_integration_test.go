@@ -60,7 +60,7 @@ func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.U
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	if _, err := client.Pool().Exec(ctx, "CREATE TABLE users (id uuid PRIMARY KEY); CREATE TABLE patients (id uuid PRIMARY KEY)"); err != nil {
+	if _, err := client.Pool().Exec(ctx, "CREATE TABLE accounts (id uuid PRIMARY KEY); CREATE TABLE patients (id uuid PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
 	schemaDir := filepath.Join("..", "..", "..", "infrastructure", "database", "postgres", "sqlc", "sql", "schema")
@@ -74,7 +74,7 @@ func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.U
 		}
 	}
 	patientID, userID := uuid.New(), uuid.New()
-	if _, err := client.Pool().Exec(ctx, "INSERT INTO users VALUES ($1); INSERT INTO patients VALUES ($2)", userID, patientID); err != nil {
+	if _, err := client.Pool().Exec(ctx, "INSERT INTO accounts VALUES ($1); INSERT INTO patients VALUES ($2)", userID, patientID); err != nil {
 		t.Fatal(err)
 	}
 	clinicalRepository := labpostgres.NewRepository(client)
@@ -272,7 +272,8 @@ func TestReviewMigrationPreservesLegacyAndProtectsSnapshots(t *testing.T) {
 	legacy := processingTestDocument(t, client, patient, user)
 	ctx := context.Background()
 	// Recreate the pre-review shape, then apply the actual migration in this isolated schema.
-	_, err := client.Pool().Exec(ctx, `DROP TABLE exam_document_extractions;
+	_, err := client.Pool().Exec(ctx, `ALTER TABLE accounts RENAME TO users;
+ DROP TABLE exam_document_extractions;
  ALTER TABLE exam_documents DROP COLUMN review_status,DROP COLUMN lab_report_id,DROP COLUMN confirmed_by_user_id,DROP COLUMN confirmed_at;
  DO $$ BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF;
@@ -288,6 +289,10 @@ func TestReviewMigrationPreservesLegacyAndProtectsSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = client.Pool().Exec(ctx, strings.ReplaceAll(string(migration), "public.", "")); err != nil {
+		t.Fatal(err)
+	}
+	// Restore the account table name after validating the historical migration.
+	if _, err = client.Pool().Exec(ctx, "ALTER TABLE users RENAME TO accounts"); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := repo.documents.FindByID(ctx, legacy)

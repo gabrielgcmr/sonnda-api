@@ -79,10 +79,10 @@ func performCreationRequest(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	account := &accountdomain.User{ID: uuid.New()}
+	account := &accountdomain.Account{ID: uuid.New()}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), account))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), account))
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))

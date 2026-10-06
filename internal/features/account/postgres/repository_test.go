@@ -5,12 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/gabrielgcmr/sonnda/internal/features/account"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
-	usersqlc "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres/sqlc/generated/user"
+	accountsqlc "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres/sqlc/generated/account"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/persistence"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,216 +19,155 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func TestCreatePreservesProfileAndDateParameters(t *testing.T) {
-	profile := testProfile()
-	before := *profile
-	queries := &stubQueries{}
-	repo := &Repository{queries: queries}
-	if err := repo.Create(t.Context(), profile); err != nil {
+func TestCreatePreservesNullsAndSeparateIdentity(t *testing.T) {
+	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
+	i, _ := accountdomain.NewIdentity(a.ID, "issuer", "subject", nil)
+	q := &stubQueries{}
+	if err := (&Repository{queries: q}).Create(t.Context(), a, i); err != nil {
 		t.Fatal(err)
 	}
-	params := queries.created
-	if params.ID != profile.ID || params.AuthIssuer != profile.AuthIssuer || params.AuthSubject != profile.AuthSubject ||
-		params.Email != profile.Email || params.FullName != profile.FullName || params.Cpf != profile.CPF ||
-		params.Phone != profile.Phone || params.AccountType != string(profile.AccountType) {
-		t.Fatalf("unexpected create parameters: %+v", params)
+	p := q.created
+	if p.ID != a.ID || p.Issuer != i.Issuer || p.Subject != i.Subject || p.Email.Valid ||
+		p.FullName.Valid || p.BirthDate.Valid || p.Cpf.Valid || p.Phone.Valid ||
+		!p.CreatedAt.Time.Equal(a.CreatedAt) || !p.IdentityCreatedAt.Time.Equal(i.CreatedAt) {
+		t.Fatalf("unexpected create parameters: %+v", p)
 	}
-	if !params.BirthDate.Valid || !params.BirthDate.Time.Equal(profile.BirthDate) ||
-		!params.CreatedAt.Valid || !params.CreatedAt.Time.Equal(profile.CreatedAt) ||
-		!params.UpdatedAt.Valid || !params.UpdatedAt.Time.Equal(profile.UpdatedAt) {
-		t.Fatalf("dates must remain present and unchanged: %+v", params)
-	}
-	if *profile != before {
-		t.Fatal("create must not overwrite the domain entity")
+	i.AccountID = uuid.New()
+	if err := (&Repository{queries: q}).Create(t.Context(), a, i); !errors.Is(err, persistence.ErrPersistenceFailure) {
+		t.Fatal("mismatched account and identity IDs must fail")
 	}
 }
 
-func TestLookupsPreserveProfileAndMissingResultSemantics(t *testing.T) {
-	profile := testProfile()
+func TestLookupsPreserveOptionalProfileAndDeactivation(t *testing.T) {
 	for _, lookup := range []struct {
 		name string
-		find func(*Repository) (*accountdomain.User, error)
+		find func(*Repository) (*accountdomain.Account, error)
 	}{
-		{"identity", func(r *Repository) (*accountdomain.User, error) {
-			return r.FindByAuthIdentity(t.Context(), profile.AuthIssuer, profile.AuthSubject)
+		{"id", func(r *Repository) (*accountdomain.Account, error) { return r.FindByID(t.Context(), uuid.New()) }},
+		{"identity", func(r *Repository) (*accountdomain.Account, error) {
+			return r.FindByAuthIdentity(t.Context(), "issuer", "subject")
 		}},
-		{"id", func(r *Repository) (*accountdomain.User, error) { return r.FindByID(t.Context(), profile.ID) }},
-		{"cpf", func(r *Repository) (*accountdomain.User, error) { return r.FindByCPF(t.Context(), profile.CPF) }},
-		{"email", func(r *Repository) (*accountdomain.User, error) { return r.FindByEmail(t.Context(), profile.Email) }},
+		{"cpf", func(r *Repository) (*accountdomain.Account, error) { return r.FindByCPF(t.Context(), "12345678901") }},
 	} {
 		t.Run(lookup.name, func(t *testing.T) {
-			queries := &stubQueries{row: profileRow(profile)}
-			repo := &Repository{queries: queries}
-			found, err := lookup.find(repo)
-			if err != nil || found == nil || *found != *profile {
-				t.Fatalf("profile = %+v, error = %v", found, err)
+			row := accountsqlc.Account{ID: uuid.New(), AccountType: "basic_care", DeletedAt: timestamp(time.Now().UTC())}
+			q := &stubQueries{row: row}
+			r := &Repository{queries: q}
+			a, err := lookup.find(r)
+			if err != nil || a.ID != row.ID || a.Profile != (accountdomain.Profile{}) || a.DeletedAt == nil {
+				t.Fatalf("unexpected account: %+v, %v", a, err)
 			}
-
-			queries.err = fmt.Errorf("query: %w", pgx.ErrNoRows)
-			if found, err := lookup.find(repo); found != nil || err != nil {
-				t.Fatalf("absent profile = %+v, error = %v; want nil, nil", found, err)
+			q.err = fmt.Errorf("read: %w", pgx.ErrNoRows)
+			if a, err := lookup.find(r); a != nil || err != nil {
+				t.Fatalf("missing account: %+v %v", a, err)
 			}
-
-			queries.err = errors.New("database unavailable")
-			found, err = lookup.find(repo)
-			if found != nil || !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, queries.err) {
-				t.Fatalf("lookup failure must preserve the category and cause: %v", err)
+			failure := errors.New("database unavailable")
+			q.err = failure
+			if _, err := lookup.find(r); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, failure) {
+				t.Fatal(err)
 			}
 		})
 	}
 }
 
-func TestUpdateUsesReturnedDatabaseValues(t *testing.T) {
-	profile := testProfile()
-	row := profileRow(profile)
-	row.FullName = "Updated name"
-	row.UpdatedAt.Time = row.UpdatedAt.Time.Add(time.Second)
-	queries := &stubQueries{row: row}
-	if err := (&Repository{queries: queries}).Update(t.Context(), profile); err != nil {
+func TestIdentityLookupKeepsIdentityDataOutOfAccount(t *testing.T) {
+	q := &stubQueries{identity: accountsqlc.AccountIdentity{AccountID: uuid.New(), Issuer: "issuer", Subject: "subject"}}
+	r := &Repository{queries: q}
+	i, err := r.FindIdentity(t.Context(), "issuer", "subject")
+	if err != nil || i.AccountID != q.identity.AccountID || i.Issuer != "issuer" || i.Subject != "subject" || i.Email != nil {
+		t.Fatalf("identity=%+v err=%v", i, err)
+	}
+	q.err = pgx.ErrNoRows
+	if i, err := r.FindIdentity(t.Context(), "issuer", "subject"); i != nil || err != nil {
+		t.Fatal("missing identity semantics changed")
+	}
+	q.err = errors.New("read failed")
+	if _, err := r.FindIdentity(t.Context(), "issuer", "subject"); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, q.err) {
 		t.Fatal(err)
 	}
-	params := queries.updated
-	if params.ID != profile.ID || params.FullName != "Ana Silva" || params.Cpf != profile.CPF ||
-		!params.BirthDate.Valid || !params.BirthDate.Time.Equal(profile.BirthDate) || !params.UpdatedAt.Valid {
-		t.Fatalf("unexpected update parameters: %+v", params)
+}
+
+func TestUpdatePreservesNullsAndMapsDatabaseValues(t *testing.T) {
+	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
+	row := accountsqlc.Account{ID: a.ID, AccountType: "basic_care", FullName: pgtype.Text{String: "Ana Silva", Valid: true}, UpdatedAt: timestamp(a.UpdatedAt.Add(time.Second))}
+	q := &stubQueries{row: row}
+	if err := (&Repository{queries: q}).Update(t.Context(), a); err != nil {
+		t.Fatal(err)
 	}
-	if profile.FullName != row.FullName || !profile.UpdatedAt.Equal(row.UpdatedAt.Time) || profile.AuthSubject != row.AuthSubject {
-		t.Fatalf("unexpected updated entity: %+v", profile)
+	if q.updated.FullName.Valid || q.updated.BirthDate.Valid || q.updated.Cpf.Valid || q.updated.Phone.Valid {
+		t.Fatalf("NULL profile was replaced with zero values: %+v", q.updated)
+	}
+	if a.Profile.FullName == nil || *a.Profile.FullName != "Ana Silva" || !a.UpdatedAt.Equal(row.UpdatedAt.Time) {
+		t.Fatal("returned database values were not mapped")
 	}
 }
 
-func TestActivateProfessionalUsesAtomicQueryAndMapsErrors(t *testing.T) {
-	profile := testProfile()
-	row := profileRow(profile)
-	row.AccountType = string(accountdomain.AccountTypeProfessional)
-	queries := &stubQueries{row: row}
-	repository := &Repository{queries: queries}
-
-	activated, err := repository.ActivateProfessional(t.Context(), profile.ID)
-	if err != nil || activated == nil || activated.AccountType != accountdomain.AccountTypeProfessional {
-		t.Fatalf("activation result=%+v error=%v", activated, err)
-	}
-	queries.err = fmt.Errorf("activate: %w", pgx.ErrNoRows)
-	if _, err := repository.ActivateProfessional(t.Context(), profile.ID); !errors.Is(err, account.ErrUserNotFound) {
-		t.Fatalf("missing account error=%v", err)
-	}
-	failure := errors.New("database unavailable")
-	queries.err = failure
-	if _, err := repository.ActivateProfessional(t.Context(), profile.ID); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, failure) {
-		t.Fatalf("persistence error=%v", err)
-	}
-}
-
-func TestWriteErrorsPreserveRepositoryContract(t *testing.T) {
-	unique := fmt.Errorf("query: %w", &pgconn.PgError{Code: "23505"})
-	failure := errors.New("database unavailable")
+func TestWriteErrorsPreserveContractAndAccount(t *testing.T) {
+	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
+	i, _ := accountdomain.NewIdentity(a.ID, "issuer", "subject", nil)
 	for _, operation := range []struct {
-		name  string
-		write func(*Repository, *accountdomain.User) error
+		name string
+		run  func(*Repository) error
 	}{
-		{"create", func(r *Repository, u *accountdomain.User) error { return r.Create(t.Context(), u) }},
-		{"update", func(r *Repository, u *accountdomain.User) error { return r.Update(t.Context(), u) }},
-		{"delete", func(r *Repository, u *accountdomain.User) error { return r.Delete(t.Context(), u.ID) }},
-		{"soft delete", func(r *Repository, u *accountdomain.User) error { return r.SoftDelete(t.Context(), u.ID) }},
+		{"create", func(r *Repository) error { return r.Create(t.Context(), a, i) }},
+		{"update", func(r *Repository) error { return r.Update(t.Context(), a) }},
+		{"deactivate", func(r *Repository) error { return r.SoftDelete(t.Context(), a.ID) }},
+		{"activate", func(r *Repository) error { _, err := r.ActivateProfessional(t.Context(), a.ID); return err }},
 	} {
 		t.Run(operation.name, func(t *testing.T) {
-			queries := &stubQueries{err: failure}
-			repo := &Repository{queries: queries}
-			profile := testProfile()
-			before := *profile
-			err := operation.write(repo, profile)
-			if !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, failure) || *profile != before {
-				t.Fatalf("failure must preserve cause and entity: %v", err)
+			failure := errors.New("database unavailable")
+			q := &stubQueries{err: failure}
+			before := *a
+			if err := operation.run(&Repository{queries: q}); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, failure) || !reflect.DeepEqual(before, *a) {
+				t.Fatalf("error=%v account=%+v", err, a)
 			}
-
-			if operation.name == "create" || operation.name == "update" {
-				queries.err = unique
-				if err := operation.write(repo, profile); !errors.Is(err, account.ErrUserAlreadyExists) {
-					t.Fatalf("unique violation = %v", err)
-				}
+			q.err = &pgconn.PgError{Code: "23505"}
+			if err := operation.run(&Repository{queries: q}); !errors.Is(err, account.ErrAccountAlreadyExists) {
+				t.Fatal(err)
 			}
-			if operation.name == "create" {
-				return
-			}
-			queries.err = nil
-			if operation.name == "update" {
-				queries.err = fmt.Errorf("query: %w", pgx.ErrNoRows)
-			}
-			if err := operation.write(repo, profile); !errors.Is(err, account.ErrUserNotFound) {
-				t.Fatalf("missing target = %v", err)
-			}
-			if operation.name != "update" {
-				queries.rows = 1
-				if err := operation.write(repo, profile); err != nil {
-					t.Fatalf("successful deletion = %v", err)
+			if operation.name != "create" {
+				q.err = pgx.ErrNoRows
+				if err := operation.run(&Repository{queries: q}); !errors.Is(err, account.ErrAccountNotFound) {
+					t.Fatal(err)
 				}
 			}
 		})
-	}
-}
-
-func testProfile() *accountdomain.User {
-	return &accountdomain.User{
-		ID: uuid.New(), AuthIssuer: "test", AuthSubject: "subject-1", Email: "ana@example.test",
-		FullName: "Ana Silva", AccountType: accountdomain.AccountTypeBasicCare, CPF: "12345678901", Phone: "11999999999",
-		BirthDate: time.Date(1990, 1, 2, 0, 0, 0, 0, time.UTC),
-		CreatedAt: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
-		UpdatedAt: time.Date(2026, 1, 2, 12, 0, 0, 0, time.UTC),
-	}
-}
-
-func profileRow(u *accountdomain.User) usersqlc.User {
-	return usersqlc.User{
-		ID: u.ID, AuthIssuer: u.AuthIssuer, AuthSubject: u.AuthSubject, Email: u.Email,
-		FullName: u.FullName, AccountType: string(u.AccountType), Cpf: u.CPF, Phone: u.Phone,
-		BirthDate: pgtype.Date{Time: u.BirthDate, Valid: true},
-		CreatedAt: pgtype.Timestamptz{Time: u.CreatedAt, Valid: true},
-		UpdatedAt: pgtype.Timestamptz{Time: u.UpdatedAt, Valid: true},
 	}
 }
 
 type stubQueries struct {
-	row     usersqlc.User
-	err     error
-	rows    int64
-	created usersqlc.CreateUserParams
-	updated usersqlc.UpdateUserParams
+	accountsqlc.Querier
+	row      accountsqlc.Account
+	identity accountsqlc.AccountIdentity
+	err      error
+	rows     int64
+	created  accountsqlc.CreateAccountWithIdentityParams
+	updated  accountsqlc.UpdateAccountProfileParams
 }
 
-func (q *stubQueries) ActivateUserAsProfessional(context.Context, uuid.UUID) (usersqlc.User, error) {
-	return q.row, q.err
-}
-
-func (q *stubQueries) CreateUser(_ context.Context, params usersqlc.CreateUserParams) error {
-	q.created = params
+func (q *stubQueries) CreateAccountWithIdentity(_ context.Context, p accountsqlc.CreateAccountWithIdentityParams) error {
+	q.created = p
 	return q.err
 }
-
-func (q *stubQueries) UpdateUser(_ context.Context, params usersqlc.UpdateUserParams) (usersqlc.User, error) {
-	q.updated = params
+func (q *stubQueries) UpdateAccountProfile(_ context.Context, p accountsqlc.UpdateAccountProfileParams) (accountsqlc.Account, error) {
+	q.updated = p
 	return q.row, q.err
 }
-
-func (q *stubQueries) DeleteUser(context.Context, uuid.UUID) (int64, error) {
+func (q *stubQueries) FindAccountByID(context.Context, uuid.UUID) (accountsqlc.Account, error) {
+	return q.row, q.err
+}
+func (q *stubQueries) FindAccountByCPF(context.Context, pgtype.Text) (accountsqlc.Account, error) {
+	return q.row, q.err
+}
+func (q *stubQueries) FindAccountByAuthIdentity(context.Context, accountsqlc.FindAccountByAuthIdentityParams) (accountsqlc.Account, error) {
+	return q.row, q.err
+}
+func (q *stubQueries) FindAccountIdentity(context.Context, accountsqlc.FindAccountIdentityParams) (accountsqlc.AccountIdentity, error) {
+	return q.identity, q.err
+}
+func (q *stubQueries) SoftDeleteAccount(context.Context, uuid.UUID) (int64, error) {
 	return q.rows, q.err
 }
-
-func (q *stubQueries) SoftDeleteUser(context.Context, uuid.UUID) (int64, error) {
-	return q.rows, q.err
-}
-
-func (q *stubQueries) FindUserByAuthIdentity(context.Context, usersqlc.FindUserByAuthIdentityParams) (usersqlc.User, error) {
-	return q.row, q.err
-}
-
-func (q *stubQueries) FindUserByID(context.Context, uuid.UUID) (usersqlc.User, error) {
-	return q.row, q.err
-}
-
-func (q *stubQueries) FindUserByCPF(context.Context, string) (usersqlc.User, error) {
-	return q.row, q.err
-}
-
-func (q *stubQueries) FindUserByEmail(context.Context, string) (usersqlc.User, error) {
+func (q *stubQueries) ActivateAccountAsProfessional(context.Context, uuid.UUID) (accountsqlc.Account, error) {
 	return q.row, q.err
 }

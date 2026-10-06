@@ -23,7 +23,7 @@ func (a *deniedPatientAccess) RequireAccess(_ context.Context, accountID, patien
 }
 
 func TestPatientOperationsStopWhenAccessIsDenied(t *testing.T) {
-	actor := &accountdomain.User{ID: uuid.New()}
+	actor := &accountdomain.Account{ID: uuid.New()}
 	patientID := uuid.New()
 	denied := apperr.Forbidden("acesso negado")
 	for _, operation := range []string{"get", "update", "soft delete", "hard delete"} {

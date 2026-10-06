@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.31.1
 
-package usersqlc
+package accountsqlc
 
 import (
 	"context"
@@ -13,9 +13,10 @@ import (
 
 type Querier interface {
 	ActivateAccountAsProfessional(ctx context.Context, id uuid.UUID) (Account, error)
-	// internal/infrastructure/database/postgres/sqlc/sql/queries/user_queries.sql
 	CreateAccount(ctx context.Context, id uuid.UUID) error
 	CreateAccountIdentity(ctx context.Context, arg CreateAccountIdentityParams) error
+	// internal/infrastructure/database/postgres/sqlc/sql/queries/account_queries.sql
+	CreateAccountWithIdentity(ctx context.Context, arg CreateAccountWithIdentityParams) error
 	FindAccountByAuthIdentity(ctx context.Context, arg FindAccountByAuthIdentityParams) (Account, error)
 	FindAccountByCPF(ctx context.Context, cpf pgtype.Text) (Account, error)
 	FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error)

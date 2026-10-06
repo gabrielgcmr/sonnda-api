@@ -16,10 +16,10 @@ import (
 )
 
 type patientService interface {
-	Get(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) (*profiledomain.Patient, error)
-	Update(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID, input patientprofile.UpdateInput) (*profiledomain.Patient, error)
-	HardDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error
-	ListMyPatients(ctx context.Context, currentUser *accountdomain.User, limit, offset int) ([]*profiledomain.Patient, error)
+	Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error)
+	Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input patientprofile.UpdateInput) (*profiledomain.Patient, error)
+	HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
+	ListMyPatients(ctx context.Context, currentAccount *accountdomain.Account, limit, offset int) ([]*profiledomain.Patient, error)
 }
 
 type Handler struct {
@@ -81,12 +81,12 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 }
 
 func (h *Handler) getPatient(ctx context.Context, input *patientIDInput) (*patientOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 
-	patient, err := h.svc.Get(ctx, currentUser, input.PatientID)
+	patient, err := h.svc.Get(ctx, currentAccount, input.PatientID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -98,12 +98,12 @@ func (h *Handler) listPatients(ctx context.Context, _ *struct{}) (*patientListOu
 		return nil, huma.Error500InternalServerError("serviço indisponível")
 	}
 
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 
-	patients, err := h.svc.ListMyPatients(ctx, currentUser, 100, 0)
+	patients, err := h.svc.ListMyPatients(ctx, currentAccount, 100, 0)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}

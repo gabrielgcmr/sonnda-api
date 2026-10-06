@@ -11,22 +11,25 @@ import (
 )
 
 type Middleware struct {
-	userRepo account.Repository
+	accountRepo account.Repository
 }
 
-func NewMiddleware(userRepo account.Repository) *Middleware {
-	return &Middleware{userRepo: userRepo}
+func NewMiddleware(accountRepo account.Repository) *Middleware {
+	return &Middleware{accountRepo: accountRepo}
 }
 
-func (m *Middleware) ResolveRegisteredUser(ctx context.Context, identity *authdomain.Identity) (*accountdomain.User, error) {
+func (m *Middleware) ResolveRegisteredAccount(ctx context.Context, identity *authdomain.Identity) (*accountdomain.Account, error) {
 	if identity == nil {
 		return nil, apperr.Unauthorized("autenticação necessária")
 	}
 
-	currentUser, err := m.userRepo.FindByAuthIdentity(ctx, identity.Issuer, identity.Subject)
+	currentAccount, err := m.accountRepo.FindByAuthIdentity(ctx, identity.Issuer, identity.Subject)
 	if err != nil {
 		return nil, apperr.Internal("falha ao buscar usuário", err)
 	}
 
-	return currentUser, nil
+	if currentAccount != nil && currentAccount.DeletedAt != nil {
+		return nil, apperr.Forbidden("conta desativada")
+	}
+	return currentAccount, nil
 }

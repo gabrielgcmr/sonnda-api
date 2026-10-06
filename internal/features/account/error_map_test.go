@@ -17,8 +17,8 @@ func TestRepositoryErrorsKeepApplicationCodesAndCauses(t *testing.T) {
 		err  error
 		kind apperr.ErrorKind
 	}{
-		{"conflict", fmt.Errorf("insert: %w", ErrUserAlreadyExists), apperr.RESOURCE_ALREADY_EXISTS},
-		{"not found", fmt.Errorf("update: %w", ErrUserNotFound), apperr.NOT_FOUND},
+		{"conflict", fmt.Errorf("insert: %w", ErrAccountAlreadyExists), apperr.RESOURCE_ALREADY_EXISTS},
+		{"not found", fmt.Errorf("update: %w", ErrAccountNotFound), apperr.NOT_FOUND},
 		{"persistence", errors.Join(persistence.ErrPersistenceFailure, failure), apperr.INFRA_DATABASE_ERROR},
 		{"unknown", failure, apperr.INTERNAL_ERROR},
 	} {
