@@ -33,6 +33,6 @@ func NewAccountModule(db *postgress.Client, redisClient *redis.Client, activatio
 
 	return &AccountModule{
 		Handler:    accounthttp.NewHandler(onboarding, service, activation),
-		Middleware: accounthttp.NewMiddleware(userRepo),
+		Middleware: accounthttp.NewMiddleware(service),
 	}
 }

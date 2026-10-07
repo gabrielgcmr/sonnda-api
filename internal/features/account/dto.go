@@ -17,6 +17,14 @@ type AccountCreateInput struct {
 	Profile     accountdomain.Profile
 }
 
+// AccountResolveInput identifies the authenticated principal whose local
+// account must be resolved or provisioned.
+type AccountResolveInput struct {
+	Issuer  string
+	Subject string
+	Email   *string
+}
+
 type AccountUpdateInput struct {
 	AccountID uuid.UUID
 	FullName  *string

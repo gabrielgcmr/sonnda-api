@@ -19,6 +19,14 @@ VALUES ($1, 'basic_care', now(), now());
 INSERT INTO account_identities (account_id, issuer, subject, email)
 VALUES ($1, $2, $3, $4);
 
+-- name: LockAccountIdentity :exec
+SELECT pg_advisory_xact_lock(
+    hashtextextended(
+        format('%s:%s:%s', char_length(sqlc.arg(issuer)::text), sqlc.arg(issuer)::text, sqlc.arg(subject)::text),
+        0
+    )
+);
+
 -- name: FindAccountByAuthIdentity :one
 SELECT a.* FROM accounts a
 JOIN account_identities i ON i.account_id = a.id
@@ -26,6 +34,9 @@ WHERE i.issuer = $1 AND i.subject = $2;
 
 -- name: FindAccountByID :one
 SELECT * FROM accounts WHERE id = $1;
+
+-- name: FindAccountByIDForUpdate :one
+SELECT * FROM accounts WHERE id = $1 FOR UPDATE;
 
 -- name: FindAccountByCPF :one
 SELECT * FROM accounts WHERE cpf = $1 AND deleted_at IS NULL;

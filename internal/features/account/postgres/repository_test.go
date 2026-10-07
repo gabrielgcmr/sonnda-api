@@ -44,6 +44,9 @@ func TestLookupsPreserveOptionalProfileAndDeactivation(t *testing.T) {
 		find func(*Repository) (*accountdomain.Account, error)
 	}{
 		{"id", func(r *Repository) (*accountdomain.Account, error) { return r.FindByID(t.Context(), uuid.New()) }},
+		{"id for update", func(r *Repository) (*accountdomain.Account, error) {
+			return r.FindByIDForUpdate(t.Context(), uuid.New())
+		}},
 		{"identity", func(r *Repository) (*accountdomain.Account, error) {
 			return r.FindByAuthIdentity(t.Context(), "issuer", "subject")
 		}},
@@ -67,6 +70,27 @@ func TestLookupsPreserveOptionalProfileAndDeactivation(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestIdentityLockAndEmailSynchronization(t *testing.T) {
+	q := &stubQueries{}
+	r := &Repository{queries: q}
+	if err := r.LockAuthIdentity(t.Context(), "issuer", "subject"); err != nil {
+		t.Fatal(err)
+	}
+	email := "person@example.test"
+	if err := r.UpdateIdentityEmail(t.Context(), "issuer", "subject", &email); err != nil {
+		t.Fatal(err)
+	}
+	if q.locked.Issuer != "issuer" || q.locked.Subject != "subject" ||
+		q.email.Issuer != "issuer" || q.email.Subject != "subject" || !q.email.Email.Valid || q.email.Email.String != email {
+		t.Fatalf("lock=%+v email=%+v", q.locked, q.email)
+	}
+
+	q.err = errors.New("database unavailable")
+	if err := r.LockAuthIdentity(t.Context(), "issuer", "subject"); !errors.Is(err, persistence.ErrPersistenceFailure) || !errors.Is(err, q.err) {
+		t.Fatal(err)
 	}
 }
 
@@ -143,6 +167,8 @@ type stubQueries struct {
 	rows     int64
 	created  accountsqlc.CreateAccountWithIdentityParams
 	updated  accountsqlc.UpdateAccountProfileParams
+	locked   accountsqlc.LockAccountIdentityParams
+	email    accountsqlc.UpdateAccountIdentityEmailParams
 }
 
 func (q *stubQueries) CreateAccountWithIdentity(_ context.Context, p accountsqlc.CreateAccountWithIdentityParams) error {
@@ -154,6 +180,9 @@ func (q *stubQueries) UpdateAccountProfile(_ context.Context, p accountsqlc.Upda
 	return q.row, q.err
 }
 func (q *stubQueries) FindAccountByID(context.Context, uuid.UUID) (accountsqlc.Account, error) {
+	return q.row, q.err
+}
+func (q *stubQueries) FindAccountByIDForUpdate(context.Context, uuid.UUID) (accountsqlc.Account, error) {
 	return q.row, q.err
 }
 func (q *stubQueries) FindAccountByCPF(context.Context, pgtype.Text) (accountsqlc.Account, error) {
@@ -170,4 +199,12 @@ func (q *stubQueries) SoftDeleteAccount(context.Context, uuid.UUID) (int64, erro
 }
 func (q *stubQueries) ActivateAccountAsProfessional(context.Context, uuid.UUID) (accountsqlc.Account, error) {
 	return q.row, q.err
+}
+func (q *stubQueries) LockAccountIdentity(_ context.Context, params accountsqlc.LockAccountIdentityParams) error {
+	q.locked = params
+	return q.err
+}
+func (q *stubQueries) UpdateAccountIdentityEmail(_ context.Context, params accountsqlc.UpdateAccountIdentityEmailParams) (int64, error) {
+	q.email = params
+	return q.rows, q.err
 }

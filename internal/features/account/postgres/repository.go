@@ -19,10 +19,43 @@ import (
 
 var _ account.Repository = (*Repository)(nil)
 
-type Repository struct{ queries accountsqlc.Querier }
+type transactionDB interface {
+	accountsqlc.DBTX
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
+}
 
-func New(db accountsqlc.DBTX) *Repository {
-	return &Repository{queries: accountsqlc.New(db)}
+type Repository struct {
+	db      transactionDB
+	queries accountsqlc.Querier
+}
+
+func New(db transactionDB) *Repository {
+	return &Repository{db: db, queries: accountsqlc.New(db)}
+}
+
+func (r *Repository) WithinTransaction(ctx context.Context, fn func(account.Repository) error) error {
+	if r == nil || r.db == nil {
+		return errors.Join(persistence.ErrPersistenceFailure, errors.New("transaction database is not configured"))
+	}
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	txRepo := &Repository{queries: accountsqlc.New(tx)}
+	if err := fn(txRepo); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	return nil
+}
+
+func (r *Repository) LockAuthIdentity(ctx context.Context, issuer, subject string) error {
+	return readWriteError(r.queries.LockAccountIdentity(ctx, accountsqlc.LockAccountIdentityParams{
+		Issuer: issuer, Subject: subject,
+	}))
 }
 
 func (r *Repository) Create(ctx context.Context, a *accountdomain.Account, identity *accountdomain.Identity) error {
@@ -52,6 +85,13 @@ func (r *Repository) Update(ctx context.Context, a *accountdomain.Account) error
 	return nil
 }
 
+func (r *Repository) UpdateIdentityEmail(ctx context.Context, issuer, subject string, email *string) error {
+	_, err := r.queries.UpdateAccountIdentityEmail(ctx, accountsqlc.UpdateAccountIdentityEmailParams{
+		Issuer: issuer, Subject: subject, Email: textValue(email),
+	})
+	return readWriteError(err)
+}
+
 func (r *Repository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	rows, err := r.queries.SoftDeleteAccount(ctx, id)
 	if err != nil {
@@ -73,6 +113,10 @@ func (r *Repository) ActivateProfessional(ctx context.Context, id uuid.UUID) (*a
 
 func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (*accountdomain.Account, error) {
 	return accountResult(r.queries.FindAccountByID(ctx, id))
+}
+
+func (r *Repository) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*accountdomain.Account, error) {
+	return accountResult(r.queries.FindAccountByIDForUpdate(ctx, id))
 }
 
 func (r *Repository) FindByCPF(ctx context.Context, cpf string) (*accountdomain.Account, error) {
@@ -134,6 +178,13 @@ func writeError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return account.ErrAccountAlreadyExists
+	}
+	return errors.Join(persistence.ErrPersistenceFailure, err)
+}
+
+func readWriteError(err error) error {
+	if err == nil {
+		return nil
 	}
 	return errors.Join(persistence.ErrPersistenceFailure, err)
 }

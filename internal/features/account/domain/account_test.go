@@ -53,7 +53,7 @@ func TestOnboardingIsDerivedFromNameAndBirthDate(t *testing.T) {
 	for _, p := range []Profile{
 		{FullName: ptr("X"), BirthDate: &birth},
 		{FullName: &name, BirthDate: ptr(time.Time{})},
-		{FullName: &name, BirthDate: ptr(time.Now().AddDate(0, 0, 1))},
+		{FullName: &name, BirthDate: ptr(time.Now().UTC().AddDate(0, 0, 1))},
 	} {
 		if p.OnboardingCompleted() {
 			t.Fatal("invalid name or birth date completed onboarding")
@@ -74,7 +74,7 @@ func TestProfileValidationBoundaries(t *testing.T) {
 		{"maximum unicode name", Profile{FullName: ptr(strings.Repeat("á", 120))}, nil},
 		{"long name", Profile{FullName: ptr(strings.Repeat("á", 121))}, ErrInvalidFullName},
 		{"zero date", Profile{BirthDate: ptr(time.Time{})}, ErrInvalidBirthDate},
-		{"future date", Profile{BirthDate: ptr(time.Now().AddDate(0, 0, 1))}, ErrInvalidBirthDate},
+		{"future date", Profile{BirthDate: ptr(time.Now().UTC().AddDate(0, 0, 1))}, ErrInvalidBirthDate},
 		{"today", Profile{BirthDate: ptr(time.Now().UTC())}, nil},
 		{"blank CPF", Profile{CPF: ptr(" ")}, nil},
 		{"formatted CPF", Profile{CPF: ptr("123.456.789-01")}, nil},

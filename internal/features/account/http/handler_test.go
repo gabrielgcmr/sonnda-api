@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/gabrielgcmr/sonnda/internal/features/account"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	authdomain "github.com/gabrielgcmr/sonnda/internal/features/auth/domain"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
 func TestAccountPresentationPreservesNullProfileAndUsesRequestIdentity(t *testing.T) {
@@ -36,21 +36,22 @@ func TestAccountPresentationPreservesNullProfileAndUsesRequestIdentity(t *testin
 	}
 }
 
-type lookupRepository struct {
-	account.Repository
+type lookupResolver struct {
 	value *accountdomain.Account
+	err   error
 }
 
-func (r lookupRepository) FindByAuthIdentity(context.Context, string, string) (*accountdomain.Account, error) {
-	return r.value, nil
+func (r lookupResolver) ResolveOrProvision(context.Context, account.AccountResolveInput) (*accountdomain.Account, error) {
+	return r.value, r.err
 }
 
 func TestRegisteredAccountResolverRejectsDeactivatedAccount(t *testing.T) {
-	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
-	now := time.Now().UTC()
-	a.DeletedAt = &now
-	m := NewMiddleware(lookupRepository{value: a})
+	m := NewMiddleware(lookupResolver{err: accountErrorForbidden()})
 	if resolved, err := m.ResolveRegisteredAccount(t.Context(), &authdomain.Identity{Issuer: "issuer", Subject: "subject"}); resolved != nil || err == nil {
 		t.Fatalf("deactivated account resolved: %+v %v", resolved, err)
 	}
+}
+
+func accountErrorForbidden() error {
+	return apperr.Forbidden("conta desativada")
 }

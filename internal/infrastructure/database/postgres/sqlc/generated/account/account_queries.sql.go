@@ -185,6 +185,27 @@ func (q *Queries) FindAccountByID(ctx context.Context, id uuid.UUID) (Account, e
 	return i, err
 }
 
+const findAccountByIDForUpdate = `-- name: FindAccountByIDForUpdate :one
+SELECT id, full_name, birth_date, cpf, phone, account_type, created_at, updated_at, deleted_at FROM accounts WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) FindAccountByIDForUpdate(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, findAccountByIDForUpdate, id)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.FullName,
+		&i.BirthDate,
+		&i.Cpf,
+		&i.Phone,
+		&i.AccountType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const findAccountIdentity = `-- name: FindAccountIdentity :one
 SELECT account_id, issuer, subject, email, created_at, updated_at FROM account_identities WHERE issuer = $1 AND subject = $2
 `
@@ -237,6 +258,25 @@ func (q *Queries) ListAccountIdentities(ctx context.Context, accountID uuid.UUID
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAccountIdentity = `-- name: LockAccountIdentity :exec
+SELECT pg_advisory_xact_lock(
+    hashtextextended(
+        format('%s:%s:%s', char_length($1::text), $1::text, $2::text),
+        0
+    )
+)
+`
+
+type LockAccountIdentityParams struct {
+	Issuer  string `json:"issuer"`
+	Subject string `json:"subject"`
+}
+
+func (q *Queries) LockAccountIdentity(ctx context.Context, arg LockAccountIdentityParams) error {
+	_, err := q.db.Exec(ctx, lockAccountIdentity, arg.Issuer, arg.Subject)
+	return err
 }
 
 const softDeleteAccount = `-- name: SoftDeleteAccount :execrows

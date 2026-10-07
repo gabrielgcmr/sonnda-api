@@ -7,15 +7,95 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gabrielgcmr/sonnda/internal/features/account"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestResolveOrProvisionConcurrencyIntegration(t *testing.T) {
+	repository := newAccountTestRepository(t)
+	service := account.New(repository)
+	const workers = 16
+	ids := make(chan uuid.UUID, workers)
+	errs := make(chan error, workers)
+	var group sync.WaitGroup
+
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			resolved, err := service.ResolveOrProvision(t.Context(), account.AccountResolveInput{
+				Issuer: "issuer", Subject: "concurrent-subject",
+			})
+			if err != nil {
+				errs <- err
+				return
+			}
+			ids <- resolved.ID
+		}()
+	}
+	group.Wait()
+	close(ids)
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+
+	var expected uuid.UUID
+	for id := range ids {
+		if expected == uuid.Nil {
+			expected = id
+		}
+		if id != expected {
+			t.Fatalf("concurrent resolution returned %s and %s", expected, id)
+		}
+	}
+	var accountCount int
+	if err := repository.db.QueryRow(t.Context(), "SELECT count(*) FROM accounts").Scan(&accountCount); err != nil {
+		t.Fatal(err)
+	}
+	if accountCount != 1 {
+		t.Fatalf("provisioned %d accounts", accountCount)
+	}
+}
+
+func TestResolveOrProvisionEmailAndDeactivationIntegration(t *testing.T) {
+	repository := newAccountTestRepository(t)
+	service := account.New(repository)
+	firstEmail := "first@example.test"
+	created, err := service.ResolveOrProvision(t.Context(), account.AccountResolveInput{
+		Issuer: "issuer", Subject: "subject", Email: &firstEmail,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEmail := "second@example.test"
+	resolved, err := service.ResolveOrProvision(t.Context(), account.AccountResolveInput{
+		Issuer: "issuer", Subject: "subject", Email: &secondEmail,
+	})
+	if err != nil || resolved.ID != created.ID {
+		t.Fatalf("resolved=%+v error=%v", resolved, err)
+	}
+	identity, err := repository.FindIdentity(t.Context(), "issuer", "subject")
+	if err != nil || identity.Email == nil || *identity.Email != secondEmail {
+		t.Fatalf("identity=%+v error=%v", identity, err)
+	}
+	if err := repository.SoftDelete(t.Context(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err = service.ResolveOrProvision(t.Context(), account.AccountResolveInput{Issuer: "issuer", Subject: "subject"})
+	var appErr *apperr.AppError
+	if resolved != nil || !errors.As(err, &appErr) || appErr.Kind != apperr.ACCESS_DENIED {
+		t.Fatalf("resolved=%+v error=%v", resolved, err)
+	}
+}
 
 func TestAccountIdentityPersistenceIntegration(t *testing.T) {
 	r := newAccountTestRepository(t)

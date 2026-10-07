@@ -20,8 +20,10 @@ type Querier interface {
 	FindAccountByAuthIdentity(ctx context.Context, arg FindAccountByAuthIdentityParams) (Account, error)
 	FindAccountByCPF(ctx context.Context, cpf pgtype.Text) (Account, error)
 	FindAccountByID(ctx context.Context, id uuid.UUID) (Account, error)
+	FindAccountByIDForUpdate(ctx context.Context, id uuid.UUID) (Account, error)
 	FindAccountIdentity(ctx context.Context, arg FindAccountIdentityParams) (AccountIdentity, error)
 	ListAccountIdentities(ctx context.Context, accountID uuid.UUID) ([]AccountIdentity, error)
+	LockAccountIdentity(ctx context.Context, arg LockAccountIdentityParams) error
 	SoftDeleteAccount(ctx context.Context, id uuid.UUID) (int64, error)
 	UpdateAccountIdentityEmail(ctx context.Context, arg UpdateAccountIdentityEmailParams) (int64, error)
 	UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (Account, error)
