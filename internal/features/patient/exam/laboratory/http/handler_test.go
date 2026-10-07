@@ -59,7 +59,7 @@ func TestGetLabReportChecksAccessToOwningPatient(t *testing.T) {
 	handler := NewHandler(svc, access)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	handler.RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
@@ -89,7 +89,7 @@ func assertListMode(t *testing.T, query string, wantFull bool) {
 	handler := NewHandler(svc, allowAllAccess{})
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	handler.RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)

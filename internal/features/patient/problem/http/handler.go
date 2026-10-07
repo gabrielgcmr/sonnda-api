@@ -149,7 +149,7 @@ func (h *Handler) history(ctx context.Context, input *historyInput) (*historyOut
 }
 
 func (h *Handler) actor(ctx context.Context) (uuid.UUID, error) {
-	user, ok := helpers.GetCurrentUserFromContext(ctx)
+	user, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok || user == nil {
 		return uuid.Nil, huma.Error403Forbidden("conta registrada necessária")
 	}

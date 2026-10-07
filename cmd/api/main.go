@@ -162,18 +162,22 @@ func main() {
 
 func logInfraFatal(prefix string, err error) {
 	if err == nil {
-		log.Fatal(prefix)
+		slog.Error(prefix)
+		os.Exit(1)
 	}
 
 	var appErr *apperr.AppError
 	if errors.As(err, &appErr) && appErr != nil {
 		if appErr.Cause != nil {
-			log.Fatalf("%s: %s (cause: %v)", prefix, appErr.Message, appErr.Cause)
+			slog.Error(prefix, "message", appErr.Message, "cause", appErr.Cause)
+		} else {
+			slog.Error(prefix, "message", appErr.Message)
 		}
-		log.Fatalf("%s: %s", prefix, appErr.Message)
+		os.Exit(1)
 	}
 
-	log.Fatalf("%s: %v", prefix, err)
+	slog.Error(prefix, "error", err)
+	os.Exit(1)
 }
 
 func buildGCPClientOptions(cfg *config.Config) []option.ClientOption {

@@ -450,120 +450,6 @@ func (q *Queries) GetLabReportByPatientAndFingerprint(ctx context.Context, arg G
 	return i, err
 }
 
-const getLabReportWithPanelsByID = `-- name: GetLabReportWithPanelsByID :many
-SELECT
-    r.id AS report_id,
-    r.patient_id,
-    r.exam_document_id,
-    r.patient_name,
-    r.patient_dob,
-    r.lab_name,
-    r.lab_phone,
-    r.insurance_provider,
-    r.requesting_doctor,
-    r.technical_manager,
-    r.report_date,
-    r.uploaded_by_user_id,
-    r.created_at,
-    r.updated_at,
-    p.id AS panel_id,
-    p.lab_report_id AS panel_report_id,
-    p.test_name,
-    p.material,
-    p.method,
-    p.collected_at,
-    p.release_at,
-    o.id AS observation_id,
-    o.lab_panel_id AS observation_panel_id,
-    o.parameter_name,
-    o.result_value,
-    o.result_unit,
-    o.reference_text
-FROM lab_reports r
-LEFT JOIN lab_panels p ON p.lab_report_id = r.id
-LEFT JOIN observations o ON o.lab_panel_id = p.id
-WHERE r.id = $1
-ORDER BY p.collected_at NULLS LAST, p.id, o.id
-`
-
-type GetLabReportWithPanelsByIDRow struct {
-	ReportID           uuid.UUID          `json:"report_id"`
-	PatientID          uuid.UUID          `json:"patient_id"`
-	ExamDocumentID     pgtype.UUID        `json:"exam_document_id"`
-	PatientName        pgtype.Text        `json:"patient_name"`
-	PatientDob         pgtype.Timestamptz `json:"patient_dob"`
-	LabName            pgtype.Text        `json:"lab_name"`
-	LabPhone           pgtype.Text        `json:"lab_phone"`
-	InsuranceProvider  pgtype.Text        `json:"insurance_provider"`
-	RequestingDoctor   pgtype.Text        `json:"requesting_doctor"`
-	TechnicalManager   pgtype.Text        `json:"technical_manager"`
-	ReportDate         pgtype.Timestamptz `json:"report_date"`
-	UploadedByUserID   uuid.UUID          `json:"uploaded_by_user_id"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	PanelID            pgtype.UUID        `json:"panel_id"`
-	PanelReportID      pgtype.UUID        `json:"panel_report_id"`
-	TestName           pgtype.Text        `json:"test_name"`
-	Material           pgtype.Text        `json:"material"`
-	Method             pgtype.Text        `json:"method"`
-	CollectedAt        pgtype.Timestamptz `json:"collected_at"`
-	ReleaseAt          pgtype.Timestamptz `json:"release_at"`
-	ObservationID      pgtype.UUID        `json:"observation_id"`
-	ObservationPanelID pgtype.UUID        `json:"observation_panel_id"`
-	ParameterName      pgtype.Text        `json:"parameter_name"`
-	ResultValue        pgtype.Text        `json:"result_value"`
-	ResultUnit         pgtype.Text        `json:"result_unit"`
-	ReferenceText      pgtype.Text        `json:"reference_text"`
-}
-
-func (q *Queries) GetLabReportWithPanelsByID(ctx context.Context, id uuid.UUID) ([]GetLabReportWithPanelsByIDRow, error) {
-	rows, err := q.db.Query(ctx, getLabReportWithPanelsByID, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetLabReportWithPanelsByIDRow
-	for rows.Next() {
-		var i GetLabReportWithPanelsByIDRow
-		if err := rows.Scan(
-			&i.ReportID,
-			&i.PatientID,
-			&i.ExamDocumentID,
-			&i.PatientName,
-			&i.PatientDob,
-			&i.LabName,
-			&i.LabPhone,
-			&i.InsuranceProvider,
-			&i.RequestingDoctor,
-			&i.TechnicalManager,
-			&i.ReportDate,
-			&i.UploadedByUserID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.PanelID,
-			&i.PanelReportID,
-			&i.TestName,
-			&i.Material,
-			&i.Method,
-			&i.CollectedAt,
-			&i.ReleaseAt,
-			&i.ObservationID,
-			&i.ObservationPanelID,
-			&i.ParameterName,
-			&i.ResultValue,
-			&i.ResultUnit,
-			&i.ReferenceText,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const labDocumentBelongsToPatient = `-- name: LabDocumentBelongsToPatient :one
 
 SELECT EXISTS (
@@ -628,12 +514,7 @@ WITH paged_reports AS (
       patient_id,
       exam_document_id,
       patient_name,
-      patient_dob,
       lab_name,
-      lab_phone,
-      insurance_provider,
-      requesting_doctor,
-      technical_manager,
       report_date,
       uploaded_by_user_id,
       created_at,
@@ -648,12 +529,7 @@ SELECT
     r.patient_id,
     r.exam_document_id,
     r.patient_name,
-    r.patient_dob,
     r.lab_name,
-    r.lab_phone,
-    r.insurance_provider,
-    r.requesting_doctor,
-    r.technical_manager,
     r.report_date,
     r.uploaded_by_user_id,
     r.created_at,
@@ -689,12 +565,7 @@ type ListLabReportsByPatientIDRow struct {
 	PatientID          uuid.UUID          `json:"patient_id"`
 	ExamDocumentID     pgtype.UUID        `json:"exam_document_id"`
 	PatientName        pgtype.Text        `json:"patient_name"`
-	PatientDob         pgtype.Timestamptz `json:"patient_dob"`
 	LabName            pgtype.Text        `json:"lab_name"`
-	LabPhone           pgtype.Text        `json:"lab_phone"`
-	InsuranceProvider  pgtype.Text        `json:"insurance_provider"`
-	RequestingDoctor   pgtype.Text        `json:"requesting_doctor"`
-	TechnicalManager   pgtype.Text        `json:"technical_manager"`
 	ReportDate         pgtype.Timestamptz `json:"report_date"`
 	UploadedByUserID   uuid.UUID          `json:"uploaded_by_user_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -731,12 +602,7 @@ func (q *Queries) ListLabReportsByPatientID(ctx context.Context, arg ListLabRepo
 			&i.PatientID,
 			&i.ExamDocumentID,
 			&i.PatientName,
-			&i.PatientDob,
 			&i.LabName,
-			&i.LabPhone,
-			&i.InsuranceProvider,
-			&i.RequestingDoctor,
-			&i.TechnicalManager,
 			&i.ReportDate,
 			&i.UploadedByUserID,
 			&i.CreatedAt,

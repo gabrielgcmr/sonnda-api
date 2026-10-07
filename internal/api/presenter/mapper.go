@@ -32,7 +32,9 @@ func StatusFromCode(code apperr.ErrorKind) int {
 	// ACCESS AND PERMISSIONS
 	case apperr.PROFILE_NOT_FOUND,
 		apperr.ACCESS_DENIED,
-		apperr.ACTION_NOT_ALLOWED:
+		apperr.ACTION_NOT_ALLOWED,
+		apperr.ONBOARDING_REQUIRED,
+		apperr.ACCOUNT_DEACTIVATED:
 		return http.StatusForbidden // 403
 
 	// VALIDATION

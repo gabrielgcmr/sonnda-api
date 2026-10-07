@@ -1,8 +1,9 @@
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/lab.sql
 -- Lab reports: optional extracted metadata, linked to patient and uploader.
 CREATE TABLE lab_reports (
     id                 UUID PRIMARY KEY,
     patient_id         UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    uploaded_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    uploaded_by_user_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     exam_document_id   UUID REFERENCES exam_documents(id) ON DELETE SET NULL,
     patient_name       TEXT,
     patient_dob        TIMESTAMP WITH TIME ZONE,

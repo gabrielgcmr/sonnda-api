@@ -143,11 +143,11 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 }
 
 func (h *ExamsHandler) listExamDocuments(ctx context.Context, input *listExamDocumentsInput) (*listExamDocumentsOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, input.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	list, err := h.svc.ListByPatient(ctx, input.PatientID, input.Limit, input.Offset)
@@ -158,11 +158,11 @@ func (h *ExamsHandler) listExamDocuments(ctx context.Context, input *listExamDoc
 }
 
 func (h *ExamsHandler) listExamDocumentTexts(ctx context.Context, input *listExamDocumentsInput) (*listExamDocumentTextsOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, input.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	list, err := h.svc.ListDocumentTextsByPatient(ctx, input.PatientID, input.Limit, input.Offset)
@@ -199,11 +199,11 @@ func (h *ExamsHandler) getExamDocumentFile(ctx context.Context, input *examDocum
 }
 
 func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExamDocumentInput) (*examDocumentOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, input.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 
@@ -216,7 +216,7 @@ func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExam
 		return nil, humaerror.From(err)
 	}
 	defer os.Remove(path)
-	document, err := h.drafts.Create(ctx, documents.CreateDraftInput{PatientID: input.PatientID, UserID: currentUser.ID, LocalPath: path, Filename: fileHeaders[0].Filename})
+	document, err := h.drafts.Create(ctx, documents.CreateDraftInput{PatientID: input.PatientID, UserID: currentAccount.ID, LocalPath: path, Filename: fileHeaders[0].Filename})
 
 	if err != nil {
 		return nil, humaerror.From(err)
@@ -225,7 +225,7 @@ func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExam
 }
 
 func (h *ExamsHandler) findAccessibleDocument(ctx context.Context, documentID uuid.UUID) (*documents.ExamDocumentOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}
@@ -236,7 +236,7 @@ func (h *ExamsHandler) findAccessibleDocument(ctx context.Context, documentID uu
 	if document == nil {
 		return nil, huma.Error404NotFound("documento não encontrado")
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentUser.ID, document.PatientID); err != nil {
+	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, document.PatientID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	return document, nil

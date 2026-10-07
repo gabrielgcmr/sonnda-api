@@ -6,11 +6,11 @@ persistência do tipo da conta e o limite de tentativas estão conectados à API
 
 ## Contrato HTTP
 
-`POST /me/professional-activation` exige autenticação e uma conta registrada. O
+`POST /me/professional-activation` exige autenticação, conta resolvida e onboarding concluído. O
 corpo contém somente `password`. A operação atua sempre sobre a própria conta e
 não aceita identificador ou tipo de conta informado pelo cliente.
 
-Uma senha válida altera `users.account_type` de `basic_care` para `professional`
+Uma senha válida altera `accounts.account_type` de `basic_care` para `professional`
 e atualiza `updated_at`. A resposta `200` devolve o perfil atualizado. Repetir a
 operação para uma conta já profissional devolve o perfil atual sem validar a
 senha novamente e sem nova escrita.

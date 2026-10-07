@@ -12,7 +12,7 @@ import (
 )
 
 type accountLookup interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*accountdomain.User, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*accountdomain.Account, error)
 }
 
 type accessChecker interface {
@@ -43,7 +43,7 @@ func (r *PatientContextResolver) Resolve(ctx context.Context, accountID, patient
 	if err != nil {
 		return PatientContext{}, contextStoreError("accounts.FindByID", err)
 	}
-	if account == nil || account.ID != accountID || !account.AccountType.IsValid() {
+	if account == nil || account.ID != accountID || account.DeletedAt != nil || !account.AccountType.IsValid() {
 		return PatientContext{}, apperr.Forbidden("acesso negado")
 	}
 	if err := r.access.RequireAccess(ctx, accountID, patientID); err != nil {

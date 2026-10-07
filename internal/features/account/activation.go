@@ -50,7 +50,7 @@ func NewProfessionalActivationService(repository Repository, limiter ActivationL
 	return service
 }
 
-func (s *ProfessionalActivationService) Activate(ctx context.Context, accountID uuid.UUID, password, origin string) (*accountdomain.User, error) {
+func (s *ProfessionalActivationService) Activate(ctx context.Context, accountID uuid.UUID, password, origin string) (*accountdomain.Account, error) {
 	if accountID == uuid.Nil {
 		return nil, apperr.Unauthorized("autenticação necessária")
 	}
@@ -63,7 +63,10 @@ func (s *ProfessionalActivationService) Activate(ctx context.Context, accountID 
 		return nil, mapRepoError("repository.FindByID", err)
 	}
 	if user == nil {
-		return nil, userNotFound()
+		return nil, accountNotFound()
+	}
+	if user.DeletedAt != nil {
+		return nil, apperr.AccountDeactivated()
 	}
 	if user.AccountType == accountdomain.AccountTypeProfessional {
 		return user, nil

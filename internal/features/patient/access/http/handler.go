@@ -56,12 +56,12 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 }
 
 func (h *Handler) listForCurrentAccount(ctx context.Context, input *listPatientsInput) (*listPatientsOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 
-	result, err := h.service.ListForAccount(ctx, currentUser.ID, input.Limit, input.Offset)
+	result, err := h.service.ListForAccount(ctx, currentAccount.ID, input.Limit, input.Offset)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}

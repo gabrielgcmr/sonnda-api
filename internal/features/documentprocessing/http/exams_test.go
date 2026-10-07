@@ -68,7 +68,7 @@ func reviewRouter(denied bool, review *reviewStub) (*gin.Engine, uuid.UUID, uuid
 	doc, patient := uuid.New(), uuid.New()
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &account.User{ID: uuid.New()}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &account.Account{ID: uuid.New()}))
 	})
 	NewExams(&documentStub{document: documents.ExamDocumentOutput{ID: doc, PatientID: patient}}, review, review, nil, accessStub{denied}).RegisterHumaRoutes(humagin.New(r, huma.DefaultConfig("test", "test")), nil)
 	return r, doc, patient

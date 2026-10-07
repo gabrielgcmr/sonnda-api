@@ -70,9 +70,9 @@ func (r *testStore) ListHistory(_ context.Context, _, _ uuid.UUID, page problem.
 	return r.events, r.err
 }
 
-type testAccountLookup struct{ account *accountdomain.User }
+type testAccountLookup struct{ account *accountdomain.Account }
 
-func (a testAccountLookup) FindByID(context.Context, uuid.UUID) (*accountdomain.User, error) {
+func (a testAccountLookup) FindByID(context.Context, uuid.UUID) (*accountdomain.Account, error) {
 	return a.account, nil
 }
 
@@ -89,11 +89,11 @@ func testRouter(store *testStore, kind accountdomain.AccountType, hasAccess bool
 	gin.SetMode(gin.TestMode)
 	actorID := uuid.New()
 	// The middleware's account type must not override the persisted account type.
-	account := &accountdomain.User{ID: actorID, AccountType: kind}
+	account := &accountdomain.Account{ID: actorID, AccountType: kind}
 	authorizer := authz.NewProblemAuthorizer(authz.NewPatientContextResolver(testAccountLookup{account}, testAccess{hasAccess}))
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: actorID, AccountType: accountdomain.AccountTypeProfessional}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: actorID, AccountType: accountdomain.AccountTypeProfessional}))
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))

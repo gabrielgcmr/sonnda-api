@@ -69,7 +69,7 @@ func ProblemTitleFromCode(code ErrorCode, status int) string {
 	// ACCESS AND PERMISSIONS
 	case apperr.PROFILE_NOT_FOUND:
 		return "Cadastro necessário"
-	case apperr.ACCESS_DENIED, apperr.ACTION_NOT_ALLOWED:
+	case apperr.ACCESS_DENIED, apperr.ACTION_NOT_ALLOWED, apperr.ONBOARDING_REQUIRED, apperr.ACCOUNT_DEACTIVATED:
 		return "Acesso negado"
 
 	// VALIDATION

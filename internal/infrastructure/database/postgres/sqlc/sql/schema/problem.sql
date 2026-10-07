@@ -1,4 +1,5 @@
 -- internal/infrastructure/database/postgres/sqlc/sql/schema/problem.sql
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/problem.sql
 CREATE TABLE patient_problems (
     id uuid PRIMARY KEY,
     patient_id uuid NOT NULL REFERENCES patients(id) ON DELETE RESTRICT,
@@ -10,7 +11,7 @@ CREATE TABLE patient_problems (
     clinical_status text NOT NULL,
     administrative_status text NOT NULL,
     merged_into_id uuid,
-    created_by_account_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_by_account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     version bigint NOT NULL,
@@ -50,7 +51,7 @@ CREATE TABLE patient_problem_history (
     patient_id uuid NOT NULL,
     version bigint NOT NULL,
     action text NOT NULL,
-    actor_account_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    actor_account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     occurred_at timestamptz NOT NULL,
     before_snapshot jsonb,
     after_snapshot jsonb NOT NULL,

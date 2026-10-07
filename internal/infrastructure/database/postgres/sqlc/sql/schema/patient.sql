@@ -1,3 +1,4 @@
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/patient.sql
 -- Patients table mirrors the domain model, allowing optional User link and phone/CNS.
 CREATE TABLE patients (
     id          UUID PRIMARY KEY,
@@ -13,7 +14,7 @@ CREATE TABLE patients (
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMP WITH TIME ZONE,
-    CONSTRAINT fk_patients_user FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_patients_user FOREIGN KEY (owner_user_id) REFERENCES accounts(id) ON DELETE SET NULL,
     CONSTRAINT chk_patients_gender CHECK (gender IN ('MALE','FEMALE','OTHER','UNKNOWN')),
     CONSTRAINT chk_patients_race CHECK (race IN ('WHITE','BLACK','ASIAN','MIXED','INDIGENOUS','UNKNOWN'))
 );

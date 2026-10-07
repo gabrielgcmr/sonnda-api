@@ -10,4 +10,4 @@ services:
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/sonnda-gcs.json
     volumes:
-      - ./secrets/sonnda-gcs.json:/secrets/sonnda-gcs.json:ro
+      - C:/Users/gabri/Dev/credentials/sonnda-gcs.json:/secrets/sonnda-gcs.json:ro

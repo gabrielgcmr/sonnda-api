@@ -15,13 +15,7 @@ type Identity struct {
 	Scopes []string
 }
 
-// PrincipalID retorna o identificador canônico do principal.
-// Derivado de Issuer+Subject para evitar inconsistência.
-func (i Identity) PrincipalID() string {
-	return i.Issuer + "|" + i.Subject
-}
-
-// NewIdentity cria uma Identity com PrincipalID canônico.
+// NewIdentity preserves the issuer and subject provided by the authentication provider.
 func NewIdentity(issuer, subject string) Identity {
 	return Identity{
 		Issuer:  issuer,

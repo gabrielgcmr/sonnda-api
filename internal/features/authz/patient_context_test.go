@@ -12,11 +12,11 @@ import (
 )
 
 type contextAccounts struct {
-	user *accountdomain.User
+	user *accountdomain.Account
 	err  error
 }
 
-func (a contextAccounts) FindByID(context.Context, uuid.UUID) (*accountdomain.User, error) {
+func (a contextAccounts) FindByID(context.Context, uuid.UUID) (*accountdomain.Account, error) {
 	return a.user, a.err
 }
 
@@ -27,7 +27,7 @@ func (a contextAccess) RequireAccess(context.Context, uuid.UUID, uuid.UUID) erro
 func TestPatientContextUsesRegisteredAccountAndActiveAccess(t *testing.T) {
 	accountID, patientID := uuid.New(), uuid.New()
 	resolver := NewPatientContextResolver(
-		contextAccounts{user: &accountdomain.User{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}},
+		contextAccounts{user: &accountdomain.Account{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}},
 		contextAccess{},
 	)
 
@@ -43,7 +43,7 @@ func TestPatientContextUsesRegisteredAccountAndActiveAccess(t *testing.T) {
 
 func TestPatientContextFailsClosed(t *testing.T) {
 	accountID, patientID := uuid.New(), uuid.New()
-	accounts := contextAccounts{user: &accountdomain.User{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}}
+	accounts := contextAccounts{user: &accountdomain.Account{ID: accountID, AccountType: accountdomain.AccountTypeBasicCare}}
 	resolver := NewPatientContextResolver(accounts, contextAccess{err: apperr.Forbidden("acesso negado")})
 	if _, err := resolver.Resolve(context.Background(), accountID, patientID); contextErrorKind(err) != apperr.ACCESS_DENIED {
 		t.Fatalf("expected access denial: %v", err)

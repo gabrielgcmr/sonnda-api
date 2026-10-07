@@ -1,4 +1,4 @@
-// internal/features/account/service_impl.go
+// internal/features/account/service.go
 package account
 
 import (
@@ -12,110 +12,142 @@ import (
 )
 
 type Service interface {
-	Create(ctx context.Context, input UserCreateInput) (*accountdomain.User, error)
-	Update(ctx context.Context, input UserUpdateInput) (*accountdomain.User, error)
-	Delete(ctx context.Context, userID uuid.UUID) error
-	SoftDelete(ctx context.Context, userID uuid.UUID) error
+	ResolveOrProvision(ctx context.Context, input AccountResolveInput) (*accountdomain.Account, error)
+	Update(ctx context.Context, input AccountUpdateInput) (*accountdomain.Account, error)
+	DeactivateByIdentity(ctx context.Context, issuer, subject string) error
 }
+
+func (s *service) ResolveOrProvision(ctx context.Context, input AccountResolveInput) (*accountdomain.Account, error) {
+	candidate, err := accountdomain.NewAccount(accountdomain.NewAccountParams{
+		AccountType: accountdomain.AccountTypeBasicCare,
+	})
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	identity, err := accountdomain.NewIdentity(candidate.ID, input.Issuer, input.Subject, input.Email)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+
+	var resolved *accountdomain.Account
+	err = s.accountRepo.WithinTransaction(ctx, func(txRepo Repository) error {
+		if err := txRepo.LockAuthIdentity(ctx, identity.Issuer, identity.Subject); err != nil {
+			return err
+		}
+
+		existing, err := txRepo.FindByAuthIdentity(ctx, identity.Issuer, identity.Subject)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.DeletedAt != nil {
+				return apperr.AccountDeactivated()
+			}
+			if err := txRepo.UpdateIdentityEmail(ctx, identity.Issuer, identity.Subject, identity.Email); err != nil {
+				return err
+			}
+			resolved = existing
+			return nil
+		}
+
+		if err := txRepo.Create(ctx, candidate, identity); err != nil {
+			return err
+		}
+		resolved = candidate
+		return nil
+	})
+	if err != nil {
+		return nil, mapRepoError("accountRepo.ResolveOrProvision", err)
+	}
+	return resolved, nil
+}
+
 type service struct {
-	userRepo Repository
+	accountRepo Repository
 }
 
 var _ Service = (*service)(nil)
 
-func New(userRepo Repository) Service {
-	return &service{userRepo: userRepo}
+func New(accountRepo Repository) Service {
+	return &service{accountRepo: accountRepo}
 }
 
-func (s *service) Create(ctx context.Context, input UserCreateInput) (*accountdomain.User, error) {
-	newUser, err := accountdomain.NewUser(accountdomain.NewUserParams{
-		AuthIssuer:  input.Issuer,
-		AuthSubject: input.Subject,
-		Email:       input.Email,
-		AccountType: input.AccountType,
-		FullName:    input.FullName,
-		BirthDate:   input.BirthDate,
-		CPF:         input.CPF,
-		Phone:       input.Phone,
+func (s *service) Update(ctx context.Context, input AccountUpdateInput) (*accountdomain.Account, error) {
+	var updated *accountdomain.Account
+	err := s.accountRepo.WithinTransaction(ctx, func(txRepo Repository) error {
+		existing, err := txRepo.FindByIDForUpdate(ctx, input.AccountID)
+		if err != nil {
+			return err
+		}
+		if existing == nil {
+			return accountNotFound()
+		}
+		if existing.DeletedAt != nil {
+			return apperr.AccountDeactivated()
+		}
+
+		profile := existing.Profile
+		if input.FullName.Set {
+			profile.FullName = input.FullName.Value
+		}
+		if input.BirthDate.Set {
+			profile.BirthDate = input.BirthDate.Value
+		}
+		if input.CPF.Set {
+			profile.CPF = input.CPF.Value
+		}
+		if input.Phone.Set {
+			profile.Phone = input.Phone.Value
+		}
+
+		next := *existing
+		changed, err := next.ApplyProfile(profile)
+		if err != nil {
+			return mapDomainError(err)
+		}
+		if changed {
+			if err := txRepo.Update(ctx, &next); err != nil {
+				return err
+			}
+		}
+		updated = &next
+		return nil
 	})
 	if err != nil {
-		return nil, mapDomainError(err)
+		return nil, mapRepoError("accountRepo.Update", err)
 	}
-
-	if err := s.userRepo.Create(ctx, newUser); err != nil {
-		return nil, mapRepoError("userRepo.Create", err)
-	}
-
-	return newUser, nil
+	return updated, nil
 }
 
-func (s *service) Update(ctx context.Context, input UserUpdateInput) (*accountdomain.User, error) {
-	existingUser, err := s.userRepo.FindByID(ctx, input.UserID)
-	if err != nil {
-		return nil, mapRepoError("userRepo.FindByID", err)
-	}
-	if existingUser == nil {
-		return nil, userNotFound()
+func (s *service) DeactivateByIdentity(ctx context.Context, issuer, subject string) error {
+	if _, err := accountdomain.NewIdentity(uuid.New(), issuer, subject, nil); err != nil {
+		return mapDomainError(err)
 	}
 
-	changed, err := existingUser.ApplyUpdate(accountdomain.UpdateUserParams{
-		FullName:  input.FullName,
-		BirthDate: input.BirthDate,
-		CPF:       input.CPF,
-		Phone:     input.Phone,
-	})
-	if err != nil {
-		return nil, mapDomainError(err)
-	}
-	if !changed {
-		return existingUser, nil
-	}
-
-	if err := s.userRepo.Update(ctx, existingUser); err != nil {
-		return nil, mapRepoError("userRepo.Update", err)
-	}
-
-	return existingUser, nil
-}
-
-func (s *service) Delete(ctx context.Context, userID uuid.UUID) error {
-	existing, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		return mapRepoError("userRepo.FindByID", err)
-	}
-	if existing == nil {
-		return userNotFound()
-	}
-
-	if err := s.userRepo.Delete(ctx, userID); err != nil {
-		return mapRepoError("userRepo.Delete", err)
-	}
-
-	return nil
-}
-
-func (s *service) SoftDelete(ctx context.Context, userID uuid.UUID) error {
-	// NOTE: SoftDelete is intentionally idempotent.
-	//
-	// We first load the user to return a proper NOT_FOUND when it truly doesn't exist.
-	// Then we execute the delete; if the repository reports NOT_FOUND at this stage
-	// (e.g. already deleted or a race where another request deleted it), we treat it as success.
-	existing, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		return mapRepoError("userRepo.FindByID", err)
-	}
-	if existing == nil {
-		return userNotFound()
-	}
-
-	if err := s.userRepo.SoftDelete(ctx, userID); err != nil {
-		mapped := mapRepoError("userRepo.SoftDelete", err)
-		var appErr *apperr.AppError
-		if errors.As(mapped, &appErr) && appErr != nil && appErr.Kind == apperr.NOT_FOUND {
+	err := s.accountRepo.WithinTransaction(ctx, func(txRepo Repository) error {
+		if err := txRepo.LockAuthIdentity(ctx, issuer, subject); err != nil {
+			return err
+		}
+		existing, err := txRepo.FindByAuthIdentity(ctx, issuer, subject)
+		if err != nil {
+			return err
+		}
+		if existing == nil {
+			return accountNotFound()
+		}
+		if existing.DeletedAt != nil {
 			return nil
 		}
-		return mapped
+		if err := txRepo.SoftDelete(ctx, existing.ID); err != nil {
+			if errors.Is(err, ErrAccountNotFound) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return mapRepoError("accountRepo.DeactivateByIdentity", err)
 	}
-
 	return nil
 }

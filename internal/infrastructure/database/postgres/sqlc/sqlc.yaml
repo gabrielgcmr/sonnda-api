@@ -1,8 +1,9 @@
+# internal/infrastructure/database/postgres/sqlc/sqlc.yaml
 version: "2"
 sql:
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/patient.sql"
       - "sql/schema/problem.sql"
     queries: "sql/queries/problem_queries.sql"
@@ -20,7 +21,7 @@ sql:
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/patient.sql"
       - "sql/schema/exam.sql"
       - "sql/schema/lab.sql"
@@ -39,7 +40,7 @@ sql:
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/patient.sql"
       - "sql/schema/exam.sql"
     queries: "sql/queries/exam_queries.sql"
@@ -56,12 +57,12 @@ sql:
             - db_type: "uuid"
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
-    schema: "sql/schema/users.sql"
-    queries: "sql/queries/user_queries.sql"
+    schema: "sql/schema/accounts.sql"
+    queries: "sql/queries/account_queries.sql"
     gen:
       go:
-        package: "usersqlc"
-        out: "generated/user"
+        package: "accountsqlc"
+        out: "generated/account"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_prepared_queries: false
@@ -72,7 +73,7 @@ sql:
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/professional.sql"
     queries: "sql/queries/professional_queries.sql"
     gen:
@@ -89,7 +90,7 @@ sql:
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/patient.sql"
     queries: "sql/queries/patient_queries.sql"
     gen:
@@ -106,7 +107,7 @@ sql:
               go_type: "github.com/google/uuid.UUID"
   - engine: "postgresql"
     schema:
-      - "sql/schema/users.sql"
+      - "sql/schema/accounts.sql"
       - "sql/schema/patient.sql"
       - "sql/schema/patientaccess.sql"
     queries: "sql/queries/patientaccess_queries.sql"

@@ -52,7 +52,7 @@ func TestServiceConcurrentChangesPreserveClinicalRulesAndAudit(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			careID := uuid.New()
-			if _, err := client.Pool().Exec(ctx, "INSERT INTO users (id) VALUES ($1)", careID); err != nil {
+			if _, err := client.Pool().Exec(ctx, "INSERT INTO accounts (id) VALUES ($1)", careID); err != nil {
 				t.Fatal(err)
 			}
 			p, created := testProblem(t, patientID, professionalID, "Problema agudo")

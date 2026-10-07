@@ -36,7 +36,7 @@ func (h *ExamsHandler) confirm(ctx context.Context, input *examDocumentInput) (*
 	if _, err := h.findAccessibleDocument(ctx, input.DocumentID); err != nil {
 		return nil, err
 	}
-	user, ok := helpers.GetCurrentUserFromContext(ctx)
+	user, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necess?ria")
 	}

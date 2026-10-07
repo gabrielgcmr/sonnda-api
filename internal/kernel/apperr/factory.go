@@ -51,6 +51,14 @@ func Forbidden(msg string) *AppError {
 	}
 }
 
+func OnboardingRequired() *AppError {
+	return &AppError{Kind: ONBOARDING_REQUIRED, Message: "onboarding pendente"}
+}
+
+func AccountDeactivated() *AppError {
+	return &AppError{Kind: ACCOUNT_DEACTIVATED, Message: "conta desativada"}
+}
+
 func RateLimited(msg string) *AppError {
 	return &AppError{
 		Kind:    RATE_LIMIT_EXCEEDED,

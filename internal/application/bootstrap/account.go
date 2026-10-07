@@ -20,7 +20,6 @@ func NewAccountModule(db *postgress.Client, redisClient *redis.Client, activatio
 	userRepo := accountpostgres.New(db.Pool())
 
 	service := account.New(userRepo)
-	onboarding := account.NewOnboarding(userRepo, service)
 	var limiter account.ActivationLimiter
 	if redisClient != nil {
 		limiter = accountredis.NewActivationLimiter(redisClient)
@@ -32,7 +31,7 @@ func NewAccountModule(db *postgress.Client, redisClient *redis.Client, activatio
 	})
 
 	return &AccountModule{
-		Handler:    accounthttp.NewHandler(onboarding, service, activation),
-		Middleware: accounthttp.NewMiddleware(userRepo),
+		Handler:    accounthttp.NewHandler(service, activation),
+		Middleware: accounthttp.NewMiddleware(service),
 	}
 }

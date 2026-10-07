@@ -50,7 +50,7 @@ func NewCreationHandler(creator patientcreation.UseCase) *CreationHandler {
 	return &CreationHandler{creator: creator}
 }
 
-// RegisterHumaRoutes registers patient creation in the registered-account group.
+// RegisterHumaRoutes registers patient creation in the onboarded-account group.
 func (h *CreationHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
 	huma.Register(registered, huma.Operation{
 		OperationID:   "createPatient",
@@ -67,7 +67,7 @@ func (h *CreationHandler) RegisterHumaRoutes(registered huma.API, security []map
 func (h *CreationHandler) create(ctx context.Context, input *createPatientInput) (*createPatientOutput, error) {
 	applog.FromContext(ctx).Info("patient_create")
 
-	creatorAccount, ok := helpers.GetCurrentUserFromContext(ctx)
+	creatorAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok || creatorAccount == nil {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}

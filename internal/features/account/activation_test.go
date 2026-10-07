@@ -15,17 +15,17 @@ import (
 
 type activationRepository struct {
 	Repository
-	user        *accountdomain.User
+	user        *accountdomain.Account
 	findErr     error
 	updateErr   error
 	updateCalls int
 }
 
-func (r *activationRepository) FindByID(context.Context, uuid.UUID) (*accountdomain.User, error) {
+func (r *activationRepository) FindByID(context.Context, uuid.UUID) (*accountdomain.Account, error) {
 	return r.user, r.findErr
 }
 
-func (r *activationRepository) ActivateProfessional(context.Context, uuid.UUID) (*accountdomain.User, error) {
+func (r *activationRepository) ActivateProfessional(context.Context, uuid.UUID) (*accountdomain.Account, error) {
 	r.updateCalls++
 	if r.updateErr != nil {
 		return nil, r.updateErr
@@ -129,8 +129,8 @@ func TestProfessionalActivationFailsClosedWhenDependenciesOrConfigurationFail(t 
 	}
 }
 
-func activationUser(accountType accountdomain.AccountType) *accountdomain.User {
-	return &accountdomain.User{ID: uuid.New(), AccountType: accountType, UpdatedAt: time.Now().Add(-time.Hour)}
+func activationUser(accountType accountdomain.AccountType) *accountdomain.Account {
+	return &accountdomain.Account{ID: uuid.New(), AccountType: accountType, UpdatedAt: time.Now().Add(-time.Hour)}
 }
 
 func appErrorKind(err error) apperr.ErrorKind {
