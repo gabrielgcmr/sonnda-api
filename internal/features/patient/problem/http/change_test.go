@@ -32,6 +32,30 @@ func (r *testStore) Update(_ context.Context, version int64, p problemdomain.Pro
 	return nil
 }
 
+func (r *testStore) Merge(_ context.Context, updates []problem.VersionedUpdate) error {
+	r.calls++
+	if r.beforeUpdate != nil {
+		r.beforeUpdate()
+	}
+	if r.updateErr != nil {
+		return r.updateErr
+	}
+	for _, update := range updates {
+		current, exists := r.problems[update.Problem.ID]
+		if !exists || current.Version != update.ExpectedVersion {
+			return problem.ErrVersionConflict
+		}
+	}
+	for _, update := range updates {
+		r.problems[update.Problem.ID] = update.Problem
+		if update.Problem.ID == r.p.ID {
+			r.p = update.Problem
+		}
+		r.events = append(r.events, update.Event)
+	}
+	return nil
+}
+
 func changeTestStore(t *testing.T, classification problemdomain.Classification, resolved bool) *testStore {
 	t.Helper()
 	p, event, err := problemdomain.NewProblem(problemdomain.NewProblemParams{

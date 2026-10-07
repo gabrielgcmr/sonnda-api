@@ -26,6 +26,7 @@ import (
 type testStore struct {
 	problem.Repository
 	p            problemdomain.Problem
+	problems     map[uuid.UUID]problemdomain.Problem
 	events       []problemdomain.HistoryEvent
 	calls        int
 	filter       problem.ListFilter
@@ -48,10 +49,14 @@ func (r *testStore) Get(_ context.Context, patientID, id uuid.UUID) (problemdoma
 	if r.err != nil {
 		return problemdomain.Problem{}, r.err
 	}
-	if r.p.ID != id || r.p.PatientID != patientID {
+	current := r.p
+	if r.problems != nil {
+		current = r.problems[id]
+	}
+	if current.ID != id || current.PatientID != patientID {
 		return problemdomain.Problem{}, problem.ErrNotFound
 	}
-	return r.p, nil
+	return current, nil
 }
 func (r *testStore) List(_ context.Context, _ uuid.UUID, filter problem.ListFilter) ([]problemdomain.Problem, error) {
 	r.calls++

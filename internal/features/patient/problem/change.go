@@ -105,6 +105,8 @@ func changeError(err error) error {
 		return apperr.DomainRuleViolation("problema crônico não pode estar resolvido")
 	case errors.Is(err, problemdomain.ErrReasonRequired):
 		return apperr.DomainRuleViolation("motivo da retificação é obrigatório")
+	case errors.Is(err, problemdomain.ErrInvalidMergeSources), errors.Is(err, problemdomain.ErrInvalidMergeTarget):
+		return apperr.DomainRuleViolation("origens ou destino da unificação são inválidos")
 	case errors.Is(err, problemdomain.ErrInvalidTransition):
 		return apperr.DomainRuleViolation("alteração incompatível com o estado atual do problema ou sem mudanças")
 	default:

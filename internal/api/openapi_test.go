@@ -68,7 +68,7 @@ func TestOpenAPIKeepsBothPatientListRoutes(t *testing.T) {
 func TestOpenAPIIncludesAuthenticatedProblemOperations(t *testing.T) {
 	spec := OpenAPI(APIInfo{})
 	base := "/patients/{patientId}/problems"
-	for _, path := range []string{base, base + "/{problemId}", base + "/{problemId}/history", base + "/{problemId}/rectify"} {
+	for _, path := range []string{base, base + "/{problemId}", base + "/{problemId}/history", base + "/{problemId}/rectify", base + "/{problemId}/merge"} {
 		if spec.Paths[path] == nil {
 			t.Fatalf("missing problem path: %s", path)
 		}
@@ -99,5 +99,22 @@ func TestOpenAPIIncludesAuthenticatedProblemOperations(t *testing.T) {
 	}
 	if !required["version"] || !required["reason"] {
 		t.Fatalf("rectification version and reason must be required: %v", request.Required)
+	}
+	merge := spec.Paths[base+"/{problemId}/merge"].Post
+	if merge == nil || merge.OperationID != "mergePatientProblems" || len(merge.Security) != 1 {
+		t.Fatalf("missing authenticated merge operation: %+v", merge)
+	}
+	mergeRequest := referencedSchema(spec, merge.RequestBody.Content["application/json"].Schema)
+	mergeRequired := map[string]bool{}
+	for _, name := range mergeRequest.Required {
+		mergeRequired[name] = true
+	}
+	for _, name := range []string{"version", "sources", "name", "cid11", "classification", "clinical_status"} {
+		if mergeRequest.Properties[name] == nil || !mergeRequired[name] {
+			t.Fatalf("merge property %q must be present and required: properties=%+v required=%v", name, mergeRequest.Properties, mergeRequest.Required)
+		}
+	}
+	if !mergeRequest.Properties["cid11"].Nullable {
+		t.Fatalf("merge cid11 must accept explicit null: %+v", mergeRequest.Properties["cid11"])
 	}
 }

@@ -311,6 +311,26 @@ Conclusão: motivo e autoria recuperáveis; registro indevido não aparece como 
 
 ### B5 — Unificação manual
 
+Status: **concluída nos serviços e endpoint Huma**. A operação
+`POST /patients/{patientId}/problems/{problemId}/merge` trata o problema da rota
+como destino, exige profissional com acesso e recebe versões do destino e de cada
+origem. `cid11` é obrigatório e anulável: objeto escolhe o código final e `null`
+representa explicitamente a escolha sem CID. Nome, classificação e situação
+clínica finais também são obrigatórios.
+
+Destino, origens e eventos são persistidos numa única transação PostgreSQL com
+controle otimista de versão e ordem estável de atualização. As origens preservam
+seus campos e históricos, recebem `merged_into_id` e evento `merged_source`; o
+destino recebe `merged_destination` com `source_problem_ids`. Auto-unificação,
+origens repetidas, registros de outro paciente ou já terminais e a combinação
+crônico resolvido são rejeitados. Os eventos preservam a cadeia necessária para
+recuperar origens em unificações sucessivas.
+
+Verificação desta entrega: suíte Go, `go vet`, compilação do sqlc e exportação
+OpenAPI executadas com sucesso. Os testes de integração PostgreSQL para gravação
+atômica e rollback por origem concorrente foram adicionados e ficam pendentes de
+execução local por ausência de `PROBLEMS_TEST_DATABASE_URL` configurada.
+
 - Operação exclusiva de profissionais com destino e origens do mesmo paciente.
 - Exigir nome final livre e escolhas explícitas de CID, situação e classificação,
   mesmo se os valores dos registros originais forem iguais.
@@ -347,7 +367,7 @@ A1 pode ser entregue em incrementos documentais no mesmo PR. Para implementaçã
 uma entrega/PR por etapa; B1.1 fecha o domínio antes da migration de B1.2.
 O primeiro incremento utilizável chega ao final de B3. O escopo completo inclui B4 e B5.
 
-Pendências de contrato: representação da escolha sem CID na unificação.
+Pendências de contrato: nenhuma para as etapas B1–B5.
 
 Interface mobile, notificações semanais, catálogo de terminologia, consulta externa
 CID-11 e implementação de encontros/evoluções/prescrições ficam fora deste plano.
