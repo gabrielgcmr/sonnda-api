@@ -5,11 +5,7 @@ Simple instructions for coding agents working on this repo.
 
 ## General
 - The project is being done by a solo developer.
-- When suggesting a solution to a problem, try offer the correct way (even if it requires refactoring) and a simple way to solve it.
-- Prefer small, readable functions and clear naming.
-- Avoid editing generated files unless explicitly asked.
 - Call out any assumptions or open questions before finishing.
-- Do not touch secrets or files under `secrets/`.
 - Follow the existing error-handling and logging architecture described below.
 - Always start every source file you create or modify with a one-line header comment containing the workspace-relative path to that file, formatted as "path/to/file". 
    - Use the language's comment syntax (Go/TS/JS: //, HTML/Markdown: <!-- -->, CSS: /* */). 
