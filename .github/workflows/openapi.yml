@@ -29,11 +29,12 @@ jobs:
 
   notify-consumers:
     needs: verify-and-export
-    if: ${{ secrets.CI_DISPATCH_TOKEN != '' }}
     runs-on: ubuntu-latest
+    env:
+      CI_DISPATCH_TOKEN: ${{ secrets.CI_DISPATCH_TOKEN }}
     strategy:
       matrix:
-        repository: [gabrielgcmr/sonnda-web, gabrielgcmr/sonnda-mobile]
+        repository: [gabrielgcmr/sonnda-web, gabrielgcmr/sonnda-mobile, gabrielgcmr/sonnda-svelte]
     steps:
       - name: Dispatch API artifact identity
         env:
