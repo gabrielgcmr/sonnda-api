@@ -50,17 +50,24 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	authenticated := huma.NewGroup(api)
 	authenticated.UseMiddleware(middleware.RequireBearer(api, deps.Auth))
 
-	registered := huma.NewGroup(authenticated)
-	registered.UseMiddleware(middleware.RequireRegisteredAccount(api, deps.Account))
+	resolved := huma.NewGroup(authenticated)
+	resolved.UseMiddleware(middleware.ResolveAccount(api, deps.Account))
 
-	deps.AccountHandler.RegisterHumaRoutes(authenticated, registered, bearerSecurity())
-	deps.PatientAccessHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.PatientCreationHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.PatientHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.PatientProblemHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.ExamsHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.StandaloneLabExtractionHandler.RegisterHumaRoutes(registered, bearerSecurity())
-	deps.LaboratoryHandler.RegisterHumaRoutes(registered, bearerSecurity())
+	onboarded := huma.NewGroup(resolved)
+	onboarded.UseMiddleware(middleware.RequireCompletedOnboarding(api))
+
+	deps.AccountHandler.RegisterAuthenticatedRoutes(authenticated, bearerSecurity())
+	deps.AccountHandler.RegisterResolvedRoutes(resolved, bearerSecurity())
+	deps.AccountHandler.RegisterOnboardedRoutes(onboarded, bearerSecurity())
+
+	deps.PatientAccessHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	deps.PatientCreationHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	deps.PatientHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	deps.PatientProblemHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+
+	deps.ExamsHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	deps.StandaloneLabExtractionHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	deps.LaboratoryHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 }
 
 func bearerSecurity() []map[string][]string {

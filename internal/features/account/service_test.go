@@ -57,6 +57,19 @@ func (r *resolveRepository) UpdateIdentityEmail(_ context.Context, issuer, subje
 	return nil
 }
 
+func (r *resolveRepository) SoftDelete(_ context.Context, id uuid.UUID) error {
+	for _, stored := range r.accounts {
+		if stored.ID == id {
+			if stored.DeletedAt == nil {
+				now := time.Now().UTC()
+				stored.DeletedAt = &now
+			}
+			return nil
+		}
+	}
+	return ErrAccountNotFound
+}
+
 func identityKey(issuer, subject string) string { return issuer + "\x00" + subject }
 
 func cloneString(value *string) *string {
@@ -69,11 +82,9 @@ func cloneString(value *string) *string {
 
 type profileRepository struct {
 	Repository
-	mu        sync.Mutex
-	account   *accountdomain.Account
-	identity  *accountdomain.Identity
-	updates   int
-	deleteErr error
+	mu      sync.Mutex
+	account *accountdomain.Account
+	updates int
 }
 
 func (r *profileRepository) WithinTransaction(_ context.Context, fn func(Repository) error) error {
@@ -82,10 +93,6 @@ func (r *profileRepository) WithinTransaction(_ context.Context, fn func(Reposit
 	return fn(r)
 }
 
-func (r *profileRepository) Create(_ context.Context, a *accountdomain.Account, i *accountdomain.Identity) error {
-	r.account, r.identity = a, i
-	return nil
-}
 func (r *profileRepository) FindByID(context.Context, uuid.UUID) (*accountdomain.Account, error) {
 	return r.account, nil
 }
@@ -97,19 +104,6 @@ func (r *profileRepository) Update(_ context.Context, account *accountdomain.Acc
 	r.account = account
 	return nil
 }
-func (r *profileRepository) SoftDelete(context.Context, uuid.UUID) error { return r.deleteErr }
-
-func TestCreateKeepsAccountAndIdentitySeparate(t *testing.T) {
-	r := &profileRepository{}
-	a, err := New(r).Create(t.Context(), AccountCreateInput{Issuer: "issuer", Subject: "subject"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.Profile != (accountdomain.Profile{}) || a.OnboardingCompleted() || r.identity.AccountID != a.ID || r.identity.Email != nil {
-		t.Fatalf("account=%+v identity=%+v", a, r.identity)
-	}
-}
-
 func TestResolveOrProvisionIsIdempotentAndSynchronizesEmail(t *testing.T) {
 	repo := newResolveRepository()
 	service := New(repo)
@@ -157,7 +151,7 @@ func TestResolveOrProvisionRejectsDeactivatedAccount(t *testing.T) {
 
 	resolved, err := service.ResolveOrProvision(t.Context(), AccountResolveInput{Issuer: "issuer", Subject: "subject"})
 	var appErr *apperr.AppError
-	if resolved != nil || !errors.As(err, &appErr) || appErr.Kind != apperr.ACCESS_DENIED || repo.creates != 1 {
+	if resolved != nil || !errors.As(err, &appErr) || appErr.Kind != apperr.ACCOUNT_DEACTIVATED || repo.creates != 1 {
 		t.Fatalf("resolved=%+v error=%v creates=%d", resolved, err, repo.creates)
 	}
 }
@@ -207,16 +201,16 @@ func TestProfileUpdateValidatesBeforeWritingAndSkipsNoOp(t *testing.T) {
 	r := &profileRepository{account: a}
 	s := New(r)
 	before := *a
-	if _, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: &name}); err != nil || r.updates != 0 || !a.UpdatedAt.Equal(before.UpdatedAt) {
+	if _, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: valueField(name)}); err != nil || r.updates != 0 || !a.UpdatedAt.Equal(before.UpdatedAt) {
 		t.Fatalf("no-op wrote profile: %v", err)
 	}
 	newName, invalidPhone := "Novo Nome", "bad"
-	_, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: &newName, Phone: &invalidPhone})
+	_, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: valueField(newName), Phone: valueField(invalidPhone)})
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) || appErr.Kind != apperr.VALIDATION_FAILED || r.updates != 0 || *a != before {
 		t.Fatalf("invalid update=%+v error=%v", a, err)
 	}
-	updated, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: &newName})
+	updated, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID, FullName: valueField(newName)})
 	if err != nil || r.updates != 1 || updated.Profile.Phone == nil || *updated.Profile.Phone != phone || *updated.Profile.FullName != newName {
 		t.Fatalf("partial update=%+v error=%v", updated, err)
 	}
@@ -229,8 +223,8 @@ func TestConcurrentProfileUpdatesPreserveDifferentFields(t *testing.T) {
 	name := "Ana Silva"
 	phone := "11999999999"
 	inputs := []AccountUpdateInput{
-		{AccountID: account.ID, FullName: &name},
-		{AccountID: account.ID, Phone: &phone},
+		{AccountID: account.ID, FullName: valueField(name)},
+		{AccountID: account.ID, Phone: valueField(phone)},
 	}
 	errs := make(chan error, len(inputs))
 	var group sync.WaitGroup
@@ -255,18 +249,79 @@ func TestConcurrentProfileUpdatesPreserveDifferentFields(t *testing.T) {
 	}
 }
 
-func TestDeactivatedAccountCannotBeUpdatedAndDeletionIsIdempotent(t *testing.T) {
+func TestProfileUpdateDistinguishesOmittedNullAndValue(t *testing.T) {
+	name, phone := "Ana Silva", "11999999999"
+	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{Profile: accountdomain.Profile{FullName: &name, Phone: &phone}})
+	repo := &profileRepository{account: a}
+	updated, err := New(repo).Update(t.Context(), AccountUpdateInput{
+		AccountID: a.ID,
+		FullName:  OptionalField[string]{},
+		Phone:     nullField[string](),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Profile.FullName == nil || *updated.Profile.FullName != name || updated.Profile.Phone != nil {
+		t.Fatalf("unexpected profile: %+v", updated.Profile)
+	}
+}
+
+func TestProfileUpdateNormalizesEmptyCPFAndPhoneToNull(t *testing.T) {
+	cpf, phone := "12345678901", "11999999999"
+	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{Profile: accountdomain.Profile{CPF: &cpf, Phone: &phone}})
+	repo := &profileRepository{account: a}
+	empty := ""
+	updated, err := New(repo).Update(t.Context(), AccountUpdateInput{
+		AccountID: a.ID,
+		CPF:       valueField(empty),
+		Phone:     valueField(empty),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Profile.CPF != nil || updated.Profile.Phone != nil {
+		t.Fatalf("empty CPF and phone were not normalized: %+v", updated.Profile)
+	}
+}
+
+func TestDeactivatedAccountCannotBeUpdated(t *testing.T) {
 	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
 	now := time.Now().UTC()
 	a.DeletedAt = &now
-	r := &profileRepository{account: a, deleteErr: ErrAccountNotFound}
+	r := &profileRepository{account: a}
 	s := New(r)
 	_, err := s.Update(t.Context(), AccountUpdateInput{AccountID: a.ID})
 	var appErr *apperr.AppError
-	if !errors.As(err, &appErr) || appErr.Kind != apperr.ACCESS_DENIED || r.updates != 0 {
+	if !errors.As(err, &appErr) || appErr.Kind != apperr.ACCOUNT_DEACTIVATED || r.updates != 0 {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(t.Context(), a.ID); err != nil {
+}
+
+func TestDeactivationByIdentityIsIdempotentAndDoesNotProvision(t *testing.T) {
+	repo := newResolveRepository()
+	service := New(repo)
+	if err := service.DeactivateByIdentity(t.Context(), "issuer", "missing"); appErrorKind(err) != apperr.NOT_FOUND || repo.creates != 0 {
+		t.Fatalf("missing identity: error=%v creates=%d", err, repo.creates)
+	}
+	created, err := service.ResolveOrProvision(t.Context(), AccountResolveInput{Issuer: "issuer", Subject: "subject"})
+	if err != nil {
 		t.Fatal(err)
 	}
+	if err := service.DeactivateByIdentity(t.Context(), "issuer", "subject"); err != nil {
+		t.Fatal(err)
+	}
+	if created.DeletedAt == nil {
+		t.Fatal("account was not deactivated")
+	}
+	if err := service.DeactivateByIdentity(t.Context(), "issuer", "subject"); err != nil || repo.creates != 1 {
+		t.Fatalf("repeated deactivation: error=%v creates=%d", err, repo.creates)
+	}
+}
+
+func valueField[T any](value T) OptionalField[T] {
+	return OptionalField[T]{Set: true, Value: &value}
+}
+
+func nullField[T any]() OptionalField[T] {
+	return OptionalField[T]{Set: true}
 }

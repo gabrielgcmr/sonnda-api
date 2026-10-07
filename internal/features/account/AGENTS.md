@@ -1,7 +1,7 @@
 <!-- internal/features/account/AGENTS.md -->
 # Account
 
-- Keep profile services, onboarding and application DTOs in this package. It must not import Gin or the HTTP layer.
+- Keep profile services, account resolution and application DTOs in this package. It must not import Gin or the HTTP layer.
 - Keep HTTP binding, request identity and response presentation in `http/`.
 - Return known failures through `internal/kernel/apperr`; Huma handlers call `humaerror.From(err)` directly and Huma middleware uses `humaerror.Write(api, ctx, err)`.
 - Preserve exactly one access log per request. Do not log 4xx details in handlers; the shared Huma error adapter handles detailed 5xx logging with the original cause.
@@ -11,6 +11,6 @@
 - Keep `Account`, `Profile`, persisted `Identity`, `AccountType`, their validation rules and tests in `domain/` (package `accountdomain`), without an extra `entity/` directory. `Account` has no authentication claims or email. Optional profile fields use nil; onboarding completion is derived from valid name and birth date.
 - The domain package must not import account application services, HTTP, Gin, `apperr` or infrastructure. Other contexts may import it directly for account models.
 - Patient access services, HTTP handlers, interfaces and adapters live in `internal/features/patient/access`; account must not depend on them.
-- Onboarding registers accounts without a separate professional profile or professional service.
+- Validated authentication identities are resolved or provisioned automatically. Onboarding is completed by updating the account profile; it does not use a separate professional profile or professional service.
 - Account types are account data, not permissions. Patient access is limited to ownership or active grants checked by `internal/features/patient/access`.
-- Account endpoints are unversioned and registered through the application's single Huma API: `POST`, `GET`, `PUT` and `DELETE /me`, plus `POST /me/professional-activation`. The `/users` creation alias does not exist. The `/me/patients` route belongs to `patient/access`.
+- Account endpoints are unversioned and registered through the application's single Huma API: `GET`, `PATCH` and `DELETE /me`, plus `POST /me/professional-activation`. `GET /me` and `PATCH /me` resolve the account automatically; `DELETE /me` only deactivates an existing account and never provisions one. Business routes and professional activation require completed onboarding. The `/users` creation alias does not exist. The `/me/patients` route belongs to `patient/access`.

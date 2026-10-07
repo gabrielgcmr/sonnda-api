@@ -50,7 +50,7 @@ func NewCreationHandler(creator patientcreation.UseCase) *CreationHandler {
 	return &CreationHandler{creator: creator}
 }
 
-// RegisterHumaRoutes registers patient creation in the registered-account group.
+// RegisterHumaRoutes registers patient creation in the onboarded-account group.
 func (h *CreationHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
 	huma.Register(registered, huma.Operation{
 		OperationID:   "createPatient",

@@ -1,7 +1,7 @@
 <!-- internal/features/patient/problem/README.md -->
 # Problemas do paciente — B2 e B3
 
-Todas as rotas exigem Bearer token, conta registrada e acesso ao paciente.
+Todas as rotas exigem Bearer token, conta resolvida com onboarding concluído e acesso ao paciente.
 A autorização consulta o tipo atual da conta no backend. Apenas contas
 `professional` podem criar; `professional` e `basic_care` podem consultar.
 Edição, classificação e reabertura exigem `professional`. Qualquer conta

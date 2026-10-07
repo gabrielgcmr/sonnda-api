@@ -66,7 +66,7 @@ func (s *ProfessionalActivationService) Activate(ctx context.Context, accountID 
 		return nil, accountNotFound()
 	}
 	if user.DeletedAt != nil {
-		return nil, apperr.Forbidden("conta desativada")
+		return nil, apperr.AccountDeactivated()
 	}
 	if user.AccountType == accountdomain.AccountTypeProfessional {
 		return user, nil

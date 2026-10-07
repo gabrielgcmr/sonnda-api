@@ -57,7 +57,7 @@ func NewHandler(svc patientService) *Handler {
 	return &Handler{svc: svc}
 }
 
-// RegisterHumaRoutes registers patient profile reads in the registered-account group.
+// RegisterHumaRoutes registers patient profile reads in the onboarded-account group.
 func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
 	huma.Register(registered, huma.Operation{
 		OperationID: "listPatients",

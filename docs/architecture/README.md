@@ -8,7 +8,8 @@ As decisões não óbvias (o *porquê*) são registradas separadamente em ADRs.
 
 ## Documentação por contexto
 
-- [Account](account/professional-activation.md): habilitação e mudança do tipo da conta.
+- [Identidade e onboarding](account/identity-onboarding.md): provisionamento, perfil e contrato dos clientes.
+- [Ativação profissional](account/professional-activation.md): habilitação e mudança do tipo da conta.
 - [Autorização](authz/README.md): política por ação e contrato `ProblemAuthorizer`.
 - [Acesso a pacientes](access-control.md): vínculo e verificação de acesso ao prontuário.
 - [Plano de problemas](../../problem-implementation-plan.md): sequência de implementação
@@ -32,11 +33,11 @@ O backend está em camadas globais para contextos em `internal/features`, manten
 - **Features (`internal/features`)**  
   Fluxos orientados a contexto de negócio.  
   - `auth` valida identidades externas e expõe `RequireBearer`.
-  - `account` reúne serviços de perfil, onboarding, DTOs e mapeamento de erros.
-  - `account/domain` contém `User`, `AccountType` e suas regras de validação, no pacote `accountdomain`.
-  - `account/http` contém o handler de perfil e o middleware que resolve o usuário local e expõe `RequireRegisteredUser`.
+  - `account` reúne resolução/provisionamento de contas, atualização de perfil, DTOs e mapeamento de erros.
+  - `account/domain` contém `Account`, `Identity`, `Profile`, `AccountType` e suas regras de validação, no pacote `accountdomain`.
+  - `account/http` contém o handler de perfil e o middleware que resolve ou provisiona a conta local a partir da identidade autenticada.
   - `account/repository.go` define a interface de persistência; `account/postgres` implementa esse contrato usando o SQLC existente.
-  - `patient/access` contém o checker, a listagem de pacientes acessíveis e os contratos de vínculo; seu handler HTTP atende `/v1/me/patients`.
+  - `patient/access` contém o checker, a listagem de pacientes acessíveis e os contratos de vínculo; seu handler HTTP atende `/me/patients`.
   - `documentprocessing` reúne o processamento e gestão documental: consultas de documentos (`queries.go`), coordenação de rascunhos (`drafts.go`) e snapshot persistido (`snapshot.go`). Subpacotes `textextraction` e `labextraction` definem contratos de leitura e extração estruturada, e `extraction` coordena normalização e resumo.
 
 - **Infrastructure (`internal/infrastructure`)**  
@@ -61,42 +62,38 @@ Essas camadas representam **limites conceituais**, não apenas organização de 
 ```text
 internal/features/account/
 ├── domain/
-│   ├── user.go
+│   ├── account.go
 │   ├── account_type.go
-│   └── user_test.go
+│   ├── identity.go
+│   └── profile.go
 ├── service.go
-├── service_impl.go
 ├── dto.go
 ├── error_map.go
-├── onboarding.go
-├── onboarding_dto.go
 ├── repository.go
 ├── postgres/
 │   ├── repository.go
-│   └── repository_test.go
+│   └── repository_integration_test.go
 └── http/
     ├── handler.go
     ├── middleware.go
     └── middleware_test.go
 ```
 
-Os erros de conflito e usuário ausente pertencem ao contrato de account. A falha
+Os erros de conflito, conta ausente, onboarding pendente e conta desativada pertencem ao contrato de account. A falha
 genérica de persistência pertence a `internal/kernel/persistence/errors.go`.
 O mapeamento de erros da aplicação deixa de importar a implementação Postgres.
 
 As interfaces e a listagem de acesso a pacientes pertencem a `patient/access`.
 `account` não depende mais do repositório de acesso. A conexão compartilhada e o
-código sqlc permanecem em infraestrutura. O onboarding não depende mais de um serviço ou perfil profissional
-separado; registra os tipos de conta existentes pelo serviço de account. O
-cadastro HTTP continua criando `basic_care`, conforme o contrato atual.
-Não há migração de queries nesta etapa.
+código sqlc permanecem em infraestrutura. Uma identidade autenticada é associada
+a uma `Account` por `issuer + subject`; email é apenas dado informativo da
+identidade e não participa da vinculação. A conta mínima é provisionada como
+`basic_care`, e o onboarding é derivado de nome e nascimento válidos.
 
-Não houve mudança de banco ou regras de concessão. O contrato da listagem deixa
-de expor `relation_type`. Os testes
-em `internal/api/account_routes_test.go` verificam os fluxos pelas rotas reais,
-com serviços de account e repositórios em memória.
-Os testes do adaptador verificam parâmetros, conversões e erros com uma
-implementação em memória da interface de queries do SQLC, sem acessar banco real.
+`GET /me` e `PATCH /me` resolvem a conta mesmo com onboarding pendente.
+`DELETE /me` consulta a identidade sem provisionar e desativa a conta existente.
+Recursos de negócio e ativação profissional passam pelos grupos de autenticação,
+resolução e onboarding concluído, compostos em `internal/api/routes.go`.
 
 ---
 
@@ -197,12 +194,13 @@ A extração de laudos atende a dois fluxos:
 ## Bootstrap e rotas
 
 - Bootstrap faz o wiring (repos, services e handlers) em `internal/application/bootstrap`.
-- `AccountModule` reúne handler de perfil/onboarding e middleware de usuário registrado.
+- `AccountModule` reúne handler de perfil, ativação e middleware de resolução/provisionamento da conta.
 - As rotas HTTP vivem em `internal/api/routes.go` (API REST).  
 - Níveis de acesso:
   - público
   - autenticado
-  - registrado
+  - conta resolvida
+  - onboarding concluído
 
 ---
 
@@ -226,10 +224,10 @@ Os ADRs vivem em:
 
 O pacote `internal/features/patient/access` centraliza a checagem de acesso por
 vínculo. `RequireAccess` permite acesso ao dono do paciente ou
-a um usuário com vínculo ativo; os demais recebem 403. Pacientes, exames e
+a uma conta com vínculo ativo; os demais recebem 403. Pacientes, exames e
 laudos compartilham essa regra.
 
-A mesma feature atende `GET /v1/me/patients`. A rota permanece estável, enquanto
+A mesma feature atende `GET /me/patients`. A rota permanece estável, enquanto
 o serviço, o handler e os DTOs deixam de pertencer a `account`.
 
 O checker não decide permissões por ação. Para problemas do paciente, `authz`

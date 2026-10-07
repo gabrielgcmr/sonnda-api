@@ -22,7 +22,7 @@ func NewMiddleware(accountService accountResolver) *Middleware {
 	return &Middleware{accountService: accountService}
 }
 
-func (m *Middleware) ResolveRegisteredAccount(ctx context.Context, identity *authdomain.Identity) (*accountdomain.Account, error) {
+func (m *Middleware) ResolveAccount(ctx context.Context, identity *authdomain.Identity) (*accountdomain.Account, error) {
 	if identity == nil {
 		return nil, apperr.Unauthorized("autenticação necessária")
 	}
