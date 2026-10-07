@@ -68,6 +68,7 @@ func TestChangeRoutesEnforcePermissionsAndRecordAuthorship(t *testing.T) {
 				{"PUT", "/classification", "classified", `,"classification":"chronic"`},
 				{"POST", "/resolve", "resolved", ""},
 				{"POST", "/reopen", "reopened", ""},
+				{"POST", "/rectify", "rectified", `,"reason":"  registro duplicado  "`},
 			} {
 				t.Run(fmt.Sprintf("%s/%s/access=%t", kind, operation.action, access), func(t *testing.T) {
 					store := changeTestStore(t, problemdomain.ClassificationAcute, operation.action == "reopened")
@@ -110,6 +111,13 @@ func TestChangeRoutesEnforcePermissionsAndRecordAuthorship(t *testing.T) {
 						if result.ClinicalStatus != "active" || event.Before.ClinicalStatus != problemdomain.ClinicalStatusResolved {
 							t.Fatalf("invalid reopening: %+v", result)
 						}
+					case "rectified":
+						if result.AdministrativeStatus != "entered_in_error" || event.Reason != "registro duplicado" ||
+							event.After.AdministrativeStatus != problemdomain.AdministrativeStatusEnteredInError ||
+							result.Name != before.State.Name || result.Classification != string(before.State.Classification) ||
+							result.ClinicalStatus != string(before.State.ClinicalStatus) || result.CID11 == nil || result.CID11.Code != before.State.CID11.Code {
+							t.Fatalf("invalid rectification: result=%+v event=%+v", result, event)
+						}
 					}
 				})
 			}
@@ -142,10 +150,13 @@ func TestChangesRejectInvalidPayloadsAndStatesWithoutAudit(t *testing.T) {
 		{name: "reopen active", method: "POST", suffix: "/reopen", body: `{"version":1}`},
 		{name: "same classification", method: "PUT", suffix: "/classification", body: `{"version":1,"classification":"acute"}`},
 		{name: "same details", method: "PUT", body: `{"version":1,"name":"Original","cid11":{"code":"CA23","system":"ICD-11","version":"2026"}}`},
+		{name: "missing rectification reason", method: "POST", suffix: "/rectify", body: `{"version":1}`},
+		{name: "blank rectification reason", method: "POST", suffix: "/rectify", body: `{"version":1,"reason":"   "}`},
 		{name: "edit rectified", method: "PUT", body: `{"version":1,"name":"Novo"}`, administrative: problemdomain.AdministrativeStatusEnteredInError},
 		{name: "classify rectified", method: "PUT", suffix: "/classification", body: `{"version":1,"classification":"chronic"}`, administrative: problemdomain.AdministrativeStatusEnteredInError},
 		{name: "resolve merged", method: "POST", suffix: "/resolve", body: `{"version":1}`, administrative: problemdomain.AdministrativeStatusMerged},
 		{name: "reopen rectified", method: "POST", suffix: "/reopen", body: `{"version":2}`, resolved: true, administrative: problemdomain.AdministrativeStatusEnteredInError},
+		{name: "rectify rectified", method: "POST", suffix: "/rectify", body: `{"version":1,"reason":"duplicado"}`, administrative: problemdomain.AdministrativeStatusEnteredInError},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			classification := tc.classification
@@ -200,6 +211,7 @@ func TestChangeConflictsCrossPatientAndSafeErrors(t *testing.T) {
 	for _, operation := range []struct{ method, suffix, fields string }{
 		{"PUT", "", `,"name":"Novo"`}, {"PUT", "/classification", `,"classification":"chronic"`},
 		{"POST", "/resolve", ""}, {"POST", "/reopen", ""},
+		{"POST", "/rectify", `,"reason":"registro indevido"`},
 	} {
 		store := changeTestStore(t, problemdomain.ClassificationAcute, operation.suffix == "/reopen")
 		router, _ := testRouter(store, accountdomain.AccountTypeProfessional, true)
@@ -266,6 +278,25 @@ func TestRepeatedResolutionDoesNotAppendAudit(t *testing.T) {
 		response = request(router, "POST", path, tc.body)
 		if response.Code != tc.status || store.p.Version != 2 || len(store.events) != 2 || store.events[1].ActorAccountID != actorID {
 			t.Fatalf("repeated resolution: %d %s events=%+v", response.Code, response.Body.String(), store.events)
+		}
+	}
+}
+
+func TestRepeatedRectificationDoesNotAppendAudit(t *testing.T) {
+	store := changeTestStore(t, problemdomain.ClassificationAcute, false)
+	router, actorID := testRouter(store, accountdomain.AccountTypeProfessional, true)
+	path := changePath(store) + "/rectify"
+	response := request(router, "POST", path, `{"version":1,"reason":"registro duplicado"}`)
+	if response.Code != 200 {
+		t.Fatalf("initial rectification: %d %s", response.Code, response.Body.String())
+	}
+	for _, tc := range []struct {
+		body   string
+		status int
+	}{{`{"version":1,"reason":"registro duplicado"}`, 409}, {`{"version":2,"reason":"registro duplicado"}`, 422}} {
+		response = request(router, "POST", path, tc.body)
+		if response.Code != tc.status || store.p.Version != 2 || len(store.events) != 2 || store.events[1].ActorAccountID != actorID {
+			t.Fatalf("repeated rectification: %d %s events=%+v", response.Code, response.Body.String(), store.events)
 		}
 	}
 }

@@ -68,7 +68,7 @@ func TestOpenAPIKeepsBothPatientListRoutes(t *testing.T) {
 func TestOpenAPIIncludesAuthenticatedProblemOperations(t *testing.T) {
 	spec := OpenAPI(APIInfo{})
 	base := "/patients/{patientId}/problems"
-	for _, path := range []string{base, base + "/{problemId}", base + "/{problemId}/history"} {
+	for _, path := range []string{base, base + "/{problemId}", base + "/{problemId}/history", base + "/{problemId}/rectify"} {
 		if spec.Paths[path] == nil {
 			t.Fatalf("missing problem path: %s", path)
 		}
@@ -84,5 +84,20 @@ func TestOpenAPIIncludesAuthenticatedProblemOperations(t *testing.T) {
 	}
 	if spec.Paths[base].Post.Responses["201"] == nil {
 		t.Fatal("creation must document 201")
+	}
+	rectify := spec.Paths[base+"/{problemId}/rectify"].Post
+	if rectify == nil || rectify.OperationID != "rectifyPatientProblem" || len(rectify.Security) != 1 {
+		t.Fatalf("missing authenticated rectification operation: %+v", rectify)
+	}
+	request := referencedSchema(spec, rectify.RequestBody.Content["application/json"].Schema)
+	if request.Properties["version"] == nil || request.Properties["reason"] == nil {
+		t.Fatalf("unexpected rectification request: %+v", request.Properties)
+	}
+	required := map[string]bool{}
+	for _, name := range request.Required {
+		required[name] = true
+	}
+	if !required["version"] || !required["reason"] {
+		t.Fatalf("rectification version and reason must be required: %v", request.Required)
 	}
 }

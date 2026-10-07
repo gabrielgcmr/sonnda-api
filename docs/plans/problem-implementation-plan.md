@@ -296,6 +296,13 @@ contornam a proibição de crônico resolvido nem sobrescrevem alterações.
 
 ### B4 — Retificação por engano
 
+Status: **concluída nos serviços e endpoint Huma**. A operação
+`POST /patients/{patientId}/problems/{problemId}/rectify` exige profissional com
+acesso, versão atual e motivo não vazio. A atualização preserva os campos clínicos,
+marca o registro como `entered_in_error` e grava autoria, motivo e snapshots na
+mesma transação. Conflitos retornam `409`; registros retificados deixam a listagem
+padrão e continuam consultáveis por detalhe, histórico e filtro administrativo.
+
 - Operação explícita, exclusiva de profissionais, com motivo não vazio obrigatório.
 - Marcar registro indevido e retirá-lo da listagem padrão sem exclusão física.
 - Preservar conteúdo e histórico; impedir alterações clínicas comuns posteriores.

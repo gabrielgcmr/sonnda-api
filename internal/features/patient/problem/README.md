@@ -1,5 +1,5 @@
 <!-- internal/features/patient/problem/README.md -->
-# Problemas do paciente — B2 e B3
+# Problemas do paciente — B2, B3 e B4
 
 Todas as rotas exigem Bearer token, conta resolvida com onboarding concluído e acesso ao paciente.
 A autorização consulta o tipo atual da conta no backend. Apenas contas
@@ -17,6 +17,7 @@ registrada com acesso pode resolver um problema agudo ativo.
 | PUT | `/patients/{patientId}/problems/{problemId}/classification` | `200`, classificação alterada |
 | POST | `/patients/{patientId}/problems/{problemId}/resolve` | `200`, problema agudo resolvido |
 | POST | `/patients/{patientId}/problems/{problemId}/reopen` | `200`, problema reaberto |
+| POST | `/patients/{patientId}/problems/{problemId}/rectify` | `200`, registro retificado por engano |
 
 ## Criação
 
@@ -97,13 +98,16 @@ Exemplos de payloads, usando a versão atual em cada chamada:
 | Classificar como crônico | `{"version":2,"classification":"chronic"}` |
 | Resolver | `{"version":2}` |
 | Reabrir | `{"version":3}` |
+| Retificar | `{"version":3,"reason":"Registro criado para o paciente errado"}` |
 
 `PUT` no problema substitui os detalhes: `name` é obrigatório e `cid11` omitido
 ou `null` remove o código anterior. Para manter um CID existente, envie o objeto
 completo. Nome e CID são validados juntos e gravados em um único evento `edited`.
 Situação clínica e classificação não são campos aceitos nessa operação.
 Classificação usa evento `classified`; resolução e reabertura usam `resolved`
-e `reopened`.
+e `reopened`. Retificação usa `rectified`, exige motivo não vazio e altera apenas
+`administrative_status` para `entered_in_error`. Nome, CID, classificação e
+situação clínica são preservados.
 
 Somente `acute` + `active` permite resolução, inclusive para profissionais.
 Para mudar um problema resolvido para `chronic`, um profissional deve primeiro
@@ -112,6 +116,12 @@ payloads que tentam combinar classificação e reabertura são rejeitados.
 Registros `merged` e `entered_in_error` não aceitam essas alterações.
 Pedidos sem mudança efetiva e transições incompatíveis retornam `422` sem
 incrementar versão nem adicionar histórico.
+
+A retificação é exclusiva de profissionais com acesso ativo ao paciente. O
+registro deixa de aparecer na listagem padrão, permanece disponível nas consultas
+com `administrative_status=entered_in_error` ou `all`, e conserva todo o conteúdo
+e histórico. A versão esperada evita que a retificação sobrescreva uma alteração
+concorrente.
 
 O backend consulta o estado atual, valida o estado final e grava problema e
 auditoria na mesma transação, condicionando a atualização à versão esperada.
@@ -132,10 +142,10 @@ uma chamada bem-sucedida com a versão antiga também retorna `409`.
 - `422`: campos, parâmetros ou regras clínicas inválidos; alteração sem mudanças.
 - `500`: falha técnica, sem detalhes internos na resposta.
 
-B2 e B3 usam a migration `supabase/migrations/20261005121819_patient_problems.sql`
+B2, B3 e B4 usam a migration `supabase/migrations/20261005121819_patient_problems.sql`
 de B1.2, que precisa estar aplicada no ambiente de execução. Esta etapa não
 introduz migration adicional. As rotas estão conectadas ao bootstrap da API;
-retificação e unificação são etapas posteriores.
+unificação permanece como etapa posterior.
 
 Testes de persistência usam `PROBLEMS_TEST_DATABASE_URL`, aceitando apenas
 PostgreSQL local; criam e removem um schema isolado por teste.

@@ -35,6 +35,14 @@ type transitionInput struct {
 	}
 }
 
+type rectifyInput struct {
+	ProblemInput
+	Body struct {
+		Version int64  `json:"version" minimum:"1" doc:"Versão atual esperada do problema"`
+		Reason  string `json:"reason" minLength:"1" doc:"Motivo da retificação"`
+	}
+}
+
 func (h *Handler) registerChangeRoutes(api huma.API, security []map[string][]string) {
 	base := "/patients/{patientId}/problems/{problemId}"
 	operation := func(id, method, suffix, summary string) huma.Operation {
@@ -51,6 +59,9 @@ func (h *Handler) registerChangeRoutes(api huma.API, security []map[string][]str
 	huma.Register(api, operation("classifyPatientProblem", http.MethodPut, "/classification", "Classificar problema (profissional com acesso)"), h.classify)
 	huma.Register(api, operation("resolvePatientProblem", http.MethodPost, "/resolve", "Resolver problema agudo ativo (qualquer conta com acesso)"), h.resolve)
 	huma.Register(api, operation("reopenPatientProblem", http.MethodPost, "/reopen", "Reabrir problema resolvido (profissional com acesso)"), h.reopen)
+	rectify := operation("rectifyPatientProblem", http.MethodPost, "/rectify", "Retificar problema registrado por engano (profissional com acesso)")
+	rectify.Description += " reason é obrigatório. A retificação preserva conteúdo e histórico e remove o registro da listagem padrão."
+	huma.Register(api, rectify, h.rectify)
 }
 
 func (h *Handler) edit(ctx context.Context, input *editInput) (*problemOutput, error) {
@@ -103,6 +114,21 @@ func (h *Handler) reopen(ctx context.Context, input *transitionInput) (*problemO
 		return nil, err
 	}
 	p, err := h.svc.Reopen(ctx, actorID, input.PatientID, input.ProblemID, input.Body.Version)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	return &problemOutput{Body: problemResponse(p)}, nil
+}
+
+func (h *Handler) rectify(ctx context.Context, input *rectifyInput) (*problemOutput, error) {
+	actorID, err := h.actor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, err := h.svc.Rectify(ctx, actorID, input.PatientID, input.ProblemID, problem.RectifyInput{
+		Version: input.Body.Version,
+		Reason:  input.Body.Reason,
+	})
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
