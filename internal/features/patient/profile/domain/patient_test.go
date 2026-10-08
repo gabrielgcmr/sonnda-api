@@ -150,6 +150,28 @@ func TestPatient_ApplyUpdate_NormalizesAndUpdatesTimestamp(t *testing.T) {
 	}
 }
 
+func TestPatient_ApplyUpdate_ClearsEmptyOptionalValues(t *testing.T) {
+	cns := "123456789012345"
+	phone := "11999999999"
+	p, err := NewPatient(NewPatientParams{
+		CPF:       "52998224725",
+		CNS:       &cns,
+		FullName:  "Paciente",
+		BirthDate: time.Now().Add(-24 * time.Hour),
+		Phone:     &phone,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	empty := "  "
+	p.ApplyUpdate(nil, &empty, nil, nil, nil, &empty)
+
+	if p.Phone != nil || p.CNS != nil {
+		t.Fatalf("expected phone and CNS to be cleared: phone=%v CNS=%v", p.Phone, p.CNS)
+	}
+}
+
 func validParams(birthDate time.Time) NewPatientParams {
 	return NewPatientParams{
 		CPF:       "52998224725",

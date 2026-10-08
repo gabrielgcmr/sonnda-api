@@ -1,25 +1,22 @@
-// internal/features/patient/http/create_handler.go
-package patienthttp
+// internal/features/patient/profile/http/create.go
+package profilehttp
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	helpers "github.com/gabrielgcmr/sonnda/internal/api/helpers"
+	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
 	"github.com/gabrielgcmr/sonnda/internal/domain/demographics"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	applog "github.com/gabrielgcmr/sonnda/internal/kernel/observability"
 	"github.com/google/uuid"
 )
-
-type CreationHandler struct {
-	creator patientcreation.UseCase
-}
 
 type createPatientInput struct {
 	Body createPatientRequest
@@ -46,30 +43,15 @@ type createPatientOutput struct {
 	Body     createPatientResponse
 }
 
-func NewCreationHandler(creator patientcreation.UseCase) *CreationHandler {
-	return &CreationHandler{creator: creator}
-}
-
-// RegisterHumaRoutes registers patient creation in the onboarded-account group.
-func (h *CreationHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
-	huma.Register(registered, huma.Operation{
-		OperationID:   "createPatient",
-		Method:        http.MethodPost,
-		Path:          "/patients",
-		Summary:       "Criar paciente e conceder acesso inicial à conta atual",
-		Tags:          []string{"Patients"},
-		DefaultStatus: http.StatusCreated,
-		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity},
-		Security:      security,
-	}, h.create)
-}
-
-func (h *CreationHandler) create(ctx context.Context, input *createPatientInput) (*createPatientOutput, error) {
+func (h *Handler) createPatient(ctx context.Context, input *createPatientInput) (*createPatientOutput, error) {
 	applog.FromContext(ctx).Info("patient_create")
 
 	creatorAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok || creatorAccount == nil {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
+	}
+	if h == nil || h.creator == nil {
+		return nil, humaerror.From(apperr.Internal("criação de paciente indisponível", errors.New("patient creation use case is not configured")))
 	}
 
 	birthDate, err := time.Parse(time.DateOnly, input.Body.BirthDate)
@@ -102,9 +84,7 @@ func (h *CreationHandler) create(ctx context.Context, input *createPatientInput)
 			Phone:     input.Body.Phone,
 			AvatarURL: avatarURL,
 		},
-		Access: patientcreation.AccessInput{
-			RelationType: input.Body.RelationType,
-		},
+		Access: patientcreation.AccessInput{RelationType: input.Body.RelationType},
 	})
 	if err != nil {
 		return nil, humaerror.From(err)

@@ -11,7 +11,6 @@ import (
 	documentprocessinghttp "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/http"
 	accesshttp "github.com/gabrielgcmr/sonnda/internal/features/patient/access/http"
 	laboratoryhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/http"
-	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
 	problemhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/http"
 	profilehttp "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/http"
 	"github.com/gabrielgcmr/sonnda/static"
@@ -24,7 +23,6 @@ type APIDependencies struct {
 	Account                        *accounthttp.Middleware
 	AccountHandler                 *accounthttp.Handler
 	PatientAccessHandler           *accesshttp.Handler
-	PatientCreationHandler         *patienthttp.CreationHandler
 	PatientHandler                 *profilehttp.Handler
 	PatientProblemHandler          *problemhttp.Handler
 	LaboratoryHandler              *laboratoryhttp.Handler
@@ -61,7 +59,6 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	deps.AccountHandler.RegisterOnboardedRoutes(onboarded, bearerSecurity())
 
 	deps.PatientAccessHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
-	deps.PatientCreationHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 	deps.PatientHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 	deps.PatientProblemHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 

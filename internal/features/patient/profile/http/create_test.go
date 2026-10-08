@@ -1,5 +1,5 @@
-// internal/features/patient/http/create_handler_test.go
-package patienthttp
+// internal/features/patient/profile/http/create_test.go
+package profilehttp
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
-	helpers "github.com/gabrielgcmr/sonnda/internal/api/helpers"
+	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
@@ -37,7 +37,7 @@ func (s *creationUseCaseStub) Execute(
 
 func TestCreateRequiresExplicitRelationshipType(t *testing.T) {
 	creator := &creationUseCaseStub{}
-	response := performCreationRequest(t, creator, `{
+	response := performPatientRequest(t, nil, creator, http.MethodPost, "/patients", `{
 		"cpf":"12345678901",
 		"full_name":"Joana Silva",
 		"birth_date":"1990-01-01",
@@ -55,7 +55,7 @@ func TestCreateRequiresExplicitRelationshipType(t *testing.T) {
 
 func TestCreateForwardsRelationshipTypeToAccessInput(t *testing.T) {
 	creator := &creationUseCaseStub{}
-	response := performCreationRequest(t, creator, `{
+	response := performPatientRequest(t, nil, creator, http.MethodPost, "/patients", `{
 		"cpf":"12345678901",
 		"full_name":"Joana Silva",
 		"birth_date":"1990-01-01",
@@ -72,25 +72,30 @@ func TestCreateForwardsRelationshipTypeToAccessInput(t *testing.T) {
 	}
 }
 
-func performCreationRequest(
+func performPatientRequest(
 	t *testing.T,
+	svc patientService,
 	creator patientcreation.UseCase,
+	method string,
+	path string,
 	body string,
 ) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	account := &accountdomain.Account{ID: uuid.New()}
+	account := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeProfessional}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), account))
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
-	NewCreationHandler(creator).RegisterHumaRoutes(api, nil)
+	NewHandler(svc, creator).RegisterHumaRoutes(api, nil)
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/patients", strings.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	router.ServeHTTP(response, request)
 	return response
 }

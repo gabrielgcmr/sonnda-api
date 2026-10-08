@@ -94,7 +94,7 @@ func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Acco
 }
 
 func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
+	if err := s.requireProfessionalAccess(ctx, currentAccount, id); err != nil {
 		return err
 	}
 
@@ -113,7 +113,7 @@ func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.
 }
 
 func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
+	if err := s.requireProfessionalAccess(ctx, currentAccount, id); err != nil {
 		return err
 	}
 
@@ -129,6 +129,20 @@ func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.
 		return mapRepoError("patientRepo.HardDelete", err)
 	}
 	return nil
+}
+
+func (s *service) requireProfessionalAccess(
+	ctx context.Context,
+	currentAccount *accountdomain.Account,
+	patientID uuid.UUID,
+) error {
+	if currentAccount == nil || currentAccount.ID == uuid.Nil {
+		return apperr.Unauthorized("autenticação necessária")
+	}
+	if currentAccount.DeletedAt != nil || currentAccount.AccountType != accountdomain.AccountTypeProfessional {
+		return apperr.Forbidden("acesso negado")
+	}
+	return s.accessChecker.RequireAccess(ctx, currentAccount.ID, patientID)
 }
 
 func currentAccountID(currentAccount *accountdomain.Account) uuid.UUID {

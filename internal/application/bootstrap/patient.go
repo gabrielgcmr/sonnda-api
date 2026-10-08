@@ -7,7 +7,6 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	accesspostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/access/postgres"
-	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
 	"github.com/gabrielgcmr/sonnda/internal/features/patient/problem"
 	problemhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/http"
 	problempostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/postgres"
@@ -21,7 +20,6 @@ import (
 type PatientModule struct {
 	Service           patientprofile.Service
 	ProfileHandler    *profilehttp.Handler
-	CreationHandler   *patienthttp.CreationHandler
 	ProblemAuthorizer authz.ProblemAuthorizer
 	ProblemHandler    *problemhttp.Handler
 }
@@ -39,8 +37,7 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 
 	return &PatientModule{
 		Service:           svc,
-		ProfileHandler:    profilehttp.NewHandler(svc),
-		CreationHandler:   patienthttp.NewCreationHandler(creator),
+		ProfileHandler:    profilehttp.NewHandler(svc, creator),
 		ProblemAuthorizer: problemAuthorizer,
 		ProblemHandler:    problemhttp.NewHandler(problemService),
 	}

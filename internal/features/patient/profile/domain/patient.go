@@ -138,7 +138,12 @@ func (p *Patient) ApplyUpdate(
 	}
 
 	if cns != nil {
-		p.CNS = cns
+		value := strings.TrimSpace(*cns)
+		if value == "" {
+			p.CNS = nil
+		} else {
+			p.CNS = &value
+		}
 	}
 
 	p.UpdatedAt = time.Now().UTC()
