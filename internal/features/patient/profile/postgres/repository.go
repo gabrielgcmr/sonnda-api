@@ -19,32 +19,78 @@ import (
 )
 
 type Repository struct {
-	queries *patientsqlc.Queries
+	queries patientsqlc.Querier
 }
 
 // FindByName implements [patientprofile.Repository].
 func (r *Repository) FindByName(ctx context.Context, name string) ([]profiledomain.Patient, error) {
-	panic("unimplemented")
+	rows, err := r.queries.FindPatientsByName(ctx, name)
+	if err != nil {
+		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	return patientsFromRows(rows), nil
 }
 
 // SearchByName implements [patientprofile.Repository].
 func (r *Repository) SearchByName(ctx context.Context, name string, limit int, offset int) ([]profiledomain.Patient, error) {
-	panic("unimplemented")
+	rows, err := r.queries.SearchPatientsByName(ctx, patientsqlc.SearchPatientsByNameParams{
+		Query:  pgtype.Text{String: name, Valid: true},
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	return patientsFromRows(rows), nil
 }
 
 // HardDelete implements [patientprofile.Repository].
 func (r *Repository) HardDelete(ctx context.Context, id uuid.UUID) error {
-	panic("unimplemented")
+	rows, err := r.queries.HardDeletePatient(ctx, id)
+	if err != nil {
+		return errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	if rows == 0 {
+		return patientprofile.ErrPatientNotFound
+	}
+	return nil
 }
 
 // List implements [patientprofile.Repository].
 func (r *Repository) List(ctx context.Context, limit int, offset int) ([]profiledomain.Patient, error) {
-	panic("unimplemented")
+	rows, err := r.queries.ListPatients(ctx, patientsqlc.ListPatientsParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	return patientsFromRows(rows), nil
 }
 
 // Update implements [patientprofile.Repository].
 func (r *Repository) Update(ctx context.Context, patient *profiledomain.Patient) error {
-	panic("unimplemented")
+	row, err := r.queries.UpdatePatient(ctx, patientsqlc.UpdatePatientParams{
+		ID:        patient.ID,
+		FullName:  patient.FullName,
+		Phone:     fromNullableString(patient.Phone),
+		AvatarUrl: fromNullableString(&patient.AvatarURL),
+		Gender:    string(patient.Gender),
+		Race:      string(patient.Race),
+		Cns:       fromNullableString(patient.CNS),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return patientprofile.ErrPatientNotFound
+		}
+		if isUniqueViolation(err) {
+			return patientprofile.ErrPatientAlreadyExists
+		}
+		return errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+
+	*patient = *patientFromRow(row)
+	return nil
 }
 
 var _ patientprofile.Repository = (*Repository)(nil)
@@ -62,7 +108,7 @@ func (r *Repository) Create(ctx context.Context, p *profiledomain.Patient) error
 
 func (r *Repository) createWithQueries(
 	ctx context.Context,
-	queries *patientsqlc.Queries,
+	queries patientsqlc.Querier,
 	p *profiledomain.Patient,
 ) error {
 	params := patientsqlc.CreatePatientParams{
@@ -86,25 +132,21 @@ func (r *Repository) createWithQueries(
 		return errors.Join(persistence.ErrPersistenceFailure, err)
 	}
 
-	p.ID = row.ID
-	p.OwnerUserID = fromPgUUID(row.OwnerUserID)
-	p.CPF = row.Cpf
-	p.CNS = fromPgText(row.Cns)
-	p.FullName = row.FullName
-	p.BirthDate = row.BirthDate.Time
-	p.Gender = demographics.Gender(row.Gender)
-	p.Race = demographics.Race(row.Race)
-	p.AvatarURL = row.AvatarUrl.String
-	p.Phone = fromPgText(row.Phone)
-	p.CreatedAt = row.CreatedAt.Time
-	p.UpdatedAt = row.UpdatedAt.Time
+	*p = *patientFromRow(row)
 
 	return nil
 }
 
 // SoftDelete implements [patientprofile.Repository].
-func (p *Repository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	panic("unimplemented")
+func (r *Repository) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	rows, err := r.queries.SoftDeletePatient(ctx, id)
+	if err != nil {
+		return errors.Join(persistence.ErrPersistenceFailure, err)
+	}
+	if rows == 0 {
+		return patientprofile.ErrPatientNotFound
+	}
+	return nil
 }
 
 // FindByCPF implements [patientprofile.Repository].
@@ -117,20 +159,7 @@ func (p *Repository) FindByCPF(ctx context.Context, cpf string) (*profiledomain.
 		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
 	}
 
-	return &profiledomain.Patient{
-		ID:          row.ID,
-		OwnerUserID: fromPgUUID(row.OwnerUserID),
-		CPF:         row.Cpf,
-		CNS:         fromPgText(row.Cns),
-		FullName:    row.FullName,
-		BirthDate:   row.BirthDate.Time,
-		Gender:      demographics.Gender(row.Gender),
-		Race:        demographics.Race(row.Race),
-		AvatarURL:   row.AvatarUrl.String,
-		Phone:       fromPgText(row.Phone),
-		CreatedAt:   row.CreatedAt.Time,
-		UpdatedAt:   row.UpdatedAt.Time,
-	}, nil
+	return patientFromRow(row), nil
 }
 
 // FindByID implements [patientprofile.Repository].
@@ -143,6 +172,10 @@ func (p *Repository) FindByID(ctx context.Context, id uuid.UUID) (*profiledomain
 		return nil, errors.Join(persistence.ErrPersistenceFailure, err)
 	}
 
+	return patientFromRow(row), nil
+}
+
+func patientFromRow(row patientsqlc.Patient) *profiledomain.Patient {
 	return &profiledomain.Patient{
 		ID:          row.ID,
 		OwnerUserID: fromPgUUID(row.OwnerUserID),
@@ -156,7 +189,15 @@ func (p *Repository) FindByID(ctx context.Context, id uuid.UUID) (*profiledomain
 		Phone:       fromPgText(row.Phone),
 		CreatedAt:   row.CreatedAt.Time,
 		UpdatedAt:   row.UpdatedAt.Time,
-	}, nil
+	}
+}
+
+func patientsFromRows(rows []patientsqlc.Patient) []profiledomain.Patient {
+	patients := make([]profiledomain.Patient, len(rows))
+	for i, row := range rows {
+		patients[i] = *patientFromRow(row)
+	}
+	return patients
 }
 
 func fromNullableString(value *string) pgtype.Text {
