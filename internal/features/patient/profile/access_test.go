@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
@@ -14,13 +15,17 @@ import (
 
 type deniedPatientAccess struct {
 	err       error
+	patient   *profiledomain.Patient
 	accountID uuid.UUID
 	patientID uuid.UUID
 }
 
-func (a *deniedPatientAccess) RequireAccess(_ context.Context, accountID, patientID uuid.UUID) error {
+func (a *deniedPatientAccess) ResolveAccessiblePatient(
+	_ context.Context,
+	accountID, patientID uuid.UUID,
+) (*profiledomain.Patient, error) {
 	a.accountID, a.patientID = accountID, patientID
-	return a.err
+	return a.patient, a.err
 }
 
 func TestPatientOperationsStopWhenAccessIsDenied(t *testing.T) {
@@ -55,13 +60,8 @@ func TestPatientOperationsStopWhenAccessIsDenied(t *testing.T) {
 
 type deletionRepository struct {
 	Repository
-	patient         *profiledomain.Patient
 	softDeleteCalls int
 	hardDeleteCalls int
-}
-
-func (r *deletionRepository) FindByID(context.Context, uuid.UUID) (*profiledomain.Patient, error) {
-	return r.patient, nil
 }
 
 func (r *deletionRepository) SoftDelete(context.Context, uuid.UUID) error {
@@ -125,8 +125,8 @@ func TestProfessionalWithAccessCanDeletePatient(t *testing.T) {
 
 	for _, operation := range []string{"soft delete", "hard delete"} {
 		t.Run(operation, func(t *testing.T) {
-			repository := &deletionRepository{patient: &profiledomain.Patient{ID: patientID}}
-			accessChecker := &deniedPatientAccess{}
+			repository := &deletionRepository{}
+			accessChecker := &deniedPatientAccess{patient: &profiledomain.Patient{ID: patientID}}
 			svc := New(repository, accessChecker)
 
 			var err error
@@ -148,6 +148,52 @@ func TestProfessionalWithAccessCanDeletePatient(t *testing.T) {
 				t.Fatal("hard delete was not executed")
 			}
 		})
+	}
+}
+
+type updateRepository struct {
+	Repository
+	updateCalls int
+}
+
+func (r *updateRepository) Update(context.Context, *profiledomain.Patient) error {
+	r.updateCalls++
+	return nil
+}
+
+func TestPatientGetReusesResolvedPatient(t *testing.T) {
+	actor := &accountdomain.Account{ID: uuid.New()}
+	patient := &profiledomain.Patient{ID: uuid.New()}
+	resolver := &deniedPatientAccess{patient: patient}
+	svc := New(nil, resolver)
+
+	result, err := svc.Get(context.Background(), actor, patient.ID)
+	if err != nil {
+		t.Fatalf("unexpected get error: %v", err)
+	}
+	if result != patient {
+		t.Fatal("service did not return the patient loaded during authorization")
+	}
+}
+
+func TestPatientUpdateReusesResolvedPatient(t *testing.T) {
+	actor := &accountdomain.Account{ID: uuid.New()}
+	patient := &profiledomain.Patient{
+		ID:        uuid.New(),
+		CPF:       "52998224725",
+		FullName:  "Paciente",
+		BirthDate: time.Now().Add(-24 * time.Hour),
+	}
+	resolver := &deniedPatientAccess{patient: patient}
+	repository := &updateRepository{}
+	svc := New(repository, resolver)
+
+	result, err := svc.Update(context.Background(), actor, patient.ID, UpdateInput{})
+	if err != nil {
+		t.Fatalf("unexpected update error: %v", err)
+	}
+	if result != patient || repository.updateCalls != 1 {
+		t.Fatalf("resolved patient was not reused: result=%p patient=%p updates=%d", result, patient, repository.updateCalls)
 	}
 }
 

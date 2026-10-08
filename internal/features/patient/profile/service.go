@@ -18,53 +18,39 @@ type Service interface {
 	HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
 }
 
-type AccessChecker interface {
-	RequireAccess(ctx context.Context, accountID, patientID uuid.UUID) error
+type AccessResolver interface {
+	ResolveAccessiblePatient(ctx context.Context, accountID, patientID uuid.UUID) (*profiledomain.Patient, error)
 }
 
 type service struct {
-	repo          Repository
-	accessChecker AccessChecker
+	repo           Repository
+	accessResolver AccessResolver
 }
 
 var _ Service = (*service)(nil)
 
 func New(
 	repo Repository,
-	accessChecker AccessChecker,
+	accessResolver AccessResolver,
 ) Service {
 	return &service{
-		repo:          repo,
-		accessChecker: accessChecker,
+		repo:           repo,
+		accessResolver: accessResolver,
 	}
 }
 
 func (s *service) Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error) {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
-		return nil, err
-	}
-
-	p, err := s.repo.FindByID(ctx, id)
+	p, err := s.accessResolver.ResolveAccessiblePatient(ctx, currentAccountID(currentAccount), id)
 	if err != nil {
-		return nil, mapRepoError("patientRepo.FindByID", err)
-	}
-	if p == nil {
-		return nil, patientNotFound()
+		return nil, err
 	}
 	return p, nil
 }
 
 func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error) {
-	if err := s.accessChecker.RequireAccess(ctx, currentAccountID(currentAccount), id); err != nil {
-		return nil, err
-	}
-
-	p, err := s.repo.FindByID(ctx, id)
+	p, err := s.accessResolver.ResolveAccessiblePatient(ctx, currentAccountID(currentAccount), id)
 	if err != nil {
-		return nil, mapRepoError("patientRepo.FindByID", err)
-	}
-	if p == nil {
-		return nil, patientNotFound()
+		return nil, err
 	}
 
 	p.ApplyUpdate(
@@ -87,16 +73,8 @@ func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Acco
 }
 
 func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if err := s.requireProfessionalAccess(ctx, currentAccount, id); err != nil {
+	if _, err := s.resolveProfessionalAccess(ctx, currentAccount, id); err != nil {
 		return err
-	}
-
-	p, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return mapRepoError("patientRepo.FindByID", err)
-	}
-	if p == nil {
-		return patientNotFound()
 	}
 
 	if err := s.repo.SoftDelete(ctx, id); err != nil {
@@ -106,16 +84,8 @@ func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.
 }
 
 func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if err := s.requireProfessionalAccess(ctx, currentAccount, id); err != nil {
+	if _, err := s.resolveProfessionalAccess(ctx, currentAccount, id); err != nil {
 		return err
-	}
-
-	p, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return mapRepoError("patientRepo.FindByID", err)
-	}
-	if p == nil {
-		return patientNotFound()
 	}
 
 	if err := s.repo.HardDelete(ctx, id); err != nil {
@@ -124,18 +94,18 @@ func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.
 	return nil
 }
 
-func (s *service) requireProfessionalAccess(
+func (s *service) resolveProfessionalAccess(
 	ctx context.Context,
 	currentAccount *accountdomain.Account,
 	patientID uuid.UUID,
-) error {
+) (*profiledomain.Patient, error) {
 	if currentAccount == nil || currentAccount.ID == uuid.Nil {
-		return apperr.Unauthorized("autenticação necessária")
+		return nil, apperr.Unauthorized("autenticação necessária")
 	}
 	if currentAccount.DeletedAt != nil || currentAccount.AccountType != accountdomain.AccountTypeProfessional {
-		return apperr.Forbidden("acesso negado")
+		return nil, apperr.Forbidden("acesso negado")
 	}
-	return s.accessChecker.RequireAccess(ctx, currentAccount.ID, patientID)
+	return s.accessResolver.ResolveAccessiblePatient(ctx, currentAccount.ID, patientID)
 }
 
 func currentAccountID(currentAccount *accountdomain.Account) uuid.UUID {
