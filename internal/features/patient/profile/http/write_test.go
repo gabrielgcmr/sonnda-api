@@ -44,10 +44,6 @@ func (s *patientServiceStub) SoftDelete(_ context.Context, _ *accountdomain.Acco
 	return nil
 }
 
-func (s *patientServiceStub) ListMyPatients(context.Context, *accountdomain.Account, int, int) ([]*profiledomain.Patient, error) {
-	return nil, nil
-}
-
 func TestPatchPatientUpdatesOnlySuppliedFields(t *testing.T) {
 	patientID := uuid.New()
 	svc := &patientServiceStub{patient: &profiledomain.Patient{ID: patientID, FullName: "Maria Silva"}}

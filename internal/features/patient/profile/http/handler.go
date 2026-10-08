@@ -20,7 +20,6 @@ type patientService interface {
 	Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error)
 	Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input patientprofile.UpdateInput) (*profiledomain.Patient, error)
 	SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
-	ListMyPatients(ctx context.Context, currentAccount *accountdomain.Account, limit, offset int) ([]*profiledomain.Patient, error)
 }
 
 type Handler struct {
@@ -51,10 +50,6 @@ type patientOutput struct {
 	Body patientResponse
 }
 
-type patientListOutput struct {
-	Body []patientResponse
-}
-
 func NewHandler(svc patientService, creator patientcreation.UseCase) *Handler {
 	return &Handler{svc: svc, creator: creator}
 }
@@ -71,16 +66,6 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		Security:      security,
 	}, h.createPatient)
-
-	huma.Register(registered, huma.Operation{
-		OperationID: "listPatients",
-		Method:      http.MethodGet,
-		Path:        "/patients",
-		Summary:     "Listar pacientes acessíveis pela conta atual",
-		Tags:        []string{"Patients"},
-		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
-		Security:    security,
-	}, h.listPatients)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getPatient",
@@ -125,28 +110,6 @@ func (h *Handler) getPatient(ctx context.Context, input *patientIDInput) (*patie
 		return nil, humaerror.From(err)
 	}
 	return &patientOutput{Body: patientResponseFromDomain(patient)}, nil
-}
-
-func (h *Handler) listPatients(ctx context.Context, _ *struct{}) (*patientListOutput, error) {
-	if h == nil || h.svc == nil {
-		return nil, huma.Error500InternalServerError("serviço indisponível")
-	}
-
-	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
-	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necessária")
-	}
-
-	patients, err := h.svc.ListMyPatients(ctx, currentAccount, 100, 0)
-	if err != nil {
-		return nil, humaerror.From(err)
-	}
-
-	response := make([]patientResponse, len(patients))
-	for i, patient := range patients {
-		response[i] = patientResponseFromDomain(patient)
-	}
-	return &patientListOutput{Body: response}, nil
 }
 
 func patientResponseFromDomain(patient *profiledomain.Patient) patientResponse {

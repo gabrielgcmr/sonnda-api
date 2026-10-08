@@ -91,7 +91,7 @@ func TestAccountHTTPContractAndOnboardingBoundary(t *testing.T) {
 		t.Fatalf("DELETE /me: %d resolves=%d/%d deactivations=%d body=%s", response.Code, service.resolveCalls, resolveCalls, service.deactivateCalls, response.Body.String())
 	}
 
-	response = accountRequest(router, http.MethodGet, "/patients", "")
+	response = accountRequest(router, http.MethodGet, "/me/patients", "")
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("pending onboarding reached business route: %d %s", response.Code, response.Body.String())
 	}

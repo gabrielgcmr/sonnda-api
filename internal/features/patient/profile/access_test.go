@@ -31,7 +31,7 @@ func TestPatientOperationsStopWhenAccessIsDenied(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			accessChecker := &deniedPatientAccess{err: denied}
 			// Nil repositories ensure no read or write happens after denial.
-			svc := New(nil, nil, accessChecker)
+			svc := New(nil, accessChecker)
 			var err error
 			switch operation {
 			case "get":
@@ -79,7 +79,7 @@ func TestPatientDeletesRequireProfessionalAccount(t *testing.T) {
 	for _, operation := range []string{"soft delete", "hard delete"} {
 		t.Run(operation, func(t *testing.T) {
 			accessChecker := &deniedPatientAccess{err: errors.New("access checker should not be called")}
-			svc := New(nil, nil, accessChecker)
+			svc := New(nil, accessChecker)
 			actor := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
 
 			var err error
@@ -100,7 +100,7 @@ func TestPatientDeletesRequireProfessionalAccount(t *testing.T) {
 func TestPatientDeletesRequireAuthentication(t *testing.T) {
 	patientID := uuid.New()
 	accessChecker := &deniedPatientAccess{err: errors.New("access checker should not be called")}
-	svc := New(nil, nil, accessChecker)
+	svc := New(nil, accessChecker)
 
 	for _, operation := range []string{"soft delete", "hard delete"} {
 		t.Run(operation, func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestProfessionalWithAccessCanDeletePatient(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			repository := &deletionRepository{patient: &profiledomain.Patient{ID: patientID}}
 			accessChecker := &deniedPatientAccess{}
-			svc := New(repository, nil, accessChecker)
+			svc := New(repository, accessChecker)
 
 			var err error
 			if operation == "soft delete" {

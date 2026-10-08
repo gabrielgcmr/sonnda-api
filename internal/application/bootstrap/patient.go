@@ -29,7 +29,7 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 	accessRepo := accesspostgres.NewRepository(db)
 
 	accessChecker := patientaccess.NewChecker(patientRepo, accessRepo)
-	svc := patientprofile.New(patientRepo, accessRepo, accessChecker)
+	svc := patientprofile.New(patientRepo, accessChecker)
 	creator := patientcreation.New(patientcreationpostgres.NewRepository(db))
 	accounts := accountpostgres.New(db.Pool())
 	problemAuthorizer := authz.NewProblemAuthorizer(authz.NewPatientContextResolver(accounts, accessChecker))

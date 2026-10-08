@@ -55,13 +55,18 @@ func TestOpenAPIIncludesProfessionalActivation(t *testing.T) {
 	}
 }
 
-func TestOpenAPIKeepsBothPatientListRoutes(t *testing.T) {
+func TestOpenAPIExposesOnlyCurrentAccountPatientList(t *testing.T) {
 	spec := OpenAPI(APIInfo{})
-	for _, route := range []string{"/patients", "/me/patients"} {
-		path := spec.Paths[route]
-		if path == nil || path.Get == nil {
-			t.Fatalf("missing patient list route: %s", route)
-		}
+	patients := spec.Paths["/patients"]
+	if patients == nil || patients.Post == nil {
+		t.Fatalf("patient creation route is missing: %+v", patients)
+	}
+	if patients.Get != nil {
+		t.Fatalf("global patient listing must not be public: %+v", patients.Get)
+	}
+	currentAccountPatients := spec.Paths["/me/patients"]
+	if currentAccountPatients == nil || currentAccountPatients.Get == nil {
+		t.Fatalf("current-account patient list is missing: %+v", currentAccountPatients)
 	}
 }
 
