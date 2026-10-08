@@ -1,4 +1,6 @@
 // internal/features/account/postgres/repository_integration_test.go
+//go:build integration
+
 package accountpostgres
 
 import (

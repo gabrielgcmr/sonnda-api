@@ -1,4 +1,6 @@
 // internal/features/patient/problem/postgres/read_integration_test.go
+//go:build integration
+
 package postgres
 
 import (
