@@ -49,6 +49,8 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.4 — Caixa de entrada e exclusão
 
+**Status: concluída em código, com paginação, URL assinada limitada pela expiração, exclusão recuperável e testes unitários, HTTP e de integração PostgreSQL.**
+
 - Adicionar rotas autenticadas `GET /captures` (lista paginada, mais recentes primeiro), `GET /captures/{captureId}/file` (URL assinada por até 5 minutos, limitada pela expiração da captura) e `DELETE /captures/{captureId}`. Consultas e exclusão exigem a conta proprietária; somente capturas `available` e não expiradas podem ser listadas ou receber URL.
 - A lista retorna metadados e `expires_at`, independentemente do estado de conexão do celular. A credencial do celular não acessa essas rotas. A exclusão marca o registro, remove o objeto do Supabase Storage e conclui a remoção no banco; falha intermediária permanece recuperável por nova tentativa ou pela rotina de limpeza.
 

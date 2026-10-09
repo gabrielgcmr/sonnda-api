@@ -91,16 +91,31 @@ SET status = 'deleting', updated_at = @updated_at
 WHERE id = @id AND status <> 'deleting'
 RETURNING *;
 
+-- name: MarkOwnedCaptureDeleting :one
+UPDATE captures
+SET status = 'deleting', updated_at = @updated_at
+WHERE id = @id
+  AND account_id = @account_id
+  AND status IN ('available', 'deleting')
+RETURNING *;
+
 -- name: GetCaptureByAccount :one
 SELECT * FROM captures
 WHERE id = @id AND account_id = @account_id;
+
+-- name: GetAvailableCaptureByAccount :one
+SELECT * FROM captures
+WHERE id = @id
+  AND account_id = @account_id
+  AND status = 'available'
+  AND expires_at > @now;
 
 -- name: ListAvailableCaptures :many
 SELECT * FROM captures
 WHERE account_id = @account_id
   AND status = 'available'
   AND expires_at > @now
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: ListCaptureCleanupCandidates :many
@@ -113,6 +128,10 @@ LIMIT @page_limit;
 
 -- name: DeleteCapture :execrows
 DELETE FROM captures WHERE id = @id;
+
+-- name: DeleteOwnedCapture :execrows
+DELETE FROM captures
+WHERE id = @id AND account_id = @account_id AND status = 'deleting';
 
 -- name: DeleteExpiredCaptureSessions :execrows
 DELETE FROM capture_sessions session

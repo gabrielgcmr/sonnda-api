@@ -52,6 +52,18 @@ func (*handlerCaptureService) UploadCapture(context.Context, capture.MobileCrede
 	return nil, nil
 }
 
+func (*handlerCaptureService) ListCaptures(context.Context, uuid.UUID, capture.Pagination) (*capture.CapturePage, error) {
+	return &capture.CapturePage{}, nil
+}
+
+func (*handlerCaptureService) GetCaptureFile(context.Context, uuid.UUID, uuid.UUID) (*capture.SignedCaptureFile, error) {
+	return nil, nil
+}
+
+func (*handlerCaptureService) DeleteCapture(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
 func TestCreateSessionReturnsSecretOnceWithNoStore(t *testing.T) {
 	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
 	account := &accountdomain.Account{ID: uuid.New()}

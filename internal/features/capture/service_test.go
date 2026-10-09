@@ -51,6 +51,16 @@ type serviceRepository struct {
 	markedDeleting    bool
 	setAvailableErr   error
 	markDeletingErr   error
+	listedCaptures    []capturedomain.Capture
+	listAccount       uuid.UUID
+	listPage          Pagination
+	listNow           time.Time
+	availableByID     *capturedomain.Capture
+	ownedDeleting     *capturedomain.Capture
+	ownedAccount      uuid.UUID
+	ownedCapture      uuid.UUID
+	deleteOwnedErr    error
+	deletedOwned      bool
 }
 
 func (r *serviceRepository) WithinTransaction(ctx context.Context, fn func(Repository) error) error {
@@ -149,6 +159,44 @@ func (r *serviceRepository) MarkCaptureDeleting(_ context.Context, _ uuid.UUID, 
 	return &item, nil
 }
 
+func (r *serviceRepository) MarkOwnedCaptureDeleting(_ context.Context, accountID, captureID uuid.UUID, _ time.Time) (*capturedomain.Capture, error) {
+	r.operations = append(r.operations, "mark-owned-deleting")
+	r.ownedAccount, r.ownedCapture = accountID, captureID
+	if r.markDeletingErr != nil {
+		return nil, r.markDeletingErr
+	}
+	if r.ownedDeleting == nil {
+		return nil, ErrCaptureNotFound
+	}
+	return r.ownedDeleting, nil
+}
+
+func (r *serviceRepository) FindAvailableCapture(_ context.Context, accountID, captureID uuid.UUID, now time.Time) (*capturedomain.Capture, error) {
+	r.ownedAccount, r.ownedCapture, r.listNow = accountID, captureID, now
+	if r.availableByID == nil {
+		return nil, ErrCaptureNotFound
+	}
+	return r.availableByID, nil
+}
+
+func (r *serviceRepository) ListCaptures(_ context.Context, accountID uuid.UUID, now time.Time, page Pagination) ([]capturedomain.Capture, error) {
+	r.listAccount, r.listNow, r.listPage = accountID, now, page
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]capturedomain.Capture(nil), r.listedCaptures...), nil
+}
+
+func (r *serviceRepository) DeleteOwnedCapture(_ context.Context, accountID, captureID uuid.UUID) error {
+	r.operations = append(r.operations, "delete-owned")
+	r.ownedAccount, r.ownedCapture = accountID, captureID
+	if r.deleteOwnedErr != nil {
+		return r.deleteOwnedErr
+	}
+	r.deletedOwned = true
+	return nil
+}
+
 type captureStorageStub struct {
 	operations  *[]string
 	uploaded    []byte
@@ -156,6 +204,11 @@ type captureStorageStub struct {
 	contentType string
 	deletedURI  string
 	err         error
+	signedURL   string
+	signedURI   string
+	signedTTL   time.Duration
+	signedErr   error
+	deleteErr   error
 }
 
 func (s *captureStorageStub) ObjectURI(objectName string) (string, error) {
@@ -179,12 +232,19 @@ func (*captureStorageStub) Open(context.Context, string) (io.ReadCloser, error) 
 }
 
 func (s *captureStorageStub) Delete(_ context.Context, uri string) error {
+	if s.operations != nil {
+		*s.operations = append(*s.operations, "delete-object")
+	}
 	s.deletedURI = uri
-	return nil
+	return s.deleteErr
 }
 
-func (*captureStorageStub) GetSignedURL(context.Context, string, time.Duration) (string, error) {
-	return "", errors.New("not implemented")
+func (s *captureStorageStub) GetSignedURL(_ context.Context, uri string, expiresIn time.Duration) (string, error) {
+	s.signedURI, s.signedTTL = uri, expiresIn
+	if s.signedErr != nil {
+		return "", s.signedErr
+	}
+	return s.signedURL, nil
 }
 
 func TestCreateSessionReplacesPreviousSessionAtomicallyAndStoresOnlyHash(t *testing.T) {
@@ -474,6 +534,113 @@ func TestFinalizationFailureCompensatesUploadedObject(t *testing.T) {
 	})
 	if apperr.ErrorCodeOf(err) != apperr.RESOURCE_CONFLICT || !repository.markedDeleting || storage.deletedURI == "" {
 		t.Fatalf("finalization compensation was not attempted: err=%v deleting=%t uri=%q", err, repository.markedDeleting, storage.deletedURI)
+	}
+}
+
+func TestListCapturesReturnsPageWithoutConnectionDependency(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountID := uuid.New()
+	items := make([]capturedomain.Capture, 3)
+	for i := range items {
+		items[i] = capturedomain.Capture{ID: uuid.New(), AccountID: accountID}
+	}
+	repository := &serviceRepository{listedCaptures: items}
+	service := newService(repository, nil, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	page, err := service.ListCaptures(t.Context(), accountID, Pagination{Limit: 2, Offset: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || !page.HasMore || page.Limit != 2 || page.Offset != 4 {
+		t.Fatalf("unexpected page: %+v", page)
+	}
+	if repository.listAccount != accountID || repository.listPage.Limit != 3 || repository.listPage.Offset != 4 || !repository.listNow.Equal(now) {
+		t.Fatalf("unexpected repository list scope: account=%s page=%+v now=%s", repository.listAccount, repository.listPage, repository.listNow)
+	}
+}
+
+func TestGetCaptureFileLimitsSignedURLToCaptureExpiration(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountID, captureID := uuid.New(), uuid.New()
+	uri := "supabase://captures/account/capture.pdf"
+	item := &capturedomain.Capture{ID: captureID, AccountID: accountID, StorageURI: &uri, ExpiresAt: now.Add(2*time.Minute + 900*time.Millisecond)}
+	repository := &serviceRepository{availableByID: item}
+	storage := &captureStorageStub{signedURL: "https://storage.test/signed"}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	file, err := service.GetCaptureFile(t.Context(), accountID, captureID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storage.signedURI != uri || storage.signedTTL != 2*time.Minute {
+		t.Fatalf("unexpected signature request: uri=%q ttl=%s", storage.signedURI, storage.signedTTL)
+	}
+	if file.URL != storage.signedURL || !file.ExpiresAt.Equal(now.Add(2*time.Minute)) || file.ExpiresAt.After(item.ExpiresAt) {
+		t.Fatalf("unexpected signed file: %+v", file)
+	}
+}
+
+func TestGetCaptureFileNeverSignsLongerThanFiveMinutes(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountID, captureID := uuid.New(), uuid.New()
+	uri := "supabase://captures/account/capture.pdf"
+	repository := &serviceRepository{availableByID: &capturedomain.Capture{
+		ID: captureID, AccountID: accountID, StorageURI: &uri, ExpiresAt: now.Add(time.Hour),
+	}}
+	storage := &captureStorageStub{signedURL: "https://storage.test/signed"}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	if _, err := service.GetCaptureFile(t.Context(), accountID, captureID); err != nil {
+		t.Fatal(err)
+	}
+	if storage.signedTTL != MaxSignedURLLifetime {
+		t.Fatalf("signed URL lifetime = %s", storage.signedTTL)
+	}
+}
+
+func TestDeleteCaptureIsRecoverableAndIdempotent(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountID, captureID := uuid.New(), uuid.New()
+	uri := "supabase://captures/account/capture.pdf"
+	item := &capturedomain.Capture{ID: captureID, AccountID: accountID, StorageURI: &uri, Status: capturedomain.StatusDeleting}
+	repository := &serviceRepository{ownedDeleting: item}
+	storage := &captureStorageStub{operations: &repository.operations, deleteErr: errors.New("storage unavailable")}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	err := service.DeleteCapture(t.Context(), accountID, captureID)
+	if apperr.ErrorCodeOf(err) != apperr.INFRA_STORAGE_ERROR || repository.deletedOwned {
+		t.Fatalf("failed object deletion removed database row: err=%v deleted=%t", err, repository.deletedOwned)
+	}
+
+	storage.deleteErr = nil
+	if err := service.DeleteCapture(t.Context(), accountID, captureID); err != nil {
+		t.Fatal(err)
+	}
+	if !repository.deletedOwned || strings.Join(repository.operations[len(repository.operations)-3:], ",") != "mark-owned-deleting,delete-object,delete-owned" {
+		t.Fatalf("unexpected successful deletion: operations=%v deleted=%t", repository.operations, repository.deletedOwned)
+	}
+
+	repository.ownedDeleting = nil
+	if err := service.DeleteCapture(t.Context(), accountID, captureID); err != nil {
+		t.Fatalf("repeated deletion should be idempotent: %v", err)
+	}
+}
+
+func TestDeleteCaptureTreatsMissingStorageObjectAsDeleted(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountID, captureID := uuid.New(), uuid.New()
+	uri := "supabase://captures/account/missing.pdf"
+	repository := &serviceRepository{ownedDeleting: &capturedomain.Capture{
+		ID: captureID, AccountID: accountID, StorageURI: &uri, Status: capturedomain.StatusDeleting,
+	}}
+	storage := &captureStorageStub{deleteErr: &apperr.AppError{Kind: apperr.NOT_FOUND, Message: "arquivo não encontrado"}}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	if err := service.DeleteCapture(t.Context(), accountID, captureID); err != nil {
+		t.Fatalf("missing object should complete database deletion: %v", err)
+	}
+	if !repository.deletedOwned {
+		t.Fatal("database row was not deleted after object was already absent")
 	}
 }
 

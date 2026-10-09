@@ -18,7 +18,12 @@ import (
 	"github.com/google/uuid"
 )
 
-const DesktopPresenceWindow = time.Minute
+const (
+	DesktopPresenceWindow = time.Minute
+	MaxSignedURLLifetime  = 5 * time.Minute
+	DefaultPageLimit      = 20
+	MaxPageLimit          = 100
+)
 
 type Service interface {
 	CreateSession(ctx context.Context, accountID uuid.UUID) (*CreatedSession, error)
@@ -29,6 +34,9 @@ type Service interface {
 	AuthenticateMobile(ctx context.Context, uploadToken string) (*MobileCredential, error)
 	MobileHeartbeat(ctx context.Context, credential MobileCredential, sessionID uuid.UUID) (*SessionState, error)
 	UploadCapture(ctx context.Context, credential MobileCredential, input UploadInput) (*capturedomain.Capture, error)
+	ListCaptures(ctx context.Context, accountID uuid.UUID, page Pagination) (*CapturePage, error)
+	GetCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*SignedCaptureFile, error)
+	DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error
 }
 
 type CreatedSession struct {
@@ -64,6 +72,18 @@ type UploadInput struct {
 	File             io.ReadSeeker
 	OriginalFilename string
 	SizeBytes        int64
+}
+
+type CapturePage struct {
+	Items   []capturedomain.Capture
+	Limit   int
+	Offset  int
+	HasMore bool
+}
+
+type SignedCaptureFile struct {
+	URL       string
+	ExpiresAt time.Time
 }
 
 type pairingCodeGenerator interface {
@@ -317,6 +337,104 @@ func (s *service) UploadCapture(ctx context.Context, credential MobileCredential
 	return available, nil
 }
 
+func (s *service) ListCaptures(ctx context.Context, accountID uuid.UUID, page Pagination) (*CapturePage, error) {
+	if accountID == uuid.Nil {
+		return nil, apperr.Unauthorized("autenticação necessária")
+	}
+	if err := s.validateDependencies(); err != nil {
+		return nil, err
+	}
+	if page.Limit == 0 {
+		page.Limit = DefaultPageLimit
+	}
+	if page.Limit < 1 || page.Limit > MaxPageLimit || page.Offset < 0 {
+		return nil, apperr.Validation("paginação inválida", apperr.Violation{Field: "pagination", Reason: "invalid_range"})
+	}
+
+	items, err := s.repository.ListCaptures(ctx, accountID, s.now().UTC(), Pagination{
+		Limit: page.Limit + 1, Offset: page.Offset,
+	})
+	if err != nil {
+		return nil, mapRepositoryError("captureRepository.ListCaptures", err)
+	}
+	hasMore := len(items) > page.Limit
+	if hasMore {
+		items = items[:page.Limit]
+	}
+	return &CapturePage{Items: items, Limit: page.Limit, Offset: page.Offset, HasMore: hasMore}, nil
+}
+
+func (s *service) GetCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*SignedCaptureFile, error) {
+	if accountID == uuid.Nil {
+		return nil, apperr.Unauthorized("autenticação necessária")
+	}
+	if captureID == uuid.Nil {
+		return nil, captureNotFound(nil)
+	}
+	if err := s.validateDependencies(); err != nil {
+		return nil, err
+	}
+	if s.storage == nil {
+		return nil, apperr.Internal("armazenamento de capturas indisponível", errors.New("capture storage is not configured"))
+	}
+
+	now := s.now().UTC()
+	item, err := s.repository.FindAvailableCapture(ctx, accountID, captureID, now)
+	if err != nil {
+		return nil, mapRepositoryError("captureRepository.FindAvailableCapture", err)
+	}
+	if item.StorageURI == nil || strings.TrimSpace(*item.StorageURI) == "" {
+		return nil, apperr.Internal("arquivo da captura indisponível", errors.New("available capture has no storage URI"))
+	}
+
+	seconds := int64(item.ExpiresAt.Sub(now) / time.Second)
+	maxSeconds := int64(MaxSignedURLLifetime / time.Second)
+	if seconds > maxSeconds {
+		seconds = maxSeconds
+	}
+	if seconds <= 0 {
+		return nil, captureNotFound(errors.New("capture expires before a signed URL can be issued"))
+	}
+	lifetime := time.Duration(seconds) * time.Second
+	url, err := s.storage.GetSignedURL(ctx, *item.StorageURI, lifetime)
+	if err != nil {
+		return nil, mapStorageError("captureStorage.GetSignedURL", err)
+	}
+	return &SignedCaptureFile{URL: url, ExpiresAt: now.Add(lifetime)}, nil
+}
+
+func (s *service) DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error {
+	if accountID == uuid.Nil {
+		return apperr.Unauthorized("autenticação necessária")
+	}
+	if captureID == uuid.Nil {
+		return nil
+	}
+	if err := s.validateDependencies(); err != nil {
+		return err
+	}
+	if s.storage == nil {
+		return apperr.Internal("armazenamento de capturas indisponível", errors.New("capture storage is not configured"))
+	}
+
+	item, err := s.repository.MarkOwnedCaptureDeleting(ctx, accountID, captureID, s.now().UTC())
+	if errors.Is(err, ErrCaptureNotFound) {
+		return nil
+	}
+	if err != nil {
+		return mapRepositoryError("captureRepository.MarkOwnedCaptureDeleting", err)
+	}
+	if item.StorageURI != nil && strings.TrimSpace(*item.StorageURI) != "" {
+		if err := s.storage.Delete(ctx, *item.StorageURI); err != nil && apperr.ErrorCodeOf(err) != apperr.NOT_FOUND {
+			return mapStorageError("captureStorage.Delete", err)
+		}
+	}
+	if err := s.repository.DeleteOwnedCapture(ctx, accountID, captureID); err != nil && !errors.Is(err, ErrCaptureNotFound) {
+		return mapRepositoryError("captureRepository.DeleteOwnedCapture", err)
+	}
+	return nil
+}
+
 func (s *service) validateDependencies() error {
 	if s == nil || s.repository == nil || s.codes == nil || s.now == nil {
 		return apperr.Internal("erro inesperado", errors.New("capture service is not configured"))
@@ -399,6 +517,8 @@ func mapRepositoryError(operation string, err error) error {
 	switch {
 	case errors.Is(err, ErrSessionNotFound):
 		return &apperr.AppError{Kind: apperr.NOT_FOUND, Message: "sessão de captura não encontrada", Cause: err}
+	case errors.Is(err, ErrCaptureNotFound):
+		return captureNotFound(err)
 	case errors.Is(err, ErrStateConflict):
 		return &apperr.AppError{Kind: apperr.RESOURCE_CONFLICT, Message: "estado da sessão de captura foi alterado", Cause: err}
 	case errors.Is(err, persistence.ErrPersistenceFailure):
@@ -406,6 +526,10 @@ func mapRepositoryError(operation string, err error) error {
 	default:
 		return apperr.Internal("erro inesperado", fmt.Errorf("%s: %w", operation, err))
 	}
+}
+
+func captureNotFound(cause error) error {
+	return &apperr.AppError{Kind: apperr.NOT_FOUND, Message: "captura não encontrada", Cause: cause}
 }
 
 func mapClaimError(err error) error {

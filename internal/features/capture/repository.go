@@ -33,10 +33,13 @@ type Repository interface {
 	CreateCapture(ctx context.Context, capture capturedomain.Capture) error
 	SetCaptureAvailable(ctx context.Context, captureID uuid.UUID, storageURI string, updatedAt time.Time) (*capturedomain.Capture, error)
 	MarkCaptureDeleting(ctx context.Context, captureID uuid.UUID, updatedAt time.Time) (*capturedomain.Capture, error)
+	MarkOwnedCaptureDeleting(ctx context.Context, accountID, captureID uuid.UUID, updatedAt time.Time) (*capturedomain.Capture, error)
 	FindCapture(ctx context.Context, accountID, captureID uuid.UUID) (*capturedomain.Capture, error)
+	FindAvailableCapture(ctx context.Context, accountID, captureID uuid.UUID, now time.Time) (*capturedomain.Capture, error)
 	ListCaptures(ctx context.Context, accountID uuid.UUID, now time.Time, page Pagination) ([]capturedomain.Capture, error)
 	ListCleanupCandidates(ctx context.Context, now, uploadingCutoff time.Time, limit int) ([]capturedomain.Capture, error)
 	DeleteCapture(ctx context.Context, captureID uuid.UUID) error
+	DeleteOwnedCapture(ctx context.Context, accountID, captureID uuid.UUID) error
 	DeleteExpiredSessions(ctx context.Context, now time.Time, limit int) (int64, error)
 }
 

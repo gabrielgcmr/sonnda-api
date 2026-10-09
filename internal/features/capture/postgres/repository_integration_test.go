@@ -70,13 +70,60 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 	if err = repo.CreateCapture(ctx, item); err != nil {
 		t.Fatal(err)
 	}
-	available, err := repo.SetCaptureAvailable(ctx, item.ID, "gs://private/captures/file", now.Add(3*time.Minute))
+	available, err := repo.SetCaptureAvailable(ctx, item.ID, "supabase://captures/account/file.pdf", now.Add(3*time.Minute))
 	if err != nil || available.Status != capturedomain.StatusAvailable {
 		t.Fatalf("available capture: %+v %v", available, err)
 	}
 	items, err := repo.ListCaptures(ctx, accountID, now.Add(4*time.Minute), capture.Pagination{Limit: 20})
 	if err != nil || len(items) != 1 || items[0].ID != item.ID {
 		t.Fatalf("listed captures: %+v %v", items, err)
+	}
+	if _, err = repo.FindAvailableCapture(ctx, otherAccountID, item.ID, now.Add(4*time.Minute)); !errors.Is(err, capture.ErrCaptureNotFound) {
+		t.Fatalf("other account obtained capture: %v", err)
+	}
+	if found, findErr := repo.FindAvailableCapture(ctx, accountID, item.ID, now.Add(4*time.Minute)); findErr != nil || found.ID != item.ID {
+		t.Fatalf("owner did not obtain capture: %+v %v", found, findErr)
+	}
+
+	expiredItem, err := capturedomain.NewCapture(capturedomain.NewCaptureParams{
+		AccountID: accountID, CaptureSessionID: session.ID, OriginalFilename: "expired.pdf",
+		MIMEType: "application/pdf", SizeBytes: 128, CreatedAt: now.Add(-25 * time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.CreateCapture(ctx, expiredItem); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.SetCaptureAvailable(ctx, expiredItem.ID, "supabase://captures/account/expired.pdf", now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	items, err = repo.ListCaptures(ctx, accountID, now.Add(4*time.Minute), capture.Pagination{Limit: 20})
+	if err != nil || len(items) != 1 || items[0].ID != item.ID {
+		t.Fatalf("expired capture was listed: %+v %v", items, err)
+	}
+	if _, err = repo.FindAvailableCapture(ctx, accountID, expiredItem.ID, now.Add(4*time.Minute)); !errors.Is(err, capture.ErrCaptureNotFound) {
+		t.Fatalf("expired capture received file access: %v", err)
+	}
+
+	if _, err = repo.MarkOwnedCaptureDeleting(ctx, otherAccountID, item.ID, now.Add(5*time.Minute)); !errors.Is(err, capture.ErrCaptureNotFound) {
+		t.Fatalf("other account marked capture for deletion: %v", err)
+	}
+	deleting, err := repo.MarkOwnedCaptureDeleting(ctx, accountID, item.ID, now.Add(5*time.Minute))
+	if err != nil || deleting.Status != capturedomain.StatusDeleting {
+		t.Fatalf("owner could not mark capture for deletion: %+v %v", deleting, err)
+	}
+	if _, err = repo.MarkOwnedCaptureDeleting(ctx, accountID, item.ID, now.Add(6*time.Minute)); err != nil {
+		t.Fatalf("repeated deletion mark should be resumable: %v", err)
+	}
+	if err = repo.DeleteOwnedCapture(ctx, otherAccountID, item.ID); !errors.Is(err, capture.ErrCaptureNotFound) {
+		t.Fatalf("other account deleted capture row: %v", err)
+	}
+	if err = repo.DeleteOwnedCapture(ctx, accountID, item.ID); err != nil {
+		t.Fatalf("owner could not delete capture row: %v", err)
+	}
+	if err = repo.DeleteOwnedCapture(ctx, accountID, item.ID); !errors.Is(err, capture.ErrCaptureNotFound) {
+		t.Fatalf("repeated database deletion returned unexpected error: %v", err)
 	}
 
 	wrongOwner, err := capturedomain.NewCapture(capturedomain.NewCaptureParams{

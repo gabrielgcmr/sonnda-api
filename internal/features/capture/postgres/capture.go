@@ -48,10 +48,30 @@ func (r *Repository) MarkCaptureDeleting(ctx context.Context, captureID uuid.UUI
 	return mapCapture(row)
 }
 
+func (r *Repository) MarkOwnedCaptureDeleting(ctx context.Context, accountID, captureID uuid.UUID, updatedAt time.Time) (*capturedomain.Capture, error) {
+	row, err := r.queries.MarkOwnedCaptureDeleting(ctx, capturesqlc.MarkOwnedCaptureDeletingParams{
+		UpdatedAt: timestamp(updatedAt), ID: captureID, AccountID: accountID,
+	})
+	if err != nil {
+		return nil, resultError("mark owned capture deleting", err, capture.ErrCaptureNotFound)
+	}
+	return mapCapture(row)
+}
+
 func (r *Repository) FindCapture(ctx context.Context, accountID, captureID uuid.UUID) (*capturedomain.Capture, error) {
 	row, err := r.queries.GetCaptureByAccount(ctx, capturesqlc.GetCaptureByAccountParams{ID: captureID, AccountID: accountID})
 	if err != nil {
 		return nil, resultError("find capture", err, capture.ErrCaptureNotFound)
+	}
+	return mapCapture(row)
+}
+
+func (r *Repository) FindAvailableCapture(ctx context.Context, accountID, captureID uuid.UUID, now time.Time) (*capturedomain.Capture, error) {
+	row, err := r.queries.GetAvailableCaptureByAccount(ctx, capturesqlc.GetAvailableCaptureByAccountParams{
+		ID: captureID, AccountID: accountID, Now: timestamp(now),
+	})
+	if err != nil {
+		return nil, resultError("find available capture", err, capture.ErrCaptureNotFound)
 	}
 	return mapCapture(row)
 }
@@ -79,6 +99,13 @@ func (r *Repository) ListCleanupCandidates(ctx context.Context, now, uploadingCu
 func (r *Repository) DeleteCapture(ctx context.Context, captureID uuid.UUID) error {
 	rows, err := r.queries.DeleteCapture(ctx, captureID)
 	return exactlyOne("delete capture", rows, err, capture.ErrCaptureNotFound)
+}
+
+func (r *Repository) DeleteOwnedCapture(ctx context.Context, accountID, captureID uuid.UUID) error {
+	rows, err := r.queries.DeleteOwnedCapture(ctx, capturesqlc.DeleteOwnedCaptureParams{
+		ID: captureID, AccountID: accountID,
+	})
+	return exactlyOne("delete owned capture", rows, err, capture.ErrCaptureNotFound)
 }
 
 func (r *Repository) DeleteExpiredSessions(ctx context.Context, now time.Time, limit int) (int64, error) {

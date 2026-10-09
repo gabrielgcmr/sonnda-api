@@ -255,6 +255,57 @@ func (q *Queries) DeleteExpiredCaptureSessions(ctx context.Context, arg DeleteEx
 	return result.RowsAffected(), nil
 }
 
+const deleteOwnedCapture = `-- name: DeleteOwnedCapture :execrows
+DELETE FROM captures
+WHERE id = $1 AND account_id = $2 AND status = 'deleting'
+`
+
+type DeleteOwnedCaptureParams struct {
+	ID        uuid.UUID `json:"id"`
+	AccountID uuid.UUID `json:"account_id"`
+}
+
+func (q *Queries) DeleteOwnedCapture(ctx context.Context, arg DeleteOwnedCaptureParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOwnedCapture, arg.ID, arg.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getAvailableCaptureByAccount = `-- name: GetAvailableCaptureByAccount :one
+SELECT id, account_id, capture_session_id, storage_uri, original_filename, mime_type, size_bytes, status, expires_at, created_at, updated_at FROM captures
+WHERE id = $1
+  AND account_id = $2
+  AND status = 'available'
+  AND expires_at > $3
+`
+
+type GetAvailableCaptureByAccountParams struct {
+	ID        uuid.UUID          `json:"id"`
+	AccountID uuid.UUID          `json:"account_id"`
+	Now       pgtype.Timestamptz `json:"now"`
+}
+
+func (q *Queries) GetAvailableCaptureByAccount(ctx context.Context, arg GetAvailableCaptureByAccountParams) (Capture, error) {
+	row := q.db.QueryRow(ctx, getAvailableCaptureByAccount, arg.ID, arg.AccountID, arg.Now)
+	var i Capture
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.CaptureSessionID,
+		&i.StorageUri,
+		&i.OriginalFilename,
+		&i.MimeType,
+		&i.SizeBytes,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getCaptureByAccount = `-- name: GetCaptureByAccount :one
 SELECT id, account_id, capture_session_id, storage_uri, original_filename, mime_type, size_bytes, status, expires_at, created_at, updated_at FROM captures
 WHERE id = $1 AND account_id = $2
@@ -340,7 +391,7 @@ SELECT id, account_id, capture_session_id, storage_uri, original_filename, mime_
 WHERE account_id = $1
   AND status = 'available'
   AND expires_at > $2
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $4 OFFSET $3
 `
 
@@ -449,6 +500,40 @@ type MarkCaptureDeletingParams struct {
 
 func (q *Queries) MarkCaptureDeleting(ctx context.Context, arg MarkCaptureDeletingParams) (Capture, error) {
 	row := q.db.QueryRow(ctx, markCaptureDeleting, arg.UpdatedAt, arg.ID)
+	var i Capture
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.CaptureSessionID,
+		&i.StorageUri,
+		&i.OriginalFilename,
+		&i.MimeType,
+		&i.SizeBytes,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markOwnedCaptureDeleting = `-- name: MarkOwnedCaptureDeleting :one
+UPDATE captures
+SET status = 'deleting', updated_at = $1
+WHERE id = $2
+  AND account_id = $3
+  AND status IN ('available', 'deleting')
+RETURNING id, account_id, capture_session_id, storage_uri, original_filename, mime_type, size_bytes, status, expires_at, created_at, updated_at
+`
+
+type MarkOwnedCaptureDeletingParams struct {
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID          `json:"id"`
+	AccountID uuid.UUID          `json:"account_id"`
+}
+
+func (q *Queries) MarkOwnedCaptureDeleting(ctx context.Context, arg MarkOwnedCaptureDeletingParams) (Capture, error) {
+	row := q.db.QueryRow(ctx, markOwnedCaptureDeleting, arg.UpdatedAt, arg.ID, arg.AccountID)
 	var i Capture
 	err := row.Scan(
 		&i.ID,

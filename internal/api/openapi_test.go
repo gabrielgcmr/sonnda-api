@@ -126,6 +126,9 @@ func TestOpenAPIIncludesAuthenticatedCaptureSessionOperations(t *testing.T) {
 		spec.Paths["/capture-sessions/current"].Get,
 		spec.Paths["/capture-sessions/{sessionId}/heartbeat"].Post,
 		spec.Paths["/capture-sessions/{sessionId}"].Delete,
+		spec.Paths["/captures"].Get,
+		spec.Paths["/captures/{captureId}/file"].Get,
+		spec.Paths["/captures/{captureId}"].Delete,
 	}
 	for _, operation := range operations {
 		if operation == nil || len(operation.Security) != 1 {
@@ -147,6 +150,11 @@ func TestOpenAPIIncludesAuthenticatedCaptureSessionOperations(t *testing.T) {
 	current := referencedSchema(spec, spec.Paths["/capture-sessions/current"].Get.Responses["200"].Content["application/json"].Schema)
 	if current.Properties["pairing_code"] != nil || current.Properties["session_id"] == nil {
 		t.Fatalf("unexpected current response schema: %+v", current.Properties)
+	}
+	list := referencedSchema(spec, spec.Paths["/captures"].Get.Responses["200"].Content["application/json"].Schema)
+	items := referencedSchema(spec, list.Properties["items"].Items)
+	if items.Properties["id"] == nil || items.Properties["expires_at"] == nil || items.Properties["storage_uri"] != nil {
+		t.Fatalf("unexpected capture list item schema: %+v", items.Properties)
 	}
 }
 

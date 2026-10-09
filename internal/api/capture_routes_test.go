@@ -29,6 +29,10 @@ type captureRouteService struct {
 	claimCode     string
 	captureToken  string
 	mobileSession uuid.UUID
+	page          *capture.CapturePage
+	file          *capture.SignedCaptureFile
+	deleted       uuid.UUID
+	inboxAccount  uuid.UUID
 }
 
 func (s *captureRouteService) CreateSession(context.Context, uuid.UUID) (*capture.CreatedSession, error) {
@@ -67,6 +71,21 @@ func (s *captureRouteService) MobileHeartbeat(_ context.Context, _ capture.Mobil
 
 func (s *captureRouteService) UploadCapture(context.Context, capture.MobileCredential, capture.UploadInput) (*capturedomain.Capture, error) {
 	return s.uploaded, nil
+}
+
+func (s *captureRouteService) ListCaptures(_ context.Context, accountID uuid.UUID, _ capture.Pagination) (*capture.CapturePage, error) {
+	s.inboxAccount = accountID
+	return s.page, nil
+}
+
+func (s *captureRouteService) GetCaptureFile(_ context.Context, accountID, _ uuid.UUID) (*capture.SignedCaptureFile, error) {
+	s.inboxAccount = accountID
+	return s.file, nil
+}
+
+func (s *captureRouteService) DeleteCapture(_ context.Context, accountID, captureID uuid.UUID) error {
+	s.inboxAccount, s.deleted = accountID, captureID
+	return nil
 }
 
 func TestCaptureClaimAndMobileRoutesUseRestrictedCredential(t *testing.T) {
@@ -188,5 +207,47 @@ func TestCaptureSessionHTTPResponsesKeepPairingCodeOnlyOnCreation(t *testing.T) 
 	}
 	if _, exists := currentBody["pairing_code"]; exists {
 		t.Fatalf("pairing code leaked from current session: %s", currentResponse.Body.String())
+	}
+}
+
+func TestCaptureInboxUsesAccountScopeAndDoesNotExposeStorageURI(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fullName := "Ana Silva"
+	birthDate := time.Date(1990, 1, 2, 0, 0, 0, 0, time.UTC)
+	current, err := accountdomain.NewAccount(accountdomain.NewAccountParams{Profile: accountdomain.Profile{FullName: &fullName, BirthDate: &birthDate}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	captureID := uuid.New()
+	storageURI := "supabase://captures/private/file.pdf"
+	item := capturedomain.Capture{
+		ID: captureID, AccountID: current.ID, CaptureSessionID: uuid.New(), StorageURI: &storageURI,
+		OriginalFilename: "exam.pdf", MIMEType: "application/pdf", SizeBytes: 8,
+		Status: capturedomain.StatusAvailable, ExpiresAt: now.Add(time.Hour), CreatedAt: now,
+	}
+	service := &captureRouteService{
+		page: &capture.CapturePage{Items: []capturedomain.Capture{item}, Limit: 20},
+		file: &capture.SignedCaptureFile{URL: "https://storage.test/signed", ExpiresAt: now.Add(5 * time.Minute)},
+	}
+	router := gin.New()
+	SetupRoutes(router, &APIDependencies{
+		Auth:           authenticatedTestMiddleware(),
+		Account:        accounthttp.NewMiddleware(&routeAccountService{account: current}),
+		AccountHandler: accounthttp.NewHandler(&routeAccountService{account: current}, nil),
+		CaptureHandler: capturehttp.NewHandler(service),
+	})
+
+	listed := accountRequest(router, http.MethodGet, "/captures", "")
+	if listed.Code != http.StatusOK || bytes.Contains(listed.Body.Bytes(), []byte("storage_uri")) || bytes.Contains(listed.Body.Bytes(), []byte(storageURI)) {
+		t.Fatalf("unexpected list response: status=%d body=%s", listed.Code, listed.Body.String())
+	}
+	file := accountRequest(router, http.MethodGet, "/captures/"+captureID.String()+"/file", "")
+	if file.Code != http.StatusOK || file.Header().Get("Cache-Control") != "private, no-store" || !bytes.Contains(file.Body.Bytes(), []byte("https://storage.test/signed")) {
+		t.Fatalf("unexpected file response: status=%d cache=%q body=%s", file.Code, file.Header().Get("Cache-Control"), file.Body.String())
+	}
+	deleted := accountRequest(router, http.MethodDelete, "/captures/"+captureID.String(), "")
+	if deleted.Code != http.StatusNoContent || service.inboxAccount != current.ID || service.deleted != captureID {
+		t.Fatalf("unexpected delete response: status=%d account=%s capture=%s body=%s", deleted.Code, service.inboxAccount, service.deleted, deleted.Body.String())
 	}
 }

@@ -27,6 +27,9 @@ type captureService interface {
 	AuthenticateMobile(ctx context.Context, uploadToken string) (*capture.MobileCredential, error)
 	MobileHeartbeat(ctx context.Context, credential capture.MobileCredential, sessionID uuid.UUID) (*capture.SessionState, error)
 	UploadCapture(ctx context.Context, credential capture.MobileCredential, input capture.UploadInput) (*capturedomain.Capture, error)
+	ListCaptures(ctx context.Context, accountID uuid.UUID, page capture.Pagination) (*capture.CapturePage, error)
+	GetCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*capture.SignedCaptureFile, error)
+	DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error
 }
 
 type Handler struct {
@@ -97,6 +100,7 @@ func (h *Handler) RegisterHumaRoutes(api huma.API, security []map[string][]strin
 		Summary: "Revogar sessão de captura", Tags: []string{"Capture sessions"}, DefaultStatus: http.StatusNoContent,
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError}, Security: security,
 	}, h.revokeSession)
+	h.registerInboxRoutes(api, security)
 }
 
 func (h *Handler) createSession(ctx context.Context, _ *struct{}) (*createSessionOutput, error) {
