@@ -58,7 +58,7 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
-**Status: implementação inicial concluída; reserva antecipada da URI, proteção contra lotes sem progresso e agendamento horário pelo Supabase Cron concluídos. A subetapa 1.5.2 permanece pendente e a 1.5.3 está parcialmente concluída.**
+**Status: implementação inicial concluída; reserva antecipada da URI, proteção contra lotes sem progresso, código de saída do CLI e agendamento horário pelo Supabase Cron concluídos. A subetapa 1.5.3 está parcialmente concluída.**
 
 - Criar um comando e um endpoint interno de limpeza. O Supabase Cron chama o endpoint de hora em hora. A limpeza percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
@@ -80,7 +80,7 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 #### 1.5.2 — Falha parcial encerra o comando com erro
 
-**Status: pendente.**
+**Status: concluída em código e coberta por testes unitários.**
 
 O serviço devolve o relatório sem erro quando há falhas por captura. `POST /internal/jobs/cleanup-captures` já responde 500 nesse caso. O CLI em `cmd/cleanup-captures` só olha o erro fatal, registra aviso e termina com código 0.
 

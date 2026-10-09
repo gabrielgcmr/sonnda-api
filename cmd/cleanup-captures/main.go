@@ -18,7 +18,16 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/kernel/observability"
 )
 
+const (
+	exitSuccess = 0
+	exitFailure = 1
+)
+
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	batchSize := flag.Int("batch-size", capture.DefaultCleanupBatchSize, "Tamanho do lote para limpeza de capturas e sessões")
 	uploadingTimeout := flag.Duration("uploading-timeout", capture.DefaultUploadingCutoffDuration, "Janela para considerar um upload como travado")
 	timeout := flag.Duration("timeout", 10*time.Minute, "Tempo limite total para execução do job")
@@ -26,7 +35,8 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("falha ao carregar configuração: %v", err)
+		log.Printf("falha ao carregar configuração: %v", err)
+		return exitFailure
 	}
 
 	appLogger := observability.New(observability.Config{
@@ -50,7 +60,7 @@ func main() {
 	dbClient, err := postgress.NewClient(postgress.SupabaseConfig(cfg.Database.URL))
 	if err != nil {
 		slog.Error("falha ao conectar no banco de dados", "error", err)
-		os.Exit(1)
+		return exitFailure
 	}
 	defer dbClient.Close()
 
@@ -60,7 +70,7 @@ func main() {
 	})
 	if err != nil {
 		slog.Error("falha ao inicializar cliente do Supabase Storage", "error", err)
-		os.Exit(1)
+		return exitFailure
 	}
 
 	captureStorage, err := supabaseStorageClient.ForBucket(filestorage.BucketConfig{
@@ -69,7 +79,7 @@ func main() {
 	})
 	if err != nil {
 		slog.Error("falha ao configurar bucket de capturas", "error", err)
-		os.Exit(1)
+		return exitFailure
 	}
 
 	repository := capturepostgres.NewRepository(dbClient)
@@ -82,19 +92,35 @@ func main() {
 	})
 
 	duration := time.Since(startTime)
+	exitCode := cleanupExitCode(report, err)
 
 	if err != nil {
 		slog.Error("falha fatal na execução do job de limpeza",
 			"error", err,
 			"duration", duration,
 		)
-		os.Exit(1)
+		return exitCode
 	}
 
-	if len(report.Errors) > 0 {
-		for _, warnErr := range report.Errors {
-			slog.Warn("aviso durante limpeza de captura", "error", warnErr)
+	if report == nil {
+		slog.Error("job de limpeza não retornou relatório", "duration", duration)
+		return exitCode
+	}
+
+	if exitCode != exitSuccess {
+		for _, cleanupErr := range report.Errors {
+			slog.Error("falha durante limpeza de captura", "error", cleanupErr)
 		}
+		slog.Error("job de limpeza de capturas concluído com falhas",
+			slog.Int("captures_processed", report.CapturesProcessed),
+			slog.Int("captures_deleted", report.CapturesDeleted),
+			slog.Int("storage_deleted", report.StorageDeleted),
+			slog.Int("sessions_deleted", report.SessionsDeleted),
+			slog.Int("error_count", len(report.Errors)),
+			slog.Duration("duration", duration),
+		)
+		fmt.Fprintf(os.Stderr, "Limpeza incompleta em %v: %d erro(s)\n", duration, len(report.Errors))
+		return exitCode
 	}
 
 	slog.Info("job de limpeza de capturas concluído com sucesso",
@@ -108,5 +134,12 @@ func main() {
 
 	fmt.Printf("Limpeza concluída em %v: %d capturas processadas, %d excluídas, %d no storage, %d sessões removidas\n",
 		duration, report.CapturesProcessed, report.CapturesDeleted, report.StorageDeleted, report.SessionsDeleted)
+	return exitSuccess
 }
 
+func cleanupExitCode(report *capture.CleanupReport, err error) int {
+	if err != nil || report == nil || len(report.Errors) > 0 {
+		return exitFailure
+	}
+	return exitSuccess
+}
