@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
@@ -26,23 +27,27 @@ type PDFExtractor interface {
 }
 
 type Drafts struct {
-	repo      DraftRepository
-	extractor PDFExtractor
-	storage   FileStorageService
+	repo       DraftRepository
+	extractor  PDFExtractor
+	storage    FileStorageService
+	authorizer Authorizer
 }
 
 type CreateDraftInput struct {
-	PatientID, UserID   uuid.UUID
+	PatientID           uuid.UUID
 	LocalPath, Filename string
 }
 
-func NewDrafts(repo DraftRepository, extractor PDFExtractor, storage FileStorageService) *Drafts {
-	return &Drafts{repo: repo, extractor: extractor, storage: storage}
+func NewDrafts(repo DraftRepository, extractor PDFExtractor, storage FileStorageService, authorizer Authorizer) *Drafts {
+	return &Drafts{repo: repo, extractor: extractor, storage: storage, authorizer: authorizer}
 }
 
-func (s *Drafts) Create(ctx context.Context, input CreateDraftInput) (*ExamDocumentOutput, error) {
-	if input.PatientID == uuid.Nil || input.UserID == uuid.Nil {
-		return nil, apperr.Validation("Paciente e usuário são obrigatórios.")
+func (s *Drafts) Create(ctx context.Context, currentAccount *accountdomain.Account, input CreateDraftInput) (*ExamDocumentOutput, error) {
+	if input.PatientID == uuid.Nil {
+		return nil, apperr.Validation("Paciente é obrigatório.")
+	}
+	if err := s.authorizer.AuthorizePatient(ctx, currentAccount, input.PatientID, UploadDocument); err != nil {
+		return nil, err
 	}
 	result, err := s.extractor.ExtractPDF(ctx, input.LocalPath, input.Filename)
 	if err != nil {
@@ -64,7 +69,7 @@ func (s *Drafts) Create(ctx context.Context, input CreateDraftInput) (*ExamDocum
 	if err != nil {
 		return nil, apperr.Internal("Falha ao armazenar o PDF.", err)
 	}
-	document, err := documents.NewExamDocument(input.PatientID, input.UserID, uri, input.Filename, "application/pdf")
+	document, err := documents.NewExamDocument(input.PatientID, currentAccount.ID, uri, input.Filename, "application/pdf")
 	if err == nil {
 		status, kind := "pending", documents.ExamTypeLaboratory
 		method := "pdf_text_raw"
@@ -81,7 +86,14 @@ func (s *Drafts) Create(ctx context.Context, input CreateDraftInput) (*ExamDocum
 	return mapDomainDocumentToOutput(document), nil
 }
 
-func (s *Drafts) Extraction(ctx context.Context, id uuid.UUID) (*extraction.Result, error) {
+func (s *Drafts) Extraction(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*extraction.Result, error) {
+	document, err := s.authorizer.AuthorizeDocument(ctx, currentAccount, id, ReadExtraction)
+	if err != nil {
+		return nil, err
+	}
+	if document == nil {
+		return nil, apperr.NotFound("Documento não encontrado.")
+	}
 	data, err := s.repo.GetExtraction(ctx, id)
 	if err != nil {
 		return nil, draftError(err)
@@ -96,7 +108,14 @@ func (s *Drafts) Extraction(ctx context.Context, id uuid.UUID) (*extraction.Resu
 	return result, nil
 }
 
-func (s *Drafts) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *Drafts) Delete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
+	document, err := s.authorizer.AuthorizeDocument(ctx, currentAccount, id, DiscardDocument)
+	if err != nil {
+		return err
+	}
+	if document == nil {
+		return apperr.NotFound("Documento não encontrado.")
+	}
 	doc, err := s.repo.BeginDelete(ctx, id)
 	if err != nil {
 		return draftError(err)

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	confirmation "github.com/gabrielgcmr/sonnda/internal/application/usecase/labdocumentconfirmation"
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	processing "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
@@ -25,6 +26,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+type confirmationAuthorizer struct {
+	processing.Authorizer
+	documents processing.DocumentRepository
+}
+
+func (a confirmationAuthorizer) AuthorizeDocument(ctx context.Context, _ *accountdomain.Account, id uuid.UUID, _ processing.Action) (*documents.ExamDocument, error) {
+	return a.documents.FindByID(ctx, id)
+}
 
 func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.UUID, uuid.UUID) {
 	t.Helper()
@@ -247,8 +257,10 @@ func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	if err = repo.CreateDraft(context.Background(), doc, data); err != nil {
 		t.Fatal(err)
 	}
-	service := confirmation.New(processing.New(nil, repo.documents), processing.NewDrafts(repo, nil, nil), repo, labpostgres.NewRepository(client))
-	saved, err := service.Confirm(context.Background(), doc.ID, user)
+	authorizer := confirmationAuthorizer{documents: repo.documents}
+	service := confirmation.New(authorizer, repo, labpostgres.NewRepository(client))
+	account := &accountdomain.Account{ID: user, AccountType: accountdomain.AccountTypeBasicCare}
+	saved, err := service.Confirm(context.Background(), account, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +269,7 @@ func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	if *item.ResultValue != value || *item.ResultUnit != unit || *item.ReferenceText != reference || saved.Panels[0].CollectedAt.UTC().Format("2006-01-02") != date || saved.ExamDocumentID == nil {
 		t.Fatalf("confirmation changed reviewed values: %+v", saved)
 	}
-	again, err := service.Confirm(context.Background(), doc.ID, user)
+	again, err := service.Confirm(context.Background(), account, doc.ID)
 	if err != nil || again.ID != saved.ID {
 		t.Fatalf("retry changed report: %v", err)
 	}

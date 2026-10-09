@@ -10,28 +10,28 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
 
 type draftService interface {
-	Create(context.Context, documents.CreateDraftInput) (*documents.ExamDocumentOutput, error)
-	Extraction(context.Context, uuid.UUID) (*extraction.Result, error)
-	Delete(context.Context, uuid.UUID) error
+	Create(context.Context, *accountdomain.Account, documents.CreateDraftInput) (*documents.ExamDocumentOutput, error)
+	Extraction(context.Context, *accountdomain.Account, uuid.UUID) (*extraction.Result, error)
+	Delete(context.Context, *accountdomain.Account, uuid.UUID) error
 }
 type confirmationService interface {
-	Confirm(context.Context, uuid.UUID, uuid.UUID) (*laboratory.LabReportOutput, error)
+	Confirm(context.Context, *accountdomain.Account, uuid.UUID) (*laboratory.LabReportOutput, error)
 }
 type ExamsHandler struct {
-	svc           documents.Service
-	drafts        draftService
-	confirmer     confirmationService
-	storage       documentprocessing.FileStorageService
-	accessChecker patientaccess.Checker
+	svc       documents.Service
+	drafts    draftService
+	confirmer confirmationService
+	storage   documentprocessing.FileStorageService
 }
 
 const examDocumentFileURLExpirationMinutes = 15
@@ -81,9 +81,8 @@ func NewExams(
 	drafts draftService,
 	confirmer confirmationService,
 	storageClient documentprocessing.FileStorageService,
-	accessChecker patientaccess.Checker,
 ) *ExamsHandler {
-	return &ExamsHandler{svc: svc, drafts: drafts, confirmer: confirmer, storage: storageClient, accessChecker: accessChecker}
+	return &ExamsHandler{svc: svc, drafts: drafts, confirmer: confirmer, storage: storageClient}
 }
 
 // RegisterHumaRoutes registers the supported exam-document operations.
@@ -145,12 +144,9 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 func (h *ExamsHandler) listExamDocuments(ctx context.Context, input *listExamDocumentsInput) (*listExamDocumentsOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
-		return nil, humaerror.From(err)
-	}
-	list, err := h.svc.ListByPatient(ctx, input.PatientID, input.Limit, input.Offset)
+	list, err := h.svc.ListByPatient(ctx, currentAccount, input.PatientID, input.Limit, input.Offset)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -160,12 +156,9 @@ func (h *ExamsHandler) listExamDocuments(ctx context.Context, input *listExamDoc
 func (h *ExamsHandler) listExamDocumentTexts(ctx context.Context, input *listExamDocumentsInput) (*listExamDocumentTextsOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
-		return nil, humaerror.From(err)
-	}
-	list, err := h.svc.ListDocumentTextsByPatient(ctx, input.PatientID, input.Limit, input.Offset)
+	list, err := h.svc.ListDocumentTextsByPatient(ctx, currentAccount, input.PatientID, input.Limit, input.Offset)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -201,12 +194,8 @@ func (h *ExamsHandler) getExamDocumentFile(ctx context.Context, input *examDocum
 func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExamDocumentInput) (*examDocumentOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
-		return nil, humaerror.From(err)
-	}
-
 	fileHeaders := input.RawBody.Form.File["file"]
 	if len(fileHeaders) != 1 {
 		return nil, huma.Error422UnprocessableEntity("arquivo é obrigatório")
@@ -216,7 +205,7 @@ func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExam
 		return nil, humaerror.From(err)
 	}
 	defer os.Remove(path)
-	document, err := h.drafts.Create(ctx, documents.CreateDraftInput{PatientID: input.PatientID, UserID: currentAccount.ID, LocalPath: path, Filename: fileHeaders[0].Filename})
+	document, err := h.drafts.Create(ctx, currentAccount, documents.CreateDraftInput{PatientID: input.PatientID, LocalPath: path, Filename: fileHeaders[0].Filename})
 
 	if err != nil {
 		return nil, humaerror.From(err)
@@ -227,17 +216,14 @@ func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExam
 func (h *ExamsHandler) findAccessibleDocument(ctx context.Context, documentID uuid.UUID) (*documents.ExamDocumentOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	document, err := h.svc.FindByID(ctx, documentID)
+	document, err := h.svc.FindByID(ctx, currentAccount, documentID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
 	if document == nil {
 		return nil, huma.Error404NotFound("documento não encontrado")
-	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, document.PatientID); err != nil {
-		return nil, humaerror.From(err)
 	}
 	return document, nil
 }

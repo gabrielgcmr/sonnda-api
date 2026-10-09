@@ -11,19 +11,19 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	"github.com/google/uuid"
 
-	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
 type labService interface {
-	List(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]laboratory.LabReportSummaryOutput, error)
-	ListFull(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]*laboratory.LabReportOutput, error)
-	FindByID(ctx context.Context, reportID uuid.UUID) (*laboratory.LabReportOutput, error)
+	List(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]laboratory.LabReportSummaryOutput, error)
+	ListFull(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]*laboratory.LabReportOutput, error)
+	FindByID(ctx context.Context, currentAccount *accountdomain.Account, reportID uuid.UUID) (*laboratory.LabReportOutput, error)
 }
 
 type Handler struct {
-	svc           labService
-	accessChecker patientaccess.Checker
+	svc labService
 }
 
 type listLabReportsInput struct {
@@ -46,8 +46,8 @@ type labReportOutput struct {
 	Body laboratory.LabReportOutput
 }
 
-func NewHandler(svc labService, accessChecker patientaccess.Checker) *Handler {
-	return &Handler{svc: svc, accessChecker: accessChecker}
+func NewHandler(svc labService) *Handler {
+	return &Handler{svc: svc}
 }
 
 // RegisterHumaRoutes registers the laboratory-report operations.
@@ -76,19 +76,16 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 func (h *Handler) listLabReports(ctx context.Context, input *listLabReportsInput) (*listLabReportsOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
-	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, input.PatientID); err != nil {
-		return nil, humaerror.From(err)
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
 	if shouldReturnFullLabsFor(input.Expand, input.Include) {
-		list, err := h.svc.ListFull(ctx, input.PatientID, input.Limit, input.Offset)
+		list, err := h.svc.ListFull(ctx, currentAccount, input.PatientID, input.Limit, input.Offset)
 		if err != nil {
 			return nil, humaerror.From(err)
 		}
 		return &listLabReportsOutput{Body: list}, nil
 	}
-	list, err := h.svc.List(ctx, input.PatientID, input.Limit, input.Offset)
+	list, err := h.svc.List(ctx, currentAccount, input.PatientID, input.Limit, input.Offset)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -98,17 +95,14 @@ func (h *Handler) listLabReports(ctx context.Context, input *listLabReportsInput
 func (h *Handler) getLabReport(ctx context.Context, input *labReportInput) (*labReportOutput, error) {
 	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	report, err := h.svc.FindByID(ctx, input.LabReportID)
+	report, err := h.svc.FindByID(ctx, currentAccount, input.LabReportID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
 	if report == nil {
 		return nil, huma.Error404NotFound("laudo não encontrado")
-	}
-	if err := h.accessChecker.RequireAccess(ctx, currentAccount.ID, report.PatientID); err != nil {
-		return nil, humaerror.From(err)
 	}
 	return &labReportOutput{Body: *report}, nil
 }

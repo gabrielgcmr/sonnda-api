@@ -26,12 +26,15 @@ type ExamsModule struct {
 func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor, storage documentprocessing.FileStorageService, config config.OCRConfig) *ExamsModule {
 	patients := patientpostgres.NewRepository(db)
 	labs := labpostgres.NewRepository(db)
-	service := documents.New(patients, documentpostgres.NewDocumentRepository(db))
+	documentRepo := documentpostgres.NewDocumentRepository(db)
+	access := patientaccess.NewChecker(patients, accesspostgres.NewRepository(db))
+	authorizer := documents.NewAuthorizer(documentRepo, access)
+	service := documents.New(documentRepo, authorizer)
 	repo := documentpostgres.NewDraftRepository(db, labs)
 	reader := textinfra.NewCommandExtractorWithOptions(textinfra.CommandExtractorOptions{Timeout: config.Timeout, RequireUsableText: true})
 	extractor := extraction.New(reader, lab)
-	drafts := documents.NewDrafts(repo, extractor, storage)
-	confirmer := labdocumentconfirmation.New(service, drafts, repo, labs)
-	access := patientaccess.NewChecker(patients, accesspostgres.NewRepository(db))
-	return &ExamsModule{Handler: documenthttp.NewExams(service, drafts, confirmer, storage, access), StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(extractor)}
+	drafts := documents.NewDrafts(repo, extractor, storage, authorizer)
+	confirmer := labdocumentconfirmation.New(authorizer, repo, labs)
+	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
+	return &ExamsModule{Handler: documenthttp.NewExams(service, drafts, confirmer, storage), StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone)}
 }

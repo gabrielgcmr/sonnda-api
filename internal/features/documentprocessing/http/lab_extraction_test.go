@@ -17,12 +17,23 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
+	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
 	domaintext "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/textextraction"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+type allowStandaloneAuthorizer struct{ documents.Authorizer }
+
+func (allowStandaloneAuthorizer) AuthorizeStandalone(*accountdomain.Account, documents.Action) error {
+	return nil
+}
+
+func authorizedStandalone(extractor documents.StandaloneLabExtractor) *documents.StandaloneLabExtraction {
+	return documents.NewStandaloneLabExtraction(extractor, allowStandaloneAuthorizer{})
+}
 
 type standaloneTextExtractorStub struct{ path string }
 
@@ -61,7 +72,7 @@ func TestStandaloneLabExtractionDiscardsPDFAndReturnsStructuredResult(t *testing
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
-	NewStandaloneLabExtraction(extraction.New(textExtractor, labExtractor)).RegisterHumaRoutes(api, nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(textExtractor, labExtractor))).RegisterHumaRoutes(api, nil)
 
 	body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
@@ -91,7 +102,7 @@ func TestStandaloneLabExtractionRejectsNonPDF(t *testing.T) {
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
-	NewStandaloneLabExtraction(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{})).RegisterHumaRoutes(api, nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{}))).RegisterHumaRoutes(api, nil)
 	body, contentType := standaloneLabMultipart(t, "exam.txt", "text/plain", []byte("not a PDF"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 	request.Header.Set("Content-Type", contentType)
@@ -109,7 +120,7 @@ func TestStandaloneExtractionFailureStillRemovesPDF(t *testing.T) {
 	router.Use(func(c *gin.Context) {
 		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 	})
-	NewStandaloneLabExtraction(extraction.New(reader, provider)).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(reader, provider))).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 	body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 	request.Header.Set("Content-Type", contentType)
@@ -138,7 +149,7 @@ func TestStandalonePDFValidation(t *testing.T) {
 			router.Use(func(c *gin.Context) {
 				c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 			})
-			NewStandaloneLabExtraction(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{})).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+			NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{}))).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 			body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", tc.content)
 			request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 			request.Header.Set("Content-Type", contentType)
@@ -181,7 +192,7 @@ func TestStandaloneLabExtractionUsesInjectedService(t *testing.T) {
 		return &want, nil
 	})
 	router := gin.New()
-	NewStandaloneLabExtraction(extractor).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extractor)).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 	body, contentType := standaloneLabMultipart(t, "injected.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body).WithContext(requestContext)
 	request.Header.Set("Content-Type", contentType)

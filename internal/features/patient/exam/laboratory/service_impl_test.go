@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	labs "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/domain"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
@@ -49,6 +50,22 @@ type fakeLabsRepo struct {
 	listErr error
 }
 
+type fakeLaboratoryAuthorizer struct {
+	err error
+}
+
+func (a *fakeLaboratoryAuthorizer) AuthorizePatient(context.Context, *accountdomain.Account, uuid.UUID, Action) error {
+	return a.err
+}
+
+func (a *fakeLaboratoryAuthorizer) AuthorizeReport(context.Context, *accountdomain.Account, uuid.UUID, Action) (*labs.LabReport, error) {
+	return nil, a.err
+}
+
+func laboratoryTestAccount() *accountdomain.Account {
+	return &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
+}
+
 func (r *fakeLabsRepo) Create(ctx context.Context, report *labs.LabReport) error { panic("unused") }
 func (r *fakeLabsRepo) AttachDocument(ctx context.Context, reportID, patientID, documentID uuid.UUID) error {
 	panic("unused")
@@ -76,9 +93,9 @@ func (r *fakeLabsRepo) ListObservationTimelineByPatientAndParameter(
 }
 
 func TestList_InvalidPatientID_ReturnsValidationFailed(t *testing.T) {
-	svc := New(&fakePatientRepo{}, &fakeLabsRepo{})
+	svc := New(&fakeLabsRepo{}, &fakeLaboratoryAuthorizer{})
 
-	_, err := svc.List(context.Background(), uuid.Nil, 10, 0)
+	_, err := svc.List(context.Background(), laboratoryTestAccount(), uuid.Nil, 10, 0)
 
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) {
@@ -90,9 +107,9 @@ func TestList_InvalidPatientID_ReturnsValidationFailed(t *testing.T) {
 }
 
 func TestList_PatientNotFound_ReturnsNotFound(t *testing.T) {
-	svc := New(&fakePatientRepo{findByIDRes: nil}, &fakeLabsRepo{})
+	svc := New(&fakeLabsRepo{}, &fakeLaboratoryAuthorizer{err: patientNotFound()})
 
-	_, err := svc.List(context.Background(), uuid.Must(uuid.NewV7()), 10, 0)
+	_, err := svc.List(context.Background(), laboratoryTestAccount(), uuid.Must(uuid.NewV7()), 10, 0)
 
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) {
@@ -105,9 +122,9 @@ func TestList_PatientNotFound_ReturnsNotFound(t *testing.T) {
 
 func TestList_PatientRepoError_ReturnsInfraDatabaseError(t *testing.T) {
 	sentinel := errors.New("db down")
-	svc := New(&fakePatientRepo{findByIDErr: errors.Join(persistence.ErrPersistenceFailure, sentinel)}, &fakeLabsRepo{})
+	svc := New(&fakeLabsRepo{}, &fakeLaboratoryAuthorizer{err: mapRepoError("patient.find_by_id", errors.Join(persistence.ErrPersistenceFailure, sentinel))})
 
-	_, err := svc.List(context.Background(), uuid.Must(uuid.NewV7()), 10, 0)
+	_, err := svc.List(context.Background(), laboratoryTestAccount(), uuid.Must(uuid.NewV7()), 10, 0)
 
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) {
@@ -120,11 +137,11 @@ func TestList_PatientRepoError_ReturnsInfraDatabaseError(t *testing.T) {
 
 func TestList_LabsRepoError_ReturnsInfraDatabaseError(t *testing.T) {
 	svc := New(
-		&fakePatientRepo{findByIDRes: &profiledomain.Patient{ID: uuid.Must(uuid.NewV7())}},
 		&fakeLabsRepo{listErr: errors.New("db down")},
+		&fakeLaboratoryAuthorizer{},
 	)
 
-	_, err := svc.List(context.Background(), uuid.Must(uuid.NewV7()), 10, 0)
+	_, err := svc.List(context.Background(), laboratoryTestAccount(), uuid.Must(uuid.NewV7()), 10, 0)
 
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) {

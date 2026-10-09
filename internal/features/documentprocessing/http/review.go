@@ -10,6 +10,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
 type extractionOutput struct{ Body extraction.Result }
@@ -22,10 +23,11 @@ func (h *ExamsHandler) registerReviewRoutes(api huma.API, security []map[string]
 }
 
 func (h *ExamsHandler) getExtraction(ctx context.Context, input *examDocumentInput) (*extractionOutput, error) {
-	if _, err := h.findAccessibleDocument(ctx, input.DocumentID); err != nil {
-		return nil, err
+	user, ok := helpers.GetCurrentAccountFromContext(ctx)
+	if !ok {
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	result, err := h.drafts.Extraction(ctx, input.DocumentID)
+	result, err := h.drafts.Extraction(ctx, user, input.DocumentID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -33,14 +35,11 @@ func (h *ExamsHandler) getExtraction(ctx context.Context, input *examDocumentInp
 }
 
 func (h *ExamsHandler) confirm(ctx context.Context, input *examDocumentInput) (*confirmationOutput, error) {
-	if _, err := h.findAccessibleDocument(ctx, input.DocumentID); err != nil {
-		return nil, err
-	}
 	user, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	report, err := h.confirmer.Confirm(ctx, input.DocumentID, user.ID)
+	report, err := h.confirmer.Confirm(ctx, user, input.DocumentID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -48,11 +47,11 @@ func (h *ExamsHandler) confirm(ctx context.Context, input *examDocumentInput) (*
 }
 
 func (h *ExamsHandler) discard(ctx context.Context, input *examDocumentInput) (*struct{}, error) {
-	// A missing resource remains 404, allowing clients to treat repeated deletion as complete.
-	if _, err := h.findAccessibleDocument(ctx, input.DocumentID); err != nil {
-		return nil, err
+	user, ok := helpers.GetCurrentAccountFromContext(ctx)
+	if !ok {
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
-	if err := h.drafts.Delete(ctx, input.DocumentID); err != nil {
+	if err := h.drafts.Delete(ctx, user, input.DocumentID); err != nil {
 		return nil, humaerror.From(err)
 	}
 	return nil, nil
