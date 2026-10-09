@@ -118,3 +118,34 @@ func TestOpenAPIIncludesAuthenticatedProblemOperations(t *testing.T) {
 		t.Fatalf("merge cid11 must accept explicit null: %+v", mergeRequest.Properties["cid11"])
 	}
 }
+
+func TestOpenAPIIncludesAuthenticatedCaptureSessionOperations(t *testing.T) {
+	spec := OpenAPI(APIInfo{})
+	operations := []*huma.Operation{
+		spec.Paths["/capture-sessions"].Post,
+		spec.Paths["/capture-sessions/current"].Get,
+		spec.Paths["/capture-sessions/{sessionId}/heartbeat"].Post,
+		spec.Paths["/capture-sessions/{sessionId}"].Delete,
+	}
+	for _, operation := range operations {
+		if operation == nil || len(operation.Security) != 1 {
+			t.Fatalf("missing authenticated capture operation: %+v", operation)
+		}
+		if _, ok := operation.Security[0][bearerAuthScheme]; !ok {
+			t.Fatal("missing bearer security")
+		}
+	}
+	create := spec.Paths["/capture-sessions"].Post
+	if create.Responses["201"] == nil {
+		t.Fatal("capture session creation must document 201")
+	}
+	response := referencedSchema(spec, create.Responses["201"].Content["application/json"].Schema)
+	if response.Properties["pairing_code"] == nil || response.Properties["session_id"] == nil ||
+		response.Properties["pairing_code_hash"] != nil || response.Properties["upload_token_hash"] != nil {
+		t.Fatalf("unexpected create response schema: %+v", response.Properties)
+	}
+	current := referencedSchema(spec, spec.Paths["/capture-sessions/current"].Get.Responses["200"].Content["application/json"].Schema)
+	if current.Properties["pairing_code"] != nil || current.Properties["session_id"] == nil {
+		t.Fatalf("unexpected current response schema: %+v", current.Properties)
+	}
+}

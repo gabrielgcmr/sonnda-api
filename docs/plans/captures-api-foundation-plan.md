@@ -28,6 +28,8 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.2 — Sessão do computador e código de pareamento
 
+**Status: concluída em código e validada com testes unitários, de contrato HTTP e de integração em PostgreSQL local.**
+
 - Adicionar rotas Huma protegidas pelo Supabase Bearer e pelo onboarding concluído: `POST /capture-sessions` cria uma sessão e devolve `session_id`, código para o QR e sua expiração; `GET /capture-sessions/current` devolve o estado atual; `POST /capture-sessions/{sessionId}/heartbeat` atualiza a presença; `DELETE /capture-sessions/{sessionId}` revoga a sessão.
 - Gerar código aleatório de alta entropia, armazenar somente seu hash e aceitá-lo uma vez por até **5 minutos**. Criar nova sessão revoga a anterior da mesma conta de forma transacional. O código aparece somente na resposta de criação, com `Cache-Control: no-store`, e não entra em logs.
 - O frontend enviará heartbeat a cada **20 segundos** enquanto a área autenticada estiver aberta. A API considera o computador presente apenas se o último heartbeat tiver no máximo **60 segundos**. Revogação impede novos envios imediatamente; ausência de presença os bloqueia até que ela seja restabelecida.

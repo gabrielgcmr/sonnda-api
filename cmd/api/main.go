@@ -134,6 +134,7 @@ func main() {
 			Auth:                           authMiddleware,
 			Account:                        modules.Account.Middleware,
 			AccountHandler:                 modules.Account.Handler,
+			CaptureHandler:                 modules.Capture.Handler,
 			PatientAccessHandler:           modules.PatientAccess.Handler,
 			PatientCreationHandler:         modules.Patient.CreationHandler,
 			PatientHandler:                 modules.Patient.ProfileHandler,

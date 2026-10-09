@@ -11,6 +11,7 @@ import (
 
 type Modules struct {
 	Account       *AccountModule
+	Capture       *CaptureModule
 	Patient       *PatientModule
 	PatientAccess *PatientAccessModule
 	Labs          *LabsModule
@@ -27,6 +28,7 @@ func NewModules(
 ) *Modules {
 	return &Modules{
 		Account:       NewAccountModule(dbClient, redisClient, activationConfig),
+		Capture:       NewCaptureModule(dbClient),
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),

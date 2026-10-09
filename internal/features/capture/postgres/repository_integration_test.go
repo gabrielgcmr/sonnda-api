@@ -103,6 +103,61 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 	if err != nil || current.ID != replacement.ID {
 		t.Fatalf("current session: %+v %v", current, err)
 	}
+	if err = repo.TouchDesktop(ctx, replacement.ID, otherAccountID, now.Add(6*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+		t.Fatalf("other account heartbeat error = %v", err)
+	}
+	if err = repo.RevokeSession(ctx, replacement.ID, otherAccountID, now.Add(6*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+		t.Fatalf("other account revocation error = %v", err)
+	}
+	current, err = repo.FindCurrentSession(ctx, accountID)
+	if err != nil || current.ID != replacement.ID || current.RevokedAt != nil {
+		t.Fatalf("other account changed session: %+v %v", current, err)
+	}
+
+	replacementClaim, err := capturedomain.NewSessionClaim(hashWithByte(5), now.Add(6*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.ClaimSession(ctx, replacement.PairingCodeHash, replacementClaim, now.Add(4*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.AuthenticateUpload(ctx, replacement.ID, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+		t.Fatalf("upload with stale desktop presence error = %v", err)
+	}
+	if err = repo.TouchDesktop(ctx, replacement.ID, accountID, now.Add(7*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.AuthenticateUpload(ctx, replacement.ID, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); err != nil {
+		t.Fatalf("upload after restored desktop presence: %v", err)
+	}
+	if _, err = repo.AuthenticateUpload(ctx, session.ID, claimed.UploadTokenHash, now.Add(7*time.Minute), now.Add(4*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+		t.Fatalf("upload after session replacement error = %v", err)
+	}
+	reusedClaim, err := capturedomain.NewSessionClaim(hashWithByte(6), now.Add(7*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.ClaimSession(ctx, replacement.PairingCodeHash, reusedClaim, now.Add(4*time.Minute)); !errors.Is(err, capture.ErrStateConflict) {
+		t.Fatalf("reused pairing code error = %v", err)
+	}
+	if _, err = repo.ClaimSession(ctx, pairingHash, reusedClaim, now.Add(4*time.Minute)); !errors.Is(err, capture.ErrStateConflict) {
+		t.Fatalf("replaced pairing code error = %v", err)
+	}
+
+	expired, err := capturedomain.NewSession(otherAccountID, hashWithByte(7), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.CreateSession(ctx, expired); err != nil {
+		t.Fatal(err)
+	}
+	expiredClaim, err := capturedomain.NewSessionClaim(hashWithByte(8), now.Add(6*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.ClaimSession(ctx, expired.PairingCodeHash, expiredClaim, now.Add(4*time.Minute)); !errors.Is(err, capture.ErrStateConflict) {
+		t.Fatalf("expired pairing code error = %v", err)
+	}
 
 	for _, table := range []string{"capture_sessions", "captures"} {
 		var rls, authenticatedAllowed, anonymousAllowed bool
