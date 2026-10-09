@@ -108,6 +108,16 @@ func (c Capture) MakeAvailable(storageURI string, updatedAt time.Time) (Capture,
 	return next, next.Validate()
 }
 
+func (c Capture) ReserveStorageURI(storageURI string) (Capture, error) {
+	uri := strings.TrimSpace(storageURI)
+	if c.Status != StatusUploading || c.StorageURI != nil || uri == "" {
+		return Capture{}, ErrInvalidStatusTransition
+	}
+	next := c
+	next.StorageURI = &uri
+	return next, next.Validate()
+}
+
 func (c Capture) MarkDeleting(updatedAt time.Time) (Capture, error) {
 	when := updatedAt.UTC()
 	if c.Status == StatusDeleting || when.Before(c.UpdatedAt) {

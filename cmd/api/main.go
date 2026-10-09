@@ -127,7 +127,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, captureStorage, cfg.OCR, cfg.ProfessionalActivation)
+	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
 
 	//8 Middlewares
 	//8.1 API
@@ -151,6 +151,7 @@ func main() {
 			AccountHandler:                 modules.Account.Handler,
 			CaptureHandler:                 modules.Capture.Handler,
 			CaptureAuth:                    modules.Capture.Middleware,
+			CaptureCleanup:                 modules.Capture.Cleanup,
 			PatientAccessHandler:           modules.PatientAccess.Handler,
 			PatientCreationHandler:         modules.Patient.CreationHandler,
 			PatientHandler:                 modules.Patient.ProfileHandler,

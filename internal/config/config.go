@@ -11,4 +11,5 @@ type Config struct {
 	Gemini                 GeminiConfig
 	OCR                    OCRConfig
 	ProfessionalActivation ProfessionalActivationConfig
+	Jobs                   JobsConfig
 }

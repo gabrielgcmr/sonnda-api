@@ -23,6 +23,9 @@ const (
 	MaxSignedURLLifetime  = 5 * time.Minute
 	DefaultPageLimit      = 20
 	MaxPageLimit          = 100
+
+	DefaultCleanupBatchSize        = 50
+	DefaultUploadingCutoffDuration = time.Hour
 )
 
 type Service interface {
@@ -37,6 +40,7 @@ type Service interface {
 	ListCaptures(ctx context.Context, accountID uuid.UUID, page Pagination) (*CapturePage, error)
 	GetCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*SignedCaptureFile, error)
 	DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error
+	Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupReport, error)
 }
 
 type CreatedSession struct {
@@ -84,6 +88,19 @@ type CapturePage struct {
 type SignedCaptureFile struct {
 	URL       string
 	ExpiresAt time.Time
+}
+
+type CleanupOptions struct {
+	BatchSize             int
+	UploadingCutoffWindow time.Duration
+}
+
+type CleanupReport struct {
+	CapturesProcessed int
+	CapturesDeleted   int
+	StorageDeleted    int
+	SessionsDeleted   int
+	Errors            []error
 }
 
 type pairingCodeGenerator interface {
@@ -322,6 +339,10 @@ func (s *service) UploadCapture(ctx context.Context, credential MobileCredential
 	if err != nil {
 		return nil, mapStorageError("captureStorage.ObjectURI", err)
 	}
+	item, err = item.ReserveStorageURI(expectedURI)
+	if err != nil {
+		return nil, apperr.Internal("erro inesperado", fmt.Errorf("reserve capture storage URI: %w", err))
+	}
 	if err := s.repository.CreateCapture(ctx, item); err != nil {
 		return nil, mapRepositoryError("captureRepository.CreateCapture", err)
 	}
@@ -433,6 +454,91 @@ func (s *service) DeleteCapture(ctx context.Context, accountID, captureID uuid.U
 		return mapRepositoryError("captureRepository.DeleteOwnedCapture", err)
 	}
 	return nil
+}
+
+func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupReport, error) {
+	if err := s.validateDependencies(); err != nil {
+		return nil, err
+	}
+	if s.storage == nil {
+		return nil, apperr.Internal("armazenamento de capturas indisponível", errors.New("capture storage is not configured"))
+	}
+
+	batchSize := opts.BatchSize
+	if batchSize <= 0 {
+		batchSize = DefaultCleanupBatchSize
+	}
+	if batchSize > MaxPageLimit {
+		batchSize = MaxPageLimit
+	}
+
+	uploadingWindow := opts.UploadingCutoffWindow
+	if uploadingWindow <= 0 {
+		uploadingWindow = DefaultUploadingCutoffDuration
+	}
+
+	now := s.now().UTC()
+	uploadingCutoff := now.Add(-uploadingWindow)
+
+	report := &CleanupReport{}
+
+	// 1. Limpeza de capturas elegíveis em lotes
+	for {
+		candidates, err := s.repository.ListCleanupCandidates(ctx, now, uploadingCutoff, batchSize)
+		if err != nil {
+			mappedErr := mapRepositoryError("captureRepository.ListCleanupCandidates", err)
+			report.Errors = append(report.Errors, mappedErr)
+			return report, mappedErr
+		}
+		if len(candidates) == 0 {
+			break
+		}
+
+		for _, item := range candidates {
+			report.CapturesProcessed++
+
+			// Remove objeto do Supabase Storage se existir URI
+			if item.StorageURI != nil && strings.TrimSpace(*item.StorageURI) != "" {
+				err := s.storage.Delete(ctx, *item.StorageURI)
+				if err != nil && !apperr.IsNotFound(err) {
+					// Se a exclusão no storage falhar, não remove do banco para evitar arquivos órfãos.
+					// Marca a captura como deleting para impedir novos acessos e retentar depois.
+					if item.Status != capturedomain.StatusDeleting {
+						_, _ = s.repository.MarkCaptureDeleting(ctx, item.ID, now)
+					}
+					report.Errors = append(report.Errors, fmt.Errorf("storage delete failed for capture %s: %w", item.ID, err))
+					continue
+				}
+				report.StorageDeleted++
+			}
+
+			// Remove o registro da captura no banco
+			if err := s.repository.DeleteCapture(ctx, item.ID); err != nil && !errors.Is(err, ErrCaptureNotFound) {
+				report.Errors = append(report.Errors, mapRepositoryError("captureRepository.DeleteCapture", err))
+				continue
+			}
+			report.CapturesDeleted++
+		}
+
+		if len(candidates) < batchSize {
+			break
+		}
+	}
+
+	// 2. Limpeza de sessões vencidas sem capturas associadas (somente após as capturas)
+	for {
+		deleted, err := s.repository.DeleteExpiredSessions(ctx, now, batchSize)
+		if err != nil {
+			report.Errors = append(report.Errors, mapRepositoryError("captureRepository.DeleteExpiredSessions", err))
+			break
+		}
+		report.SessionsDeleted += int(deleted)
+		if deleted == 0 || int(deleted) < batchSize {
+			break
+		}
+	}
+
+	return report, nil
 }
 
 func (s *service) validateDependencies() error {

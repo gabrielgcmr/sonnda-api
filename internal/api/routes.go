@@ -26,6 +26,7 @@ type APIDependencies struct {
 	AccountHandler                 *accounthttp.Handler
 	CaptureHandler                 *capturehttp.Handler
 	CaptureAuth                    *capturehttp.Middleware
+	CaptureCleanup                 *capturehttp.CleanupHandler
 	PatientAccessHandler           *accesshttp.Handler
 	PatientCreationHandler         *patienthttp.CreationHandler
 	PatientHandler                 *profilehttp.Handler
@@ -68,6 +69,9 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	deps.CaptureHandler.RegisterPublicRoutes(api)
 	deps.CaptureHandler.RegisterMobileRoutes(captureMobile, captureTokenSecurity())
 	deps.CaptureHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	if deps.CaptureCleanup != nil {
+		deps.CaptureCleanup.RegisterHumaRoutes(api)
+	}
 
 	deps.PatientAccessHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 	deps.PatientCreationHandler.RegisterHumaRoutes(onboarded, bearerSecurity())

@@ -58,6 +58,8 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
+**Status: concluída em código com serviço de limpeza em lote, comando CLI `cmd/cleanup-captures`, export OpenAPI e suite de testes.**
+
 - Criar um comando de limpeza executável como job agendado de hora em hora. Ele percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
 - Aplicar a migration antes de publicar os endpoints. Configurar e validar o job agendado antes de habilitar uploads em produção. Publicar o artefato OpenAPI identificado pelo SHA da API para consumo posterior pelo Svelte.

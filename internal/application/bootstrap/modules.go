@@ -27,10 +27,11 @@ func NewModules(
 	captureStorage capture.FileStorage,
 	ocrConfig config.OCRConfig,
 	activationConfig config.ProfessionalActivationConfig,
+	captureCleanupToken string,
 ) *Modules {
 	return &Modules{
 		Account:       NewAccountModule(dbClient, redisClient, activationConfig),
-		Capture:       NewCaptureModule(dbClient, captureStorage),
+		Capture:       NewCaptureModule(dbClient, captureStorage, captureCleanupToken),
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),

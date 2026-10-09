@@ -54,6 +54,27 @@ func TestCaptureLifecycle(t *testing.T) {
 	}
 }
 
+func TestCaptureReservesStorageURIBeforeUpload(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	item, err := NewCapture(NewCaptureParams{
+		AccountID: uuid.New(), CaptureSessionID: uuid.New(), OriginalFilename: "exam.pdf",
+		MIMEType: "application/pdf", SizeBytes: 128, CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reserved, err := item.ReserveStorageURI("supabase://captures/account/capture.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reserved.StorageURI == nil || *reserved.StorageURI != "supabase://captures/account/capture.pdf" || reserved.Status != StatusUploading {
+		t.Fatalf("unexpected reserved capture: %+v", reserved)
+	}
+	if _, err := reserved.ReserveStorageURI("supabase://captures/account/other.pdf"); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("second reservation error = %v", err)
+	}
+}
+
 func TestCaptureRejectsUnsupportedOrOversizedFile(t *testing.T) {
 	base := NewCaptureParams{
 		AccountID: uuid.New(), CaptureSessionID: uuid.New(), OriginalFilename: "file.txt",
