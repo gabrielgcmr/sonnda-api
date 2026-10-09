@@ -60,7 +60,7 @@ O web mostra PDF, resumo, dados completos e avisos; não permite edição. Exige
 ## Implantação e verificação
 
 1. Aplicar `supabase/migrations/20260930211213_lab_document_review.sql` no ambiente de destino pelo processo de migrations do projeto.
-2. Liberar API e web de forma coordenada. Publicar o OpenAPI identificado pelo SHA da API e gerar o consumidor web desse artefato.
+2. Liberar API e web de forma coordenada. Atualizar `artifacts/openapi.json` e executar `task openapi` no consumidor web.
 3. Verificar extração temporária, criação/retomada de rascunho, confirmação repetida, exclusão e leitura de exames anteriores.
 
 As migrations são versionadas somente em `supabase/migrations`, incluindo as já aplicadas no ambiente remoto. O sqlc utiliza os arquivos de schema para geração, sem um segundo conjunto de migrations. A migration é aditiva e não remove histórico. O rollback da aplicação não deve reativar uploads automáticos enquanto existirem clientes no novo fluxo.
@@ -71,8 +71,8 @@ Validações automatizadas:
 go test ./...
 go test -tags integration ./internal/features/documentprocessing/postgres ./internal/features/patient/exam/laboratory/postgres
 go tool sqlc compile -f internal/infrastructure/persistence/postgres/sqlc/sqlc.yaml
-go run ./cmd/openapi-export -output artifacts/openapi.json -version <API_SHA>
-bun run openapi:generate
+make openapi-export
+task openapi
 bun run test
 bun run lint
 bun run build

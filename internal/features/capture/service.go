@@ -481,6 +481,7 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 	uploadingCutoff := now.Add(-uploadingWindow)
 
 	report := &CleanupReport{}
+	attemptedCaptureIDs := make(map[uuid.UUID]struct{})
 
 	// 1. Limpeza de capturas elegíveis em lotes
 	for {
@@ -494,7 +495,14 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 			break
 		}
 
+		capturesDeletedBeforeBatch := report.CapturesDeleted
+		attemptedInBatch := 0
 		for _, item := range candidates {
+			if _, alreadyAttempted := attemptedCaptureIDs[item.ID]; alreadyAttempted {
+				continue
+			}
+			attemptedCaptureIDs[item.ID] = struct{}{}
+			attemptedInBatch++
 			report.CapturesProcessed++
 
 			// Remove objeto do Supabase Storage se existir URI
@@ -504,7 +512,13 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 					// Se a exclusão no storage falhar, não remove do banco para evitar arquivos órfãos.
 					// Marca a captura como deleting para impedir novos acessos e retentar depois.
 					if item.Status != capturedomain.StatusDeleting {
-						_, _ = s.repository.MarkCaptureDeleting(ctx, item.ID, now)
+						if _, markErr := s.repository.MarkCaptureDeleting(ctx, item.ID, now); markErr != nil {
+							report.Errors = append(report.Errors, fmt.Errorf(
+								"mark capture %s deleting: %w",
+								item.ID,
+								mapRepositoryError("captureRepository.MarkCaptureDeleting", markErr),
+							))
+						}
 					}
 					report.Errors = append(report.Errors, fmt.Errorf("storage delete failed for capture %s: %w", item.ID, err))
 					continue
@@ -520,7 +534,7 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 			report.CapturesDeleted++
 		}
 
-		if len(candidates) < batchSize {
+		if attemptedInBatch == 0 || report.CapturesDeleted == capturesDeletedBeforeBatch || len(candidates) < batchSize {
 			break
 		}
 	}

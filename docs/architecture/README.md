@@ -184,8 +184,8 @@ A extração de laudos atende a dois fluxos:
 ## OpenAPI
 
 - As rotas Huma são a fonte de verdade do contrato HTTP.
-- O CI exporta `artifacts/openapi.json` e o publica como artefato imutável
-  identificado pelo SHA do commit da API.
+- `make openapi-export` atualiza `artifacts/openapi.json`; os consumidores
+  regeneram seus clientes com `task openapi`.
 - `/openapi.json`, `/openapi.yaml` e `/docs` continuam servidos dinamicamente
   pelo Huma.
 

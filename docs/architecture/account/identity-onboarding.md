@@ -49,7 +49,7 @@ Web e mobile devem:
 3. ler dados pessoais dentro de `profile`;
 4. usar `onboarding_completed` para decidir a navegação;
 5. tratar CPF e telefone como opcionais;
-6. obter o OpenAPI imutável publicado pelo SHA da API antes de regenerar clientes.
+6. atualizar `artifacts/openapi.json` e executar `task openapi` antes de integrar os clientes.
 
 As duas listagens de pacientes permanecem disponíveis em `GET /patients` e
 `GET /me/patients`.

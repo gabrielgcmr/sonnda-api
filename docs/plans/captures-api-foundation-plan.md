@@ -58,17 +58,17 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
-**Status: implementação inicial concluída; correções 1.5.1–1.5.4 pendentes.**
+**Status: implementação inicial concluída; reserva antecipada da URI, proteção contra lotes sem progresso e agendamento horário pelo Supabase Cron concluídos. A subetapa 1.5.2 permanece pendente e a 1.5.3 está parcialmente concluída.**
 
-- Criar um comando de limpeza executável como job agendado de hora em hora. Ele percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
+- Criar um comando e um endpoint interno de limpeza. O Supabase Cron chama o endpoint de hora em hora. A limpeza percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
-- Aplicar a migration antes de publicar os endpoints. O cron horário fica fora do repositório: o ambiente executa `cmd/cleanup-captures`. Não criar `pg_cron` nem Vault.
+- Aplicar as migrations antes de publicar os endpoints. A migration de operação habilita `pg_cron` e `pg_net` e agenda uma chamada HTTP a cada hora. A URL pública da API e o token dedicado ficam no Supabase Vault sob os nomes `capture_cleanup_url` e `capture_cleanup_token`; o mesmo token é configurado na API como `CAPTURE_CLEANUP_TOKEN`.
 
 **Aceite:** o job elimina arquivos e registros vencidos, recupera uploads e exclusões interrompidos e não afeta capturas válidas; o OpenAPI expressa corretamente as duas formas de autenticação; o fluxo de pareamento, upload, listagem, revogação e limpeza funciona com dois clientes HTTP independentes. Esse fluxo com dois clientes permanece verificação manual e não faz parte das correções abaixo.
 
 #### 1.5.1 — Parar o lote sem progresso
 
-**Status: pendente.**
+**Status: concluída em código e coberta por testes unitários.**
 
 `Cleanup` em `internal/features/capture/service.go` só interrompe a leitura de capturas quando o lote volta menor que o tamanho pedido. Se a exclusão no Storage falha, o registro continua candidato (`deleting` ou expirado). Com um lote cheio de falhas, a mesma consulta se repete até o timeout, e a limpeza de sessões não chega a rodar.
 
@@ -92,26 +92,41 @@ O serviço devolve o relatório sem erro quando há falhas por captura. `POST /i
 
 #### 1.5.3 — Testar a SQL e o token do job
 
-**Status: pendente.**
+**Status: parcialmente concluída; autenticação e respostas do endpoint estão cobertas, validação das queries no PostgreSQL permanece pendente.**
 
-A escolha do que apagar só existe na query e não passa pelo PostgreSQL. O handler do token também não tem teste.
+A escolha do que apagar só existe na query e não passa pelo PostgreSQL. O handler do token já possui testes unitários.
 
 - Em `internal/features/capture/postgres/repository_integration_test.go`, no mesmo schema isolado de `CAPTURES_TEST_DATABASE_URL`:
   - entra na limpeza: expirada, `deleting` ainda válida, `uploading` com `updated_at` anterior ao corte de 1 hora;
   - fica de fora: `available` não expirada e `uploading` recente;
   - `DeleteExpiredSessions` remove sessão revogada ou vencida sem capturas e preserva sessão com captura ou ainda válida.
-- Testar o handler em `internal/features/capture/http/cleanup.go`: token ausente ou diferente responde não autorizado; relatório com erros responde falha interna; relatório limpo devolve as contagens.
+- O handler em `internal/features/capture/http/cleanup.go` já cobre token ausente ou diferente, relatório com erros e relatório limpo com as contagens.
 
 **Aceite:** a SQL do job e a autenticação do endpoint interno ficam cobertas por teste; capturas válidas não entram na limpeza.
 
-#### 1.5.4 — Comentário do token
+#### 1.5.4 — Agendamento horário no Supabase
 
-**Status: pendente.**
+**Status: concluída em código e validada no Supabase local.**
 
-- Em `.env.example`, remover a frase que manda gravar `CAPTURE_CLEANUP_TOKEN` no Vault. O token continua obrigatório porque protege o endpoint interno e o `config.Load` compartilhado pelo CLI.
-- Ao concluir 1.5.1–1.5.3, atualizar o status destas subetapas.
+- A migration `20261009210052_schedule_capture_cleanup.sql` agenda `cleanup-captures-hourly` com a expressão `0 * * * *` e chama `POST /internal/jobs/cleanup-captures` por `pg_net`.
+- Antes da primeira execução no ambiente de destino, criar `capture_cleanup_url` e `capture_cleanup_token` no Vault. A URL deve ser absoluta, acessível pelo projeto Supabase e terminar em `/internal/jobs/cleanup-captures`; o token deve ser o mesmo valor de `CAPTURE_CLEANUP_TOKEN` na API.
+- Exemplo de provisionamento inicial, substituindo os placeholders por valores do ambiente e sem versioná-los:
 
-**Aceite:** o exemplo de ambiente não promete Vault nem `pg_cron`; o cron horário permanece no ambiente, chamando o CLI.
+```sql
+select vault.create_secret(
+    'https://api.example.com/internal/jobs/cleanup-captures',
+    'capture_cleanup_url',
+    'URL do endpoint interno de limpeza'
+);
+
+select vault.create_secret(
+    '<token-aleatorio>',
+    'capture_cleanup_token',
+    'Token do endpoint interno de limpeza'
+);
+```
+
+**Aceite:** `cron.job` contém o job ativo com agenda horária; o comando referencia apenas os nomes dos segredos, e o endpoint recusa token ausente ou diferente.
 
 ## Verificação por entrega
 

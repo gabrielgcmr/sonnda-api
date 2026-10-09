@@ -29,40 +29,41 @@ func (g fixedPairingCodeGenerator) Generate() (string, []byte, error) {
 
 type serviceRepository struct {
 	Repository
-	transactionCalls  int
-	revokedAccount    uuid.UUID
-	revokedAt         time.Time
-	created           *capturedomain.Session
-	current           *capturedomain.Session
-	currentAccount    uuid.UUID
-	touchedSession    uuid.UUID
-	touchedAccount    uuid.UUID
-	touchedAt         time.Time
-	revokedSession    uuid.UUID
-	err               error
-	operations        []string
-	claimed           *capturedomain.Session
-	pairingHash       []byte
-	claim             capturedomain.SessionClaim
-	authenticated     *capturedomain.Session
-	authenticatedHash []byte
-	touchedMobile     uuid.UUID
-	createdCapture    *capturedomain.Capture
-	availableCapture  *capturedomain.Capture
-	markedDeleting    bool
-	setAvailableErr   error
-	markDeletingErr   error
-	listedCaptures    []capturedomain.Capture
-	listAccount       uuid.UUID
-	listPage          Pagination
-	listNow           time.Time
-	availableByID     *capturedomain.Capture
-	ownedDeleting     *capturedomain.Capture
+	transactionCalls        int
+	revokedAccount          uuid.UUID
+	revokedAt               time.Time
+	created                 *capturedomain.Session
+	current                 *capturedomain.Session
+	currentAccount          uuid.UUID
+	touchedSession          uuid.UUID
+	touchedAccount          uuid.UUID
+	touchedAt               time.Time
+	revokedSession          uuid.UUID
+	err                     error
+	operations              []string
+	claimed                 *capturedomain.Session
+	pairingHash             []byte
+	claim                   capturedomain.SessionClaim
+	authenticated           *capturedomain.Session
+	authenticatedHash       []byte
+	touchedMobile           uuid.UUID
+	createdCapture          *capturedomain.Capture
+	availableCapture        *capturedomain.Capture
+	markedDeleting          bool
+	setAvailableErr         error
+	markDeletingErr         error
+	listedCaptures          []capturedomain.Capture
+	listAccount             uuid.UUID
+	listPage                Pagination
+	listNow                 time.Time
+	availableByID           *capturedomain.Capture
+	ownedDeleting           *capturedomain.Capture
 	ownedAccount            uuid.UUID
 	ownedCapture            uuid.UUID
 	deleteOwnedErr          error
 	deletedOwned            bool
 	cleanupCandidates       []capturedomain.Capture
+	cleanupListCalls        int
 	cleanupNow              time.Time
 	cleanupUploadingCutoff  time.Time
 	cleanupLimit            int
@@ -156,18 +157,25 @@ func (r *serviceRepository) SetCaptureAvailable(_ context.Context, _ uuid.UUID, 
 	return &item, nil
 }
 
-func (r *serviceRepository) MarkCaptureDeleting(_ context.Context, _ uuid.UUID, _ time.Time) (*capturedomain.Capture, error) {
+func (r *serviceRepository) MarkCaptureDeleting(_ context.Context, captureID uuid.UUID, _ time.Time) (*capturedomain.Capture, error) {
 	r.operations = append(r.operations, "deleting")
 	r.markedDeleting = true
 	if r.markDeletingErr != nil {
 		return nil, r.markDeletingErr
 	}
-	if r.createdCapture == nil {
-		return nil, ErrCaptureNotFound
+	for i := range r.cleanupCandidates {
+		if r.cleanupCandidates[i].ID == captureID {
+			r.cleanupCandidates[i].Status = capturedomain.StatusDeleting
+			item := r.cleanupCandidates[i]
+			return &item, nil
+		}
 	}
-	item := *r.createdCapture
-	item.Status = capturedomain.StatusDeleting
-	return &item, nil
+	if r.createdCapture != nil && r.createdCapture.ID == captureID {
+		item := *r.createdCapture
+		item.Status = capturedomain.StatusDeleting
+		return &item, nil
+	}
+	return nil, ErrCaptureNotFound
 }
 
 func (r *serviceRepository) MarkOwnedCaptureDeleting(_ context.Context, accountID, captureID uuid.UUID, _ time.Time) (*capturedomain.Capture, error) {
@@ -210,6 +218,7 @@ func (r *serviceRepository) DeleteOwnedCapture(_ context.Context, accountID, cap
 
 func (r *serviceRepository) ListCleanupCandidates(_ context.Context, now, uploadingCutoff time.Time, limit int) ([]capturedomain.Capture, error) {
 	r.operations = append(r.operations, "list-cleanup-candidates")
+	r.cleanupListCalls++
 	r.cleanupNow, r.cleanupUploadingCutoff, r.cleanupLimit = now, uploadingCutoff, limit
 	if r.err != nil {
 		return nil, r.err
@@ -221,9 +230,7 @@ func (r *serviceRepository) ListCleanupCandidates(_ context.Context, now, upload
 	if n > len(r.cleanupCandidates) {
 		n = len(r.cleanupCandidates)
 	}
-	batch := append([]capturedomain.Capture(nil), r.cleanupCandidates[:n]...)
-	r.cleanupCandidates = r.cleanupCandidates[n:]
-	return batch, nil
+	return append([]capturedomain.Capture(nil), r.cleanupCandidates[:n]...), nil
 }
 
 func (r *serviceRepository) DeleteCapture(_ context.Context, captureID uuid.UUID) error {
@@ -231,10 +238,30 @@ func (r *serviceRepository) DeleteCapture(_ context.Context, captureID uuid.UUID
 	r.deletedCaptureIDs = append(r.deletedCaptureIDs, captureID)
 	if r.deleteCaptureErrByID != nil {
 		if err, ok := r.deleteCaptureErrByID[captureID]; ok {
+			if errors.Is(err, ErrCaptureNotFound) {
+				r.removeCleanupCandidate(captureID)
+			}
 			return err
 		}
 	}
-	return r.deleteCaptureErr
+	if r.deleteCaptureErr != nil {
+		if errors.Is(r.deleteCaptureErr, ErrCaptureNotFound) {
+			r.removeCleanupCandidate(captureID)
+		}
+		return r.deleteCaptureErr
+	}
+	r.removeCleanupCandidate(captureID)
+	return nil
+}
+
+func (r *serviceRepository) removeCleanupCandidate(captureID uuid.UUID) {
+	for i := range r.cleanupCandidates {
+		if r.cleanupCandidates[i].ID != captureID {
+			continue
+		}
+		r.cleanupCandidates = append(r.cleanupCandidates[:i], r.cleanupCandidates[i+1:]...)
+		return
+	}
 }
 
 func (r *serviceRepository) DeleteExpiredSessions(_ context.Context, _ time.Time, limit int) (int64, error) {
@@ -912,6 +939,101 @@ func TestCleanup_StorageFailurePreservesDatabaseRecordAndMarksDeleting(t *testin
 	}
 	if len(repository.deletedCaptureIDs) != 1 || repository.deletedCaptureIDs[0] != capOK.ID {
 		t.Errorf("expected only capOK deleted from DB, got %v", repository.deletedCaptureIDs)
+	}
+}
+
+func TestCleanup_FullFailedBatchStopsAndStillDeletesExpiredSessions(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	firstURI := "supabase://captures/acc/failed-1.pdf"
+	secondURI := "supabase://captures/acc/failed-2.pdf"
+	repository := &serviceRepository{
+		cleanupCandidates: []capturedomain.Capture{
+			{ID: uuid.New(), StorageURI: &firstURI, Status: capturedomain.StatusDeleting},
+			{ID: uuid.New(), StorageURI: &secondURI, Status: capturedomain.StatusDeleting},
+		},
+		expiredSessionsToDelete: 1,
+	}
+	storage := &captureStorageStub{deleteErr: errors.New("storage unavailable")}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	report, err := service.Cleanup(t.Context(), CleanupOptions{BatchSize: 2})
+	if err != nil {
+		t.Fatalf("cleanup should report partial failures without a fatal error: %v", err)
+	}
+	if repository.cleanupListCalls != 1 {
+		t.Fatalf("cleanup candidate queries = %d, want 1", repository.cleanupListCalls)
+	}
+	if report.CapturesProcessed != 2 || report.CapturesDeleted != 0 || len(report.Errors) != 2 {
+		t.Fatalf("unexpected capture report: %+v", report)
+	}
+	if report.SessionsDeleted != 1 {
+		t.Fatalf("expired sessions deleted = %d, want 1", report.SessionsDeleted)
+	}
+	if len(storage.deletedURIs) != 2 {
+		t.Fatalf("storage delete attempts = %d, want 2", len(storage.deletedURIs))
+	}
+}
+
+func TestCleanup_DoesNotRetryFailedCaptureWhileOtherCandidatesProgress(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	failedURI := "supabase://captures/acc/failed.pdf"
+	firstOKURI := "supabase://captures/acc/ok-1.pdf"
+	secondOKURI := "supabase://captures/acc/ok-2.pdf"
+	failedID := uuid.New()
+	repository := &serviceRepository{cleanupCandidates: []capturedomain.Capture{
+		{ID: failedID, StorageURI: &failedURI, Status: capturedomain.StatusDeleting},
+		{ID: uuid.New(), StorageURI: &firstOKURI, Status: capturedomain.StatusDeleting},
+		{ID: uuid.New(), StorageURI: &secondOKURI, Status: capturedomain.StatusDeleting},
+	}}
+	storage := &captureStorageStub{deleteErrByURI: map[string]error{
+		failedURI: errors.New("storage unavailable"),
+	}}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	report, err := service.Cleanup(t.Context(), CleanupOptions{BatchSize: 2})
+	if err != nil {
+		t.Fatalf("cleanup should report partial failures without a fatal error: %v", err)
+	}
+	if report.CapturesProcessed != 3 || report.CapturesDeleted != 2 || len(report.Errors) != 1 {
+		t.Fatalf("unexpected cleanup report: %+v", report)
+	}
+	failedAttempts := 0
+	for _, uri := range storage.deletedURIs {
+		if uri == failedURI {
+			failedAttempts++
+		}
+	}
+	if failedAttempts != 1 {
+		t.Fatalf("failed capture storage attempts = %d, want 1", failedAttempts)
+	}
+	for _, deletedID := range repository.deletedCaptureIDs {
+		if deletedID == failedID {
+			t.Fatal("failed capture should remain in the database for the next execution")
+		}
+	}
+}
+
+func TestCleanup_ReportsMarkDeletingFailure(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	uri := "supabase://captures/acc/failed.pdf"
+	repository := &serviceRepository{
+		cleanupCandidates: []capturedomain.Capture{{
+			ID: uuid.New(), StorageURI: &uri, Status: capturedomain.StatusAvailable,
+		}},
+		markDeletingErr: errors.New("database unavailable"),
+	}
+	storage := &captureStorageStub{deleteErr: errors.New("storage unavailable")}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	report, err := service.Cleanup(t.Context(), CleanupOptions{BatchSize: 10})
+	if err != nil {
+		t.Fatalf("cleanup should report partial failures without a fatal error: %v", err)
+	}
+	if len(report.Errors) != 2 {
+		t.Fatalf("cleanup errors = %d, want storage and mark-deleting errors: %v", len(report.Errors), report.Errors)
+	}
+	if !strings.Contains(report.Errors[0].Error(), "mark capture") {
+		t.Fatalf("first error does not describe mark-deleting failure: %v", report.Errors[0])
 	}
 }
 
