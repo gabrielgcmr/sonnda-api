@@ -1,4 +1,4 @@
-// internal/infrastructure/persistence/filestorage/gcsfilestorage.go
+// internal/infrastructure/filestorage/gcsfilestorage.go
 //Para GCS especificamente, **NÃO é necessário** criar um wrapper do `storage.Client` do Google porque:
 //1. ✅ O SDK do Google já é bem abstraído
 //2. ✅ Não vou trocar implementações internas do GCS
@@ -13,6 +13,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 
@@ -27,6 +28,7 @@ type GCSObjectStorage struct {
 }
 
 var _ documentprocessing.FileStorageService = (*GCSObjectStorage)(nil)
+var _ capture.FileStorage = (*GCSObjectStorage)(nil)
 
 func NewGCSObjectStorage(
 	ctx context.Context,
@@ -89,6 +91,15 @@ func (a *GCSObjectStorage) Delete(ctx context.Context, uri string) error {
 		return wrapStorageError("falha ao remover arquivo", "gcs.delete", fmt.Errorf("uri=%s: %w", uri, err))
 	}
 	return nil
+}
+
+func (a *GCSObjectStorage) Open(ctx context.Context, uri string) (io.ReadCloser, error) {
+	objectName := extractObjectName(uri, a.bucketName)
+	reader, err := a.client.Bucket(a.bucketName).Object(objectName).NewReader(ctx)
+	if err != nil {
+		return nil, wrapStorageError("falha ao abrir arquivo", "gcs.open", err)
+	}
+	return reader, nil
 }
 
 func (a *GCSObjectStorage) GetSignedURL(
