@@ -58,7 +58,7 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
-**Status: implementação inicial concluída; reserva antecipada da URI, proteção contra lotes sem progresso, código de saída do CLI e agendamento horário pelo Supabase Cron concluídos. A subetapa 1.5.3 está parcialmente concluída.**
+**Status: implementação inicial e correções 1.5.1–1.5.4 concluídas em código; queries destrutivas, autenticação do job e agendamento foram validados no Supabase local.**
 
 - Criar um comando e um endpoint interno de limpeza. O Supabase Cron chama o endpoint de hora em hora. A limpeza percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
@@ -92,9 +92,9 @@ O serviço devolve o relatório sem erro quando há falhas por captura. `POST /i
 
 #### 1.5.3 — Testar a SQL e o token do job
 
-**Status: parcialmente concluída; autenticação e respostas do endpoint estão cobertas, validação das queries no PostgreSQL permanece pendente.**
+**Status: concluída com testes unitários do endpoint e testes de integração no PostgreSQL local.**
 
-A escolha do que apagar só existe na query e não passa pelo PostgreSQL. O handler do token já possui testes unitários.
+A seleção de capturas e a exclusão de sessões passam pelo PostgreSQL em schema temporário isolado. O handler do token possui testes unitários.
 
 - Em `internal/features/capture/postgres/repository_integration_test.go`, no mesmo schema isolado de `CAPTURES_TEST_DATABASE_URL`:
   - entra na limpeza: expirada, `deleting` ainda válida, `uploading` com `updated_at` anterior ao corte de 1 hora;
@@ -106,9 +106,10 @@ A escolha do que apagar só existe na query e não passa pelo PostgreSQL. O hand
 
 #### 1.5.4 — Agendamento horário no Supabase
 
-**Status: concluída em código e validada no Supabase local.**
+**Status: concluída em código e validada por teste pgTAP no Supabase local.**
 
 - A migration `20261009210052_schedule_capture_cleanup.sql` agenda `cleanup-captures-hourly` com a expressão `0 * * * *` e chama `POST /internal/jobs/cleanup-captures` por `pg_net`.
+- O teste `supabase/tests/capture_cleanup_cron_test.sql` verifica extensões, unicidade e ativação do job, agenda horária, chamada HTTP, referências ao Vault e ausência de URL hardcoded.
 - Antes da primeira execução no ambiente de destino, criar `capture_cleanup_url` e `capture_cleanup_token` no Vault. A URL deve ser absoluta, acessível pelo projeto Supabase e terminar em `/internal/jobs/cleanup-captures`; o token deve ser o mesmo valor de `CAPTURE_CLEANUP_TOKEN` na API.
 - Exemplo de provisionamento inicial, substituindo os placeholders por valores do ambiente e sem versioná-los:
 

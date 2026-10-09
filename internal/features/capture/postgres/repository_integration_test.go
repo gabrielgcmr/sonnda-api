@@ -267,6 +267,158 @@ func TestClaimCaptureSessionIsSingleUseUnderConcurrency(t *testing.T) {
 	}
 }
 
+func TestListCleanupCandidatesSelectsOnlyEligibleCaptures(t *testing.T) {
+	_, repo, accountID, _, _ := captureTestDatabase(t)
+	ctx := t.Context()
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	session, err := capturedomain.NewSession(accountID, hashWithByte(30), now.Add(-26*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.CreateSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+
+	expired := createCaptureForCleanupTest(t, ctx, repo, accountID, session.ID, "expired.pdf", now.Add(-25*time.Hour))
+	if _, err = repo.SetCaptureAvailable(ctx, expired.ID, *expired.StorageURI, expired.CreatedAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	deleting := createCaptureForCleanupTest(t, ctx, repo, accountID, session.ID, "deleting.pdf", now.Add(-2*time.Hour))
+	if _, err = repo.SetCaptureAvailable(ctx, deleting.ID, *deleting.StorageURI, deleting.CreatedAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.MarkCaptureDeleting(ctx, deleting.ID, deleting.CreatedAt.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	stuckUploading := createCaptureForCleanupTest(t, ctx, repo, accountID, session.ID, "stuck.pdf", now.Add(-2*time.Hour))
+	recentUploading := createCaptureForCleanupTest(t, ctx, repo, accountID, session.ID, "recent.pdf", now.Add(-30*time.Minute))
+	available := createCaptureForCleanupTest(t, ctx, repo, accountID, session.ID, "available.pdf", now.Add(-30*time.Minute))
+	if _, err = repo.SetCaptureAvailable(ctx, available.ID, *available.StorageURI, available.CreatedAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := repo.ListCleanupCandidates(ctx, now, now.Add(-time.Hour), 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[uuid.UUID]struct{}{
+		expired.ID:        {},
+		deleting.ID:       {},
+		stuckUploading.ID: {},
+	}
+	if len(candidates) != len(want) {
+		t.Fatalf("cleanup candidates = %d, want %d: %+v", len(candidates), len(want), candidates)
+	}
+	for _, candidate := range candidates {
+		if _, ok := want[candidate.ID]; !ok {
+			t.Fatalf("capture %s unexpectedly selected for cleanup", candidate.ID)
+		}
+		delete(want, candidate.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("eligible captures not selected: %v", want)
+	}
+	for _, excludedID := range []uuid.UUID{recentUploading.ID, available.ID} {
+		for _, candidate := range candidates {
+			if candidate.ID == excludedID {
+				t.Fatalf("valid capture %s selected for cleanup", excludedID)
+			}
+		}
+	}
+}
+
+func TestDeleteExpiredSessionsRemovesOnlyUnreferencedExpiredOrRevoked(t *testing.T) {
+	client, repo, _, _, _ := captureTestDatabase(t)
+	ctx := t.Context()
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	accountIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	for _, accountID := range accountIDs {
+		if _, err := client.Pool().Exec(ctx, "INSERT INTO accounts(id) VALUES ($1)", accountID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	revoked := createSessionForCleanupTest(t, ctx, repo, accountIDs[0], hashWithByte(40), now.Add(-2*time.Minute))
+	if err := repo.RevokeSession(ctx, revoked.ID, revoked.AccountID, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	expired := createSessionForCleanupTest(t, ctx, repo, accountIDs[1], hashWithByte(41), now.Add(-10*time.Minute))
+	referenced := createSessionForCleanupTest(t, ctx, repo, accountIDs[2], hashWithByte(42), now.Add(-10*time.Minute))
+	createCaptureForCleanupTest(t, ctx, repo, referenced.AccountID, referenced.ID, "referenced.pdf", now.Add(-30*time.Minute))
+	valid := createSessionForCleanupTest(t, ctx, repo, accountIDs[3], hashWithByte(43), now)
+
+	deleted, err := repo.DeleteExpiredSessions(ctx, now, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted sessions = %d, want 2", deleted)
+	}
+
+	for _, sessionID := range []uuid.UUID{revoked.ID, expired.ID} {
+		if _, findErr := repo.FindSession(ctx, sessionID); !errors.Is(findErr, capture.ErrSessionNotFound) {
+			t.Fatalf("session %s should have been deleted, got %v", sessionID, findErr)
+		}
+	}
+	for _, sessionID := range []uuid.UUID{referenced.ID, valid.ID} {
+		if _, findErr := repo.FindSession(ctx, sessionID); findErr != nil {
+			t.Fatalf("session %s should have been preserved: %v", sessionID, findErr)
+		}
+	}
+}
+
+func createCaptureForCleanupTest(
+	t *testing.T,
+	ctx context.Context,
+	repo *Repository,
+	accountID uuid.UUID,
+	sessionID uuid.UUID,
+	filename string,
+	createdAt time.Time,
+) capturedomain.Capture {
+	t.Helper()
+	item, err := capturedomain.NewCapture(capturedomain.NewCaptureParams{
+		AccountID:        accountID,
+		CaptureSessionID: sessionID,
+		OriginalFilename: filename,
+		MIMEType:         "application/pdf",
+		SizeBytes:        128,
+		CreatedAt:        createdAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err = item.ReserveStorageURI("supabase://captures/" + accountID.String() + "/" + item.ID.String() + ".pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.CreateCapture(ctx, item); err != nil {
+		t.Fatal(err)
+	}
+	return item
+}
+
+func createSessionForCleanupTest(
+	t *testing.T,
+	ctx context.Context,
+	repo *Repository,
+	accountID uuid.UUID,
+	pairingHash []byte,
+	createdAt time.Time,
+) capturedomain.Session {
+	t.Helper()
+	session, err := capturedomain.NewSession(accountID, pairingHash, createdAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.CreateSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	return session
+}
+
 func captureTestDatabase(t *testing.T) (*postgress.Client, *Repository, uuid.UUID, uuid.UUID, string) {
 	t.Helper()
 	rawURL := os.Getenv("CAPTURES_TEST_DATABASE_URL")
