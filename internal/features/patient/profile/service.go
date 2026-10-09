@@ -48,16 +48,14 @@ func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Acco
 		return nil, err
 	}
 
-	p.ApplyUpdate(
+	if err := p.ApplyUpdate(
 		input.FullName,
 		input.Phone,
 		input.AvatarURL,
 		input.Gender,
 		input.Race,
 		input.CNS,
-	)
-
-	if err := p.Validate(); err != nil {
+	); err != nil {
 		return nil, mapDomainError(err)
 	}
 

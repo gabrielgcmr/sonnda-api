@@ -5,6 +5,7 @@ import "errors"
 
 var (
 	ErrInvalidBirthDate         = errors.New("invalid birth date")
+	ErrInvalidCNS               = errors.New("invalid cns")
 	ErrInvalidCPF               = errors.New("invalid cpf")
 	ErrInvalidFullName          = errors.New("full name is required")
 	ErrInvalidGender            = errors.New("invalid gender")

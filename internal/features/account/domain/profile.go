@@ -17,7 +17,6 @@ var (
 	ErrInvalidPhone     = errors.New("invalid phone")
 	ErrInvalidCPF       = errors.New("invalid cpf")
 	phonePattern        = regexp.MustCompile(`^\+?[0-9]{10,15}$`)
-	cpfPattern          = regexp.MustCompile(`^[0-9]{11}$`)
 )
 
 type Profile struct {
@@ -48,7 +47,7 @@ func (p Profile) Validate() error {
 	if p.BirthDate != nil && !validBirthDate(*p.BirthDate) {
 		return ErrInvalidBirthDate
 	}
-	if p.CPF != nil && !cpfPattern.MatchString(*p.CPF) {
+	if p.CPF != nil && !demographics.IsValidCPF(*p.CPF) {
 		return ErrInvalidCPF
 	}
 	if p.Phone != nil && !phonePattern.MatchString(*p.Phone) {

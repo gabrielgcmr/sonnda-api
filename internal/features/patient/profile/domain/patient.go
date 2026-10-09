@@ -44,10 +44,11 @@ func (p *NewPatientParams) Normalize() {
 	p.AvatarURL = strings.TrimSpace(p.AvatarURL)
 
 	if p.CNS != nil {
-		cns := strings.TrimSpace(*p.CNS)
-		if cns == "" {
+		rawCNS := strings.TrimSpace(*p.CNS)
+		if rawCNS == "" {
 			p.CNS = nil
 		} else {
+			cns := demographics.CleanDigits(rawCNS)
 			p.CNS = &cns
 		}
 	}
@@ -90,13 +91,16 @@ func NewPatient(params NewPatientParams) (*Patient, error) {
 
 func (p *Patient) Validate() error {
 	if p.FullName == "" {
-		return ErrInvalidFullName
+		return demographics.ErrInvalidFullName
 	}
 	if p.BirthDate.IsZero() || p.BirthDate.After(time.Now().UTC()) {
 		return demographics.ErrInvalidBirthDate
 	}
-	if p.CPF == "" || len(p.CPF) != 11 {
+	if !demographics.IsValidCPF(p.CPF) {
 		return demographics.ErrInvalidCPF
+	}
+	if p.CNS != nil && !demographics.IsValidCNS(*p.CNS) {
+		return demographics.ErrInvalidCNS
 	}
 	return nil
 }
@@ -108,43 +112,48 @@ func (p *Patient) ApplyUpdate(
 	gender *demographics.Gender,
 	race *demographics.Race,
 	cns *string,
-) {
+) error {
+	next := *p
+
 	if fullName != nil {
-		name := strings.TrimSpace(*fullName)
-		if name != "" {
-			p.FullName = name
-		}
+		next.FullName = strings.TrimSpace(*fullName)
 	}
 
 	if phone != nil {
 		pval := strings.TrimSpace(*phone)
 		if pval == "" {
-			p.Phone = nil
+			next.Phone = nil
 		} else {
-			p.Phone = &pval
+			next.Phone = &pval
 		}
 	}
 
 	if avatarURL != nil {
-		p.AvatarURL = strings.TrimSpace(*avatarURL)
+		next.AvatarURL = strings.TrimSpace(*avatarURL)
 	}
 
 	if gender != nil {
-		p.Gender = *gender
+		next.Gender = *gender
 	}
 
 	if race != nil {
-		p.Race = *race
+		next.Race = *race
 	}
 
 	if cns != nil {
-		value := strings.TrimSpace(*cns)
-		if value == "" {
-			p.CNS = nil
+		rawCNS := strings.TrimSpace(*cns)
+		if rawCNS == "" {
+			next.CNS = nil
 		} else {
-			p.CNS = &value
+			value := demographics.CleanDigits(rawCNS)
+			next.CNS = &value
 		}
 	}
 
-	p.UpdatedAt = time.Now().UTC()
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	next.UpdatedAt = time.Now().UTC()
+	*p = next
+	return nil
 }

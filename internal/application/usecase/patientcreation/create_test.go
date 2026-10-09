@@ -36,7 +36,7 @@ func (r *creationRepository) CreateWithInitialAccess(
 func validInput(relationType string) Input {
 	return Input{
 		Profile: patientprofile.CreateInput{
-			CPF:       "12345678901",
+			CPF:       "52998224725",
 			FullName:  "Joana Silva",
 			BirthDate: time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC),
 			Gender:    demographics.GenderFemale,

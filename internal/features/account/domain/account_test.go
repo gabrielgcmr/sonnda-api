@@ -77,8 +77,9 @@ func TestProfileValidationBoundaries(t *testing.T) {
 		{"future date", Profile{BirthDate: ptr(time.Now().UTC().AddDate(0, 0, 1))}, ErrInvalidBirthDate},
 		{"today", Profile{BirthDate: ptr(time.Now().UTC())}, nil},
 		{"blank CPF", Profile{CPF: ptr(" ")}, nil},
-		{"formatted CPF", Profile{CPF: ptr("123.456.789-01")}, nil},
-		{"no CPF checksum rule", Profile{CPF: ptr("00000000000")}, nil},
+		{"formatted CPF", Profile{CPF: ptr("529.982.247-25")}, nil},
+		{"invalid CPF check digits", Profile{CPF: ptr("12345678901")}, ErrInvalidCPF},
+		{"repeated CPF", Profile{CPF: ptr("00000000000")}, ErrInvalidCPF},
 		{"short CPF", Profile{CPF: ptr("123")}, ErrInvalidCPF},
 		{"long CPF", Profile{CPF: ptr("123456789012")}, ErrInvalidCPF},
 		{"invalid CPF", Profile{CPF: ptr("abc")}, ErrInvalidCPF},
@@ -102,11 +103,11 @@ func TestProfileValidationBoundaries(t *testing.T) {
 func TestProfileUpdatesAreAtomicAndDoNotAliasInputs(t *testing.T) {
 	name := "  Ana Silva  "
 	birth := time.Date(1990, 1, 2, 23, 0, 0, 0, time.FixedZone("BRT", -3*3600))
-	a, err := NewAccount(NewAccountParams{Profile: Profile{FullName: &name, BirthDate: &birth, CPF: ptr("123.456.789-01"), Phone: ptr(" 11999999999 ")}})
+	a, err := NewAccount(NewAccountParams{Profile: Profile{FullName: &name, BirthDate: &birth, CPF: ptr("529.982.247-25"), Phone: ptr(" 11999999999 ")}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *a.Profile.FullName != "Ana Silva" || *a.Profile.CPF != "12345678901" || a.Profile.BirthDate.Format(time.DateOnly) != "1990-01-02" {
+	if *a.Profile.FullName != "Ana Silva" || *a.Profile.CPF != "52998224725" || a.Profile.BirthDate.Format(time.DateOnly) != "1990-01-02" {
 		t.Fatalf("unexpected normalization: %+v", a.Profile)
 	}
 	name = "Mutated input"

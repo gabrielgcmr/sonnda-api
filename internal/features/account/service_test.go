@@ -267,7 +267,7 @@ func TestProfileUpdateDistinguishesOmittedNullAndValue(t *testing.T) {
 }
 
 func TestProfileUpdateNormalizesEmptyCPFAndPhoneToNull(t *testing.T) {
-	cpf, phone := "12345678901", "11999999999"
+	cpf, phone := "52998224725", "11999999999"
 	a, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{Profile: accountdomain.Profile{CPF: &cpf, Phone: &phone}})
 	repo := &profileRepository{account: a}
 	empty := ""

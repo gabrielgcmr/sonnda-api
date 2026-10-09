@@ -197,6 +197,33 @@ func TestPatientUpdateReusesResolvedPatient(t *testing.T) {
 	}
 }
 
+func TestPatientUpdateRejectsEmptyFullNameWithoutPersistence(t *testing.T) {
+	actor := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
+	patient := &profiledomain.Patient{
+		ID:        uuid.New(),
+		CPF:       "52998224725",
+		FullName:  "Paciente",
+		BirthDate: time.Now().Add(-24 * time.Hour),
+	}
+	resolver := &deniedPatientAccess{patient: patient}
+	repository := &updateRepository{}
+	emptyName := "   "
+
+	_, err := New(repository, NewAuthorizer(resolver)).Update(
+		context.Background(),
+		actor,
+		patient.ID,
+		UpdateInput{FullName: &emptyName},
+	)
+	assertAppErrorKind(t, err, apperr.VALIDATION_FAILED)
+	if repository.updateCalls != 0 {
+		t.Fatalf("invalid update reached repository: calls=%d", repository.updateCalls)
+	}
+	if patient.FullName != "Paciente" {
+		t.Fatalf("invalid update changed patient name to %q", patient.FullName)
+	}
+}
+
 func assertAppErrorKind(t *testing.T, err error, want apperr.ErrorKind) {
 	t.Helper()
 	var appErr *apperr.AppError
