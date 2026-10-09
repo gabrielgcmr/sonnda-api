@@ -66,3 +66,10 @@ This project uses a **centralized error contract** based on `AppError`.
 ## Logging
 - The app uses `log/slog` via `internal/kernel/observability` (request-scoped logger is injected by HTTP middleware).
 - Configure with `LOG_LEVEL` (`debug|info|warn|error`) and `LOG_FORMAT` (`text|json|pretty`).
+
+## Cursor Cloud specific instructions
+- Use `/usr/local/bin/go` (Go 1.26.9). `go test ./...` is the API check. PDF text extraction needs `pdftotext` from `poppler-utils`.
+- PostgreSQL 17 is local. `policy-rc.d` blocks `service postgresql start`; start the cluster with `sudo pg_ctlcluster 17 main start`. The database is `sonnda`, the role is `ubuntu`, and the socket URL is `postgres://ubuntu@/sonnda?host=/var/run/postgresql`.
+- Migrations in `supabase/migrations` expect the roles `anon`, `authenticated`, and `service_role`, plus `auth.uid()`. The API reads `.env` (see `.env.example`). `SUPABASE_JWT_ISSUER` must be a reachable OpenID issuer; the hosted project URL is `PUBLIC_SUPABASE_URL` in the web app's `.env.example`. A local service-account file is enough for `GOOGLE_APPLICATION_CREDENTIALS` to boot the API. Object uploads still need a real Cloud Storage bucket.
+- `make dev` serves `http://127.0.0.1:8080`. `GET /healthz` is public. Other routes require a Supabase bearer token.
+- When `sonnda-svelte` is checked out next to this repo, install with `bun install --frozen-lockfile`, copy `.env.example` to `.env`, and run `bun run dev -- --host 127.0.0.1 --port 5173`. `bun run validate` is the web check.
