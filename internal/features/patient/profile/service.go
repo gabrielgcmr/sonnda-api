@@ -6,7 +6,6 @@ import (
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
-	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 
 	"github.com/google/uuid"
 )
@@ -18,29 +17,25 @@ type Service interface {
 	HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
 }
 
-type AccessResolver interface {
-	ResolveAccessiblePatient(ctx context.Context, accountID, patientID uuid.UUID) (*profiledomain.Patient, error)
-}
-
 type service struct {
-	repo           Repository
-	accessResolver AccessResolver
+	repo       Repository
+	authorizer Authorizer
 }
 
 var _ Service = (*service)(nil)
 
 func New(
 	repo Repository,
-	accessResolver AccessResolver,
+	authorizer Authorizer,
 ) Service {
 	return &service{
-		repo:           repo,
-		accessResolver: accessResolver,
+		repo:       repo,
+		authorizer: authorizer,
 	}
 }
 
 func (s *service) Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error) {
-	p, err := s.accessResolver.ResolveAccessiblePatient(ctx, currentAccountID(currentAccount), id)
+	p, err := s.authorizer.Authorize(ctx, currentAccount, id, ReadProfile)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +43,7 @@ func (s *service) Get(ctx context.Context, currentAccount *accountdomain.Account
 }
 
 func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input UpdateInput) (*profiledomain.Patient, error) {
-	p, err := s.accessResolver.ResolveAccessiblePatient(ctx, currentAccountID(currentAccount), id)
+	p, err := s.authorizer.Authorize(ctx, currentAccount, id, UpdateProfile)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +68,7 @@ func (s *service) Update(ctx context.Context, currentAccount *accountdomain.Acco
 }
 
 func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if _, err := s.resolveProfessionalAccess(ctx, currentAccount, id); err != nil {
+	if _, err := s.authorizer.Authorize(ctx, currentAccount, id, SoftDeleteProfile); err != nil {
 		return err
 	}
 
@@ -84,7 +79,7 @@ func (s *service) SoftDelete(ctx context.Context, currentAccount *accountdomain.
 }
 
 func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error {
-	if _, err := s.resolveProfessionalAccess(ctx, currentAccount, id); err != nil {
+	if _, err := s.authorizer.Authorize(ctx, currentAccount, id, HardDeleteProfile); err != nil {
 		return err
 	}
 
@@ -92,25 +87,4 @@ func (s *service) HardDelete(ctx context.Context, currentAccount *accountdomain.
 		return mapRepoError("patientRepo.HardDelete", err)
 	}
 	return nil
-}
-
-func (s *service) resolveProfessionalAccess(
-	ctx context.Context,
-	currentAccount *accountdomain.Account,
-	patientID uuid.UUID,
-) (*profiledomain.Patient, error) {
-	if currentAccount == nil || currentAccount.ID == uuid.Nil {
-		return nil, apperr.Unauthorized("autenticação necessária")
-	}
-	if currentAccount.DeletedAt != nil || currentAccount.AccountType != accountdomain.AccountTypeProfessional {
-		return nil, apperr.Forbidden("acesso negado")
-	}
-	return s.accessResolver.ResolveAccessiblePatient(ctx, currentAccount.ID, patientID)
-}
-
-func currentAccountID(currentAccount *accountdomain.Account) uuid.UUID {
-	if currentAccount == nil {
-		return uuid.Nil
-	}
-	return currentAccount.ID
 }

@@ -36,7 +36,7 @@ func TestPatientOperationsStopWhenAccessIsDenied(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			accessChecker := &deniedPatientAccess{err: denied}
 			// Nil repositories ensure no read or write happens after denial.
-			svc := New(nil, accessChecker)
+			svc := New(nil, NewAuthorizer(accessChecker))
 			var err error
 			switch operation {
 			case "get":
@@ -79,7 +79,7 @@ func TestPatientDeletesRequireProfessionalAccount(t *testing.T) {
 	for _, operation := range []string{"soft delete", "hard delete"} {
 		t.Run(operation, func(t *testing.T) {
 			accessChecker := &deniedPatientAccess{err: errors.New("access checker should not be called")}
-			svc := New(nil, accessChecker)
+			svc := New(nil, NewAuthorizer(accessChecker))
 			actor := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
 
 			var err error
@@ -100,7 +100,7 @@ func TestPatientDeletesRequireProfessionalAccount(t *testing.T) {
 func TestPatientDeletesRequireAuthentication(t *testing.T) {
 	patientID := uuid.New()
 	accessChecker := &deniedPatientAccess{err: errors.New("access checker should not be called")}
-	svc := New(nil, accessChecker)
+	svc := New(nil, NewAuthorizer(accessChecker))
 
 	for _, operation := range []string{"soft delete", "hard delete"} {
 		t.Run(operation, func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestProfessionalWithAccessCanDeletePatient(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			repository := &deletionRepository{}
 			accessChecker := &deniedPatientAccess{patient: &profiledomain.Patient{ID: patientID}}
-			svc := New(repository, accessChecker)
+			svc := New(repository, NewAuthorizer(accessChecker))
 
 			var err error
 			if operation == "soft delete" {
@@ -162,10 +162,10 @@ func (r *updateRepository) Update(context.Context, *profiledomain.Patient) error
 }
 
 func TestPatientGetReusesResolvedPatient(t *testing.T) {
-	actor := &accountdomain.Account{ID: uuid.New()}
+	actor := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
 	patient := &profiledomain.Patient{ID: uuid.New()}
 	resolver := &deniedPatientAccess{patient: patient}
-	svc := New(nil, resolver)
+	svc := New(nil, NewAuthorizer(resolver))
 
 	result, err := svc.Get(context.Background(), actor, patient.ID)
 	if err != nil {
@@ -177,7 +177,7 @@ func TestPatientGetReusesResolvedPatient(t *testing.T) {
 }
 
 func TestPatientUpdateReusesResolvedPatient(t *testing.T) {
-	actor := &accountdomain.Account{ID: uuid.New()}
+	actor := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
 	patient := &profiledomain.Patient{
 		ID:        uuid.New(),
 		CPF:       "52998224725",
@@ -186,7 +186,7 @@ func TestPatientUpdateReusesResolvedPatient(t *testing.T) {
 	}
 	resolver := &deniedPatientAccess{patient: patient}
 	repository := &updateRepository{}
-	svc := New(repository, resolver)
+	svc := New(repository, NewAuthorizer(resolver))
 
 	result, err := svc.Update(context.Background(), actor, patient.ID, UpdateInput{})
 	if err != nil {

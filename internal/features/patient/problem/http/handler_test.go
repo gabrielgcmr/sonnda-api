@@ -95,7 +95,7 @@ func testRouter(store *testStore, kind accountdomain.AccountType, hasAccess bool
 	actorID := uuid.New()
 	// The middleware's account type must not override the persisted account type.
 	account := &accountdomain.Account{ID: actorID, AccountType: kind}
-	authorizer := authz.NewProblemAuthorizer(authz.NewPatientContextResolver(testAccountLookup{account}, testAccess{hasAccess}))
+	authorizer := problem.NewAuthorizer(authz.NewPatientContextResolver(testAccountLookup{account}, testAccess{hasAccess}))
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: actorID, AccountType: accountdomain.AccountTypeProfessional}))

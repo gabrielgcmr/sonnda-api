@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	problemdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
@@ -29,7 +28,7 @@ type MergeInput struct {
 // Merge consolidates valid source problems into one valid destination. Every
 // problem and its audit event are saved atomically with version checks.
 func (s *Service) Merge(ctx context.Context, actorID, patientID, destinationID uuid.UUID, input MergeInput) (problemdomain.Problem, error) {
-	if err := s.authorize(ctx, actorID, patientID, authz.MergeProblems); err != nil {
+	if err := s.authorize(ctx, actorID, patientID, MergeProblems); err != nil {
 		return problemdomain.Problem{}, err
 	}
 	if input.Version < 1 {

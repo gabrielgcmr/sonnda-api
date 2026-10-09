@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	problemdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
@@ -14,10 +13,10 @@ import (
 
 type Service struct {
 	repo       Repository
-	authorizer authz.ProblemAuthorizer
+	authorizer Authorizer
 }
 
-func New(repo Repository, authorizer authz.ProblemAuthorizer) *Service {
+func New(repo Repository, authorizer Authorizer) *Service {
 	return &Service{repo: repo, authorizer: authorizer}
 }
 
@@ -35,7 +34,7 @@ type Page[T any] struct {
 }
 
 func (s *Service) Create(ctx context.Context, actorID, patientID uuid.UUID, input CreateInput) (problemdomain.Problem, error) {
-	if err := s.authorize(ctx, actorID, patientID, authz.CreateProblem); err != nil {
+	if err := s.authorize(ctx, actorID, patientID, CreateProblem); err != nil {
 		return problemdomain.Problem{}, err
 	}
 	p, event, err := problemdomain.NewProblem(problemdomain.NewProblemParams{
@@ -61,7 +60,7 @@ func (s *Service) Create(ctx context.Context, actorID, patientID uuid.UUID, inpu
 }
 
 func (s *Service) Get(ctx context.Context, actorID, patientID, problemID uuid.UUID) (problemdomain.Problem, error) {
-	if err := s.authorize(ctx, actorID, patientID, authz.ReadProblem); err != nil {
+	if err := s.authorize(ctx, actorID, patientID, ReadProblem); err != nil {
 		return problemdomain.Problem{}, err
 	}
 	p, err := s.repo.Get(ctx, patientID, problemID)
@@ -69,7 +68,7 @@ func (s *Service) Get(ctx context.Context, actorID, patientID, problemID uuid.UU
 }
 
 func (s *Service) List(ctx context.Context, actorID, patientID uuid.UUID, filter ListFilter) (Page[problemdomain.Problem], error) {
-	if err := s.authorize(ctx, actorID, patientID, authz.ListProblems); err != nil {
+	if err := s.authorize(ctx, actorID, patientID, ListProblems); err != nil {
 		return Page[problemdomain.Problem]{}, err
 	}
 	page, err := normalizePagination(filter.Pagination)
@@ -99,7 +98,7 @@ func (s *Service) List(ctx context.Context, actorID, patientID uuid.UUID, filter
 }
 
 func (s *Service) History(ctx context.Context, actorID, patientID, problemID uuid.UUID, pagination Pagination) (Page[problemdomain.HistoryEvent], error) {
-	if err := s.authorize(ctx, actorID, patientID, authz.ReadHistory); err != nil {
+	if err := s.authorize(ctx, actorID, patientID, ReadHistory); err != nil {
 		return Page[problemdomain.HistoryEvent]{}, err
 	}
 	page, err := normalizePagination(pagination)
@@ -117,7 +116,7 @@ func (s *Service) History(ctx context.Context, actorID, patientID, problemID uui
 	return makePage(items, page), nil
 }
 
-func (s *Service) authorize(ctx context.Context, actorID, patientID uuid.UUID, action authz.ProblemAction) error {
+func (s *Service) authorize(ctx context.Context, actorID, patientID uuid.UUID, action Action) error {
 	if s == nil || s.repo == nil || s.authorizer == nil {
 		return apperr.Internal("serviço indisponível", errors.New("problem service dependencies not configured"))
 	}

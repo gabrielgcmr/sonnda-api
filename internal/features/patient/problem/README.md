@@ -7,6 +7,10 @@ A autorização consulta o tipo atual da conta no backend. Apenas contas
 Edição, classificação, reabertura, retificação e unificação exigem `professional`. Qualquer conta
 registrada com acesso pode resolver um problema agudo ativo.
 
+A feature Ã© dona de `Action`, `RequireAction` e `Authorizer`. O pacote compartilhado
+`internal/features/authz` fornece apenas `PatientContext` e `PatientContextResolver`,
+isto Ã©, os fatos confiÃ¡veis de conta e acesso usados pela policy local.
+
 | Método | Rota | Resultado |
 | --- | --- | --- |
 | POST | `/patients/{patientId}/problems` | `201`, problema criado e header `Location` |

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	problemdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
@@ -30,41 +29,41 @@ type RectifyInput struct {
 
 // Edit replaces the details. A nil CID11 explicitly removes the previous coding.
 func (s *Service) Edit(ctx context.Context, actorID, patientID, problemID uuid.UUID, input EditInput) (problemdomain.Problem, error) {
-	return s.change(ctx, actorID, patientID, problemID, input.Version, authz.EditProblem, problemdomain.ActionEdited, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
+	return s.change(ctx, actorID, patientID, problemID, input.Version, EditProblem, problemdomain.ActionEdited, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
 		state.Name, state.CID11 = input.Name, input.CID11
 		return state
 	})
 }
 
 func (s *Service) Classify(ctx context.Context, actorID, patientID, problemID uuid.UUID, input ClassifyInput) (problemdomain.Problem, error) {
-	return s.change(ctx, actorID, patientID, problemID, input.Version, authz.ClassifyProblem, problemdomain.ActionClassified, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
+	return s.change(ctx, actorID, patientID, problemID, input.Version, ClassifyProblem, problemdomain.ActionClassified, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
 		state.Classification = input.Classification
 		return state
 	})
 }
 
 func (s *Service) Resolve(ctx context.Context, actorID, patientID, problemID uuid.UUID, version int64) (problemdomain.Problem, error) {
-	return s.change(ctx, actorID, patientID, problemID, version, authz.ResolveProblem, problemdomain.ActionResolved, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
+	return s.change(ctx, actorID, patientID, problemID, version, ResolveProblem, problemdomain.ActionResolved, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
 		state.ClinicalStatus = problemdomain.ClinicalStatusResolved
 		return state
 	})
 }
 
 func (s *Service) Reopen(ctx context.Context, actorID, patientID, problemID uuid.UUID, version int64) (problemdomain.Problem, error) {
-	return s.change(ctx, actorID, patientID, problemID, version, authz.ReopenProblem, problemdomain.ActionReopened, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
+	return s.change(ctx, actorID, patientID, problemID, version, ReopenProblem, problemdomain.ActionReopened, "", func(state problemdomain.Snapshot) problemdomain.Snapshot {
 		state.ClinicalStatus = problemdomain.ClinicalStatusActive
 		return state
 	})
 }
 
 func (s *Service) Rectify(ctx context.Context, actorID, patientID, problemID uuid.UUID, input RectifyInput) (problemdomain.Problem, error) {
-	return s.change(ctx, actorID, patientID, problemID, input.Version, authz.RectifyProblem, problemdomain.ActionRectified, input.Reason, func(state problemdomain.Snapshot) problemdomain.Snapshot {
+	return s.change(ctx, actorID, patientID, problemID, input.Version, RectifyProblem, problemdomain.ActionRectified, input.Reason, func(state problemdomain.Snapshot) problemdomain.Snapshot {
 		state.AdministrativeStatus = problemdomain.AdministrativeStatusEnteredInError
 		return state
 	})
 }
 
-func (s *Service) change(ctx context.Context, actorID, patientID, problemID uuid.UUID, version int64, permission authz.ProblemAction, action problemdomain.Action, reason string, apply func(problemdomain.Snapshot) problemdomain.Snapshot) (problemdomain.Problem, error) {
+func (s *Service) change(ctx context.Context, actorID, patientID, problemID uuid.UUID, version int64, permission Action, action problemdomain.Action, reason string, apply func(problemdomain.Snapshot) problemdomain.Snapshot) (problemdomain.Problem, error) {
 	if err := s.authorize(ctx, actorID, patientID, permission); err != nil {
 		return problemdomain.Problem{}, err
 	}

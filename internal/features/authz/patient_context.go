@@ -19,6 +19,15 @@ type accessChecker interface {
 	RequireAccess(ctx context.Context, accountID, patientID uuid.UUID) error
 }
 
+// PatientContext contains trusted account and patient-access facts shared by
+// feature-owned authorization policies.
+type PatientContext struct {
+	AccountID   uuid.UUID
+	PatientID   uuid.UUID
+	AccountType accountdomain.AccountType
+	HasAccess   bool
+}
+
 // PatientContextResolver loads current authorization facts from backend stores.
 type PatientContextResolver struct {
 	accounts accountLookup

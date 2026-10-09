@@ -37,12 +37,12 @@ func (r *concurrentReadRepository) Get(ctx context.Context, patientID, problemID
 
 type changeTestAuthorizer struct{ professionalID uuid.UUID }
 
-func (a changeTestAuthorizer) Authorize(_ context.Context, actorID, patientID uuid.UUID, action authz.ProblemAction) error {
+func (a changeTestAuthorizer) Authorize(_ context.Context, actorID, patientID uuid.UUID, action problemservice.Action) error {
 	kind := accountdomain.AccountTypeBasicCare
 	if actorID == a.professionalID {
 		kind = accountdomain.AccountTypeProfessional
 	}
-	return authz.RequireProblemAction(action, patientID, authz.PatientContext{
+	return problemservice.RequireAction(action, patientID, authz.PatientContext{
 		AccountID: actorID, PatientID: patientID, AccountType: kind, HasAccess: true,
 	})
 }

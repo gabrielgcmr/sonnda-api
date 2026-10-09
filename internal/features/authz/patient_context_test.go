@@ -38,7 +38,6 @@ func TestPatientContextUsesRegisteredAccountAndActiveAccess(t *testing.T) {
 	if actor.AccountID != accountID || actor.PatientID != patientID || actor.AccountType != accountdomain.AccountTypeBasicCare || !actor.HasAccess {
 		t.Fatalf("unexpected context: %+v", actor)
 	}
-	assertProblemAction(t, "basic care with access", ResolveProblem, patientID, actor, true)
 }
 
 func TestPatientContextFailsClosed(t *testing.T) {
