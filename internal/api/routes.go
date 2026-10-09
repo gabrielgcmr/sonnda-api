@@ -25,6 +25,7 @@ type APIDependencies struct {
 	Account                        *accounthttp.Middleware
 	AccountHandler                 *accounthttp.Handler
 	CaptureHandler                 *capturehttp.Handler
+	CaptureAuth                    *capturehttp.Middleware
 	PatientAccessHandler           *accesshttp.Handler
 	PatientCreationHandler         *patienthttp.CreationHandler
 	PatientHandler                 *profilehttp.Handler
@@ -58,9 +59,14 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	onboarded := huma.NewGroup(resolved)
 	onboarded.UseMiddleware(middleware.RequireCompletedOnboarding(api))
 
+	captureMobile := huma.NewGroup(api)
+	captureMobile.UseMiddleware(middleware.RequireCaptureToken(api, deps.CaptureAuth))
+
 	deps.AccountHandler.RegisterAuthenticatedRoutes(authenticated, bearerSecurity())
 	deps.AccountHandler.RegisterResolvedRoutes(resolved, bearerSecurity())
 	deps.AccountHandler.RegisterOnboardedRoutes(onboarded, bearerSecurity())
+	deps.CaptureHandler.RegisterPublicRoutes(api)
+	deps.CaptureHandler.RegisterMobileRoutes(captureMobile, captureTokenSecurity())
 	deps.CaptureHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 
 	deps.PatientAccessHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
@@ -75,4 +81,8 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 
 func bearerSecurity() []map[string][]string {
 	return []map[string][]string{{bearerAuthScheme: {}}}
+}
+
+func captureTokenSecurity() []map[string][]string {
+	return []map[string][]string{{captureTokenAuthScheme: {}}}
 }

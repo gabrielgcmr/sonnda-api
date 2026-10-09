@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
@@ -104,6 +105,8 @@ type SupabaseBucketStorage struct {
 	maxFileSize int64
 }
 
+var _ capture.FileStorage = (*SupabaseBucketStorage)(nil)
+
 // ForBucket cria um adapter SupabaseBucketStorage vinculado ao bucket configurado.
 func (c *SupabaseStorageClient) ForBucket(cfg BucketConfig) (*SupabaseBucketStorage, error) {
 	bucketName := strings.TrimSpace(cfg.BucketName)
@@ -141,6 +144,15 @@ func (s *SupabaseBucketStorage) BucketName() string {
 // MaxFileSize retorna o tamanho máximo de arquivo permitido (em bytes).
 func (s *SupabaseBucketStorage) MaxFileSize() int64 {
 	return s.maxFileSize
+}
+
+// ObjectURI returns the canonical private URI for an object in this bucket.
+func (s *SupabaseBucketStorage) ObjectURI(objectName string) (string, error) {
+	cleanObjectName, err := validateObjectPath(objectName)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%s/%s", URIScheme, s.bucketName, cleanObjectName), nil
 }
 
 // Upload envia um arquivo para o bucket via POST /storage/v1/object/<bucket>/<objectName> sem upsert.
@@ -221,8 +233,7 @@ func (s *SupabaseBucketStorage) Upload(
 		return "", s.mapHTTPResponseError(resp.StatusCode, respBody, "supabase.upload")
 	}
 
-	storageURI := fmt.Sprintf("%s%s/%s", URIScheme, s.bucketName, cleanObjectName)
-	return storageURI, nil
+	return s.ObjectURI(cleanObjectName)
 }
 
 // Open abre um arquivo para streaming autenticado via GET /storage/v1/object/authenticated/<bucket>/<objectPath>.

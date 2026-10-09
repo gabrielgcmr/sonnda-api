@@ -75,12 +75,25 @@ func (r *Repository) ClaimSession(ctx context.Context, pairingHash []byte, claim
 	return mapSession(row)
 }
 
-func (r *Repository) AuthenticateUpload(ctx context.Context, sessionID uuid.UUID, uploadTokenHash []byte, now, desktopPresenceCutoff time.Time) (*capturedomain.Session, error) {
+func (r *Repository) AuthenticateMobile(ctx context.Context, uploadTokenHash []byte, now time.Time) (*capturedomain.Session, error) {
+	if len(uploadTokenHash) != capturedomain.CredentialHashBytes {
+		return nil, capturedomain.ErrInvalidHash
+	}
+	row, err := r.queries.AuthenticateCaptureMobile(ctx, capturesqlc.AuthenticateCaptureMobileParams{
+		UploadTokenHash: cloneBytes(uploadTokenHash), Now: timestamp(now),
+	})
+	if err != nil {
+		return nil, resultError("authenticate capture mobile", err, capture.ErrSessionNotFound)
+	}
+	return mapSession(row)
+}
+
+func (r *Repository) AuthenticateUpload(ctx context.Context, uploadTokenHash []byte, now, desktopPresenceCutoff time.Time) (*capturedomain.Session, error) {
 	if len(uploadTokenHash) != capturedomain.CredentialHashBytes {
 		return nil, capturedomain.ErrInvalidHash
 	}
 	row, err := r.queries.AuthenticateCaptureUpload(ctx, capturesqlc.AuthenticateCaptureUploadParams{
-		ID: sessionID, UploadTokenHash: cloneBytes(uploadTokenHash), Now: timestamp(now),
+		UploadTokenHash: cloneBytes(uploadTokenHash), Now: timestamp(now),
 		DesktopPresenceCutoff: timestamp(desktopPresenceCutoff),
 	})
 	if err != nil {

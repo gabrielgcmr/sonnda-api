@@ -24,7 +24,8 @@ type Repository interface {
 	FindCurrentSession(ctx context.Context, accountID uuid.UUID) (*capturedomain.Session, error)
 	RevokeSessionsByAccount(ctx context.Context, accountID uuid.UUID, revokedAt time.Time) (int64, error)
 	ClaimSession(ctx context.Context, pairingHash []byte, claim capturedomain.SessionClaim, desktopPresenceCutoff time.Time) (*capturedomain.Session, error)
-	AuthenticateUpload(ctx context.Context, sessionID uuid.UUID, uploadTokenHash []byte, now, desktopPresenceCutoff time.Time) (*capturedomain.Session, error)
+	AuthenticateMobile(ctx context.Context, uploadTokenHash []byte, now time.Time) (*capturedomain.Session, error)
+	AuthenticateUpload(ctx context.Context, uploadTokenHash []byte, now, desktopPresenceCutoff time.Time) (*capturedomain.Session, error)
 	TouchDesktop(ctx context.Context, sessionID, accountID uuid.UUID, seenAt time.Time) error
 	TouchMobile(ctx context.Context, sessionID uuid.UUID, uploadTokenHash []byte, seenAt time.Time) error
 	RevokeSession(ctx context.Context, sessionID, accountID uuid.UUID, revokedAt time.Time) error
@@ -45,8 +46,9 @@ type Pagination struct {
 }
 
 type FileStorage interface {
+	ObjectURI(objectName string) (string, error)
 	Upload(ctx context.Context, file io.Reader, objectName, contentType string) (string, error)
 	Open(ctx context.Context, uri string) (io.ReadCloser, error)
 	Delete(ctx context.Context, uri string) error
-	GetSignedURL(ctx context.Context, uri string, expirationMinutes int) (string, error)
+	GetSignedURL(ctx context.Context, uri string, expiresIn time.Duration) (string, error)
 }

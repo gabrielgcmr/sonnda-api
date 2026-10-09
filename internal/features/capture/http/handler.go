@@ -11,6 +11,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
@@ -22,6 +23,10 @@ type captureService interface {
 	CurrentSession(ctx context.Context, accountID uuid.UUID) (*capture.SessionState, error)
 	Heartbeat(ctx context.Context, accountID, sessionID uuid.UUID) (*capture.SessionState, error)
 	RevokeSession(ctx context.Context, accountID, sessionID uuid.UUID) error
+	ClaimSession(ctx context.Context, pairingCode string) (*capture.ClaimedSession, error)
+	AuthenticateMobile(ctx context.Context, uploadToken string) (*capture.MobileCredential, error)
+	MobileHeartbeat(ctx context.Context, credential capture.MobileCredential, sessionID uuid.UUID) (*capture.SessionState, error)
+	UploadCapture(ctx context.Context, credential capture.MobileCredential, input capture.UploadInput) (*capturedomain.Capture, error)
 }
 
 type Handler struct {

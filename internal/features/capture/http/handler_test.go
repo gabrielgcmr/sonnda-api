@@ -10,6 +10,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	"github.com/google/uuid"
 )
 
@@ -33,6 +34,22 @@ func (*handlerCaptureService) Heartbeat(context.Context, uuid.UUID, uuid.UUID) (
 
 func (*handlerCaptureService) RevokeSession(context.Context, uuid.UUID, uuid.UUID) error {
 	return nil
+}
+
+func (*handlerCaptureService) ClaimSession(context.Context, string) (*capture.ClaimedSession, error) {
+	return nil, nil
+}
+
+func (*handlerCaptureService) AuthenticateMobile(context.Context, string) (*capture.MobileCredential, error) {
+	return nil, nil
+}
+
+func (*handlerCaptureService) MobileHeartbeat(context.Context, capture.MobileCredential, uuid.UUID) (*capture.SessionState, error) {
+	return nil, nil
+}
+
+func (*handlerCaptureService) UploadCapture(context.Context, capture.MobileCredential, capture.UploadInput) (*capturedomain.Capture, error) {
+	return nil, nil
 }
 
 func TestCreateSessionReturnsSecretOnceWithNoStore(t *testing.T) {

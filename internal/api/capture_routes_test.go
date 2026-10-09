@@ -2,23 +2,33 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	accounthttp "github.com/gabrielgcmr/sonnda/internal/features/account/http"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	capturehttp "github.com/gabrielgcmr/sonnda/internal/features/capture/http"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type captureRouteService struct {
-	created *capture.CreatedSession
-	state   *capture.SessionState
+	created       *capture.CreatedSession
+	state         *capture.SessionState
+	claimed       *capture.ClaimedSession
+	uploaded      *capturedomain.Capture
+	claimCode     string
+	captureToken  string
+	mobileSession uuid.UUID
 }
 
 func (s *captureRouteService) CreateSession(context.Context, uuid.UUID) (*capture.CreatedSession, error) {
@@ -35,6 +45,100 @@ func (s *captureRouteService) Heartbeat(context.Context, uuid.UUID, uuid.UUID) (
 
 func (*captureRouteService) RevokeSession(context.Context, uuid.UUID, uuid.UUID) error {
 	return nil
+}
+
+func (s *captureRouteService) ClaimSession(_ context.Context, code string) (*capture.ClaimedSession, error) {
+	s.claimCode = code
+	return s.claimed, nil
+}
+
+func (s *captureRouteService) AuthenticateMobile(_ context.Context, token string) (*capture.MobileCredential, error) {
+	s.captureToken = token
+	if token == "" {
+		return nil, apperr.Unauthorized("credencial de captura necessária")
+	}
+	return &capture.MobileCredential{}, nil
+}
+
+func (s *captureRouteService) MobileHeartbeat(_ context.Context, _ capture.MobileCredential, sessionID uuid.UUID) (*capture.SessionState, error) {
+	s.mobileSession = sessionID
+	return s.state, nil
+}
+
+func (s *captureRouteService) UploadCapture(context.Context, capture.MobileCredential, capture.UploadInput) (*capturedomain.Capture, error) {
+	return s.uploaded, nil
+}
+
+func TestCaptureClaimAndMobileRoutesUseRestrictedCredential(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	sessionID := uuid.New()
+	service := &captureRouteService{
+		claimed: &capture.ClaimedSession{SessionID: sessionID, UploadToken: "upload-secret", UploadTokenExpiresAt: now.Add(12 * time.Hour)},
+		state:   &capture.SessionState{ID: sessionID, PairingExpiresAt: now, DesktopLastSeenAt: now, MobilePresent: true},
+		uploaded: &capturedomain.Capture{
+			ID: uuid.New(), CaptureSessionID: sessionID, OriginalFilename: "exam.pdf", MIMEType: "application/pdf",
+			SizeBytes: 8, Status: capturedomain.StatusAvailable, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now,
+		},
+	}
+	handler := capturehttp.NewHandler(service)
+	router := gin.New()
+	SetupRoutes(router, &APIDependencies{
+		CaptureHandler: handler,
+		CaptureAuth:    capturehttp.NewMiddleware(service),
+	})
+
+	claimRequest := httptest.NewRequest(http.MethodPost, "/capture-sessions/claim", bytes.NewBufferString(`{"code":"qr-secret"}`))
+	claimRequest.Header.Set("Content-Type", "application/json")
+	claimResponse := httptest.NewRecorder()
+	router.ServeHTTP(claimResponse, claimRequest)
+	if claimResponse.Code != http.StatusOK || claimResponse.Header().Get("Cache-Control") != "private, no-store" || service.claimCode != "qr-secret" {
+		t.Fatalf("claim failed: status=%d cache=%q body=%s", claimResponse.Code, claimResponse.Header().Get("Cache-Control"), claimResponse.Body.String())
+	}
+	if !bytes.Contains(claimResponse.Body.Bytes(), []byte(`"upload_token":"upload-secret"`)) {
+		t.Fatalf("claim token missing: %s", claimResponse.Body.String())
+	}
+
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(unauthorized, captureUploadRequest(t, ""))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("capture without restricted token returned %d: %s", unauthorized.Code, unauthorized.Body.String())
+	}
+
+	uploadRequest := captureUploadRequest(t, "upload-secret")
+	uploadResponse := httptest.NewRecorder()
+	router.ServeHTTP(uploadResponse, uploadRequest)
+	if uploadResponse.Code != http.StatusCreated || service.captureToken != "upload-secret" {
+		t.Fatalf("upload failed: status=%d token=%q body=%s", uploadResponse.Code, service.captureToken, uploadResponse.Body.String())
+	}
+
+	heartbeatRequest := httptest.NewRequest(http.MethodPost, "/capture-sessions/"+sessionID.String()+"/mobile-heartbeat", nil)
+	heartbeatRequest.Header.Set("X-Capture-Token", "upload-secret")
+	heartbeatResponse := httptest.NewRecorder()
+	router.ServeHTTP(heartbeatResponse, heartbeatRequest)
+	if heartbeatResponse.Code != http.StatusOK || service.mobileSession != sessionID {
+		t.Fatalf("mobile heartbeat failed: status=%d body=%s", heartbeatResponse.Code, heartbeatResponse.Body.String())
+	}
+}
+
+func captureUploadRequest(t *testing.T, token string) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "exam.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("%PDF-1.7"))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/captures", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	if token != "" {
+		request.Header.Set("X-Capture-Token", token)
+	}
+	return request
 }
 
 func TestCaptureSessionHTTPResponsesKeepPairingCodeOnlyOnCreation(t *testing.T) {

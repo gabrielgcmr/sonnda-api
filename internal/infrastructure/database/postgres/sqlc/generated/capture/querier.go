@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AuthenticateCaptureMobile(ctx context.Context, arg AuthenticateCaptureMobileParams) (CaptureSession, error)
 	AuthenticateCaptureUpload(ctx context.Context, arg AuthenticateCaptureUploadParams) (CaptureSession, error)
 	ClaimCaptureSession(ctx context.Context, arg ClaimCaptureSessionParams) (CaptureSession, error)
 	CreateCapture(ctx context.Context, arg CreateCaptureParams) error

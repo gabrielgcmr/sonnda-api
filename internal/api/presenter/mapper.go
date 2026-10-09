@@ -1,5 +1,4 @@
 // internal/api/presenter/mapper.go
-// internal/api/presenter/mapper.go
 package presenter
 
 import (
@@ -44,6 +43,8 @@ func StatusFromCode(code apperr.ErrorKind) int {
 		apperr.INVALID_ENUM_VALUE,
 		apperr.INVALID_DATE:
 		return http.StatusBadRequest // 400
+	case apperr.UNSUPPORTED_MEDIA_TYPE:
+		return http.StatusUnsupportedMediaType // 415
 
 	// NOT FOUND
 	case apperr.NOT_FOUND:

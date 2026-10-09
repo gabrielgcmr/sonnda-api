@@ -51,7 +51,7 @@ Serão usados dois buckets privados, um cliente HTTP compartilhado e dois adapte
   - um adapter para `exam-documents`;
   - um adapter para `captures`.
 - Injetar imediatamente o primeiro em `ExamsModule`.
-- Manter o adapter de capturas pronto e validado contra `capture.FileStorage`; sua injeção em `CaptureModule` ocorrerá junto à etapa 1.3 da feature, quando upload e leitura forem implementados.
+- O adapter do bucket `captures` já está injetado em `CaptureModule` desde a etapa 1.3 da feature; a troca do storage de documentos permanentes permanece pendente nesta etapa.
 - No futuro endpoint de captura, limitar a URL assinada a `min(5 minutos, expires_at - agora)`.
 - No endpoint de documentos permanentes, preservar os 15 minutos atuais.
 

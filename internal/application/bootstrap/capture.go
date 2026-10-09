@@ -9,10 +9,15 @@ import (
 )
 
 type CaptureModule struct {
-	Handler *capturehttp.Handler
+	Handler    *capturehttp.Handler
+	Middleware *capturehttp.Middleware
 }
 
-func NewCaptureModule(db *postgress.Client) *CaptureModule {
+func NewCaptureModule(db *postgress.Client, storage capture.FileStorage) *CaptureModule {
 	repository := capturepostgres.NewRepository(db)
-	return &CaptureModule{Handler: capturehttp.NewHandler(capture.New(repository))}
+	service := capture.New(repository, storage)
+	return &CaptureModule{
+		Handler:    capturehttp.NewHandler(service),
+		Middleware: capturehttp.NewMiddleware(service),
+	}
 }

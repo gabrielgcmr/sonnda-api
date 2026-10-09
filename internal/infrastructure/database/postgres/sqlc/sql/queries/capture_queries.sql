@@ -39,10 +39,15 @@ WHERE pairing_code_hash = @pairing_code_hash
   AND desktop_last_seen_at >= @desktop_presence_cutoff
 RETURNING *;
 
+-- name: AuthenticateCaptureMobile :one
+SELECT * FROM capture_sessions
+WHERE upload_token_hash = @upload_token_hash
+  AND revoked_at IS NULL
+  AND upload_token_expires_at > @now;
+
 -- name: AuthenticateCaptureUpload :one
 SELECT * FROM capture_sessions
-WHERE id = @id
-  AND upload_token_hash = @upload_token_hash
+WHERE upload_token_hash = @upload_token_hash
   AND revoked_at IS NULL
   AND upload_token_expires_at > @now
   AND desktop_last_seen_at >= @desktop_presence_cutoff;

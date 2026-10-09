@@ -163,6 +163,20 @@ func TestForBucket_Validation(t *testing.T) {
 			t.Fatalf("expected 2 MiB, got: %d", storage.MaxFileSize())
 		}
 	})
+
+	t.Run("canonical object URI", func(t *testing.T) {
+		storage, err := client.ForBucket(BucketConfig{BucketName: "captures"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		uri, err := storage.ObjectURI("account/capture.pdf")
+		if err != nil || uri != "supabase://captures/account/capture.pdf" {
+			t.Fatalf("unexpected object URI: %q %v", uri, err)
+		}
+		if _, err := storage.ObjectURI("../capture.pdf"); err == nil {
+			t.Fatal("expected invalid object path error")
+		}
+	})
 }
 
 func TestUpload(t *testing.T) {

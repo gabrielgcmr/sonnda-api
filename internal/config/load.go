@@ -43,6 +43,8 @@ func Load() (*Config, error) {
 	appendRequired(&violations, envSupabaseProjectURL, cfg.Auth.SupabaseProjectURL)
 	appendRequired(&violations, envGCPProjectID, cfg.Storage.GCPProjectID)
 	appendRequired(&violations, envGCSBucket, cfg.Storage.GCSBucket)
+	appendRequired(&violations, envSupabaseSecretKey, cfg.Storage.SupabaseSecretKey)
+	appendRequired(&violations, envSupabaseCapturesBucket, cfg.Storage.SupabaseCapturesBucket)
 	// Exigir pelo menos uma forma de credenciais do Google Cloud
 	if cfg.Storage.GoogleApplicationCredentials == "" && cfg.Storage.GoogleApplicationCredentialsJSON == "" {
 		violations = append(violations, apperr.Violation{

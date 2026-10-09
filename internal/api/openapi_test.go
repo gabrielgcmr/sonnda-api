@@ -149,3 +149,29 @@ func TestOpenAPIIncludesAuthenticatedCaptureSessionOperations(t *testing.T) {
 		t.Fatalf("unexpected current response schema: %+v", current.Properties)
 	}
 }
+
+func TestOpenAPISeparatesPublicClaimAndMobileCaptureSecurity(t *testing.T) {
+	spec := OpenAPI(APIInfo{})
+	claim := spec.Paths["/capture-sessions/claim"].Post
+	if claim == nil || len(claim.Security) != 0 {
+		t.Fatalf("claim must be public: %+v", claim)
+	}
+	for _, operation := range []*huma.Operation{
+		spec.Paths["/capture-sessions/{sessionId}/mobile-heartbeat"].Post,
+		spec.Paths["/captures"].Post,
+	} {
+		if operation == nil || len(operation.Security) != 1 {
+			t.Fatalf("missing mobile capture operation: %+v", operation)
+		}
+		if _, ok := operation.Security[0][captureTokenAuthScheme]; !ok {
+			t.Fatal("mobile route does not use capture token security")
+		}
+		if _, ok := operation.Security[0][bearerAuthScheme]; ok {
+			t.Fatal("mobile route unexpectedly accepts Supabase bearer auth")
+		}
+	}
+	scheme := spec.Components.SecuritySchemes[captureTokenAuthScheme]
+	if scheme == nil || scheme.Type != "apiKey" || scheme.In != "header" || scheme.Name != "X-Capture-Token" {
+		t.Fatalf("unexpected capture token scheme: %+v", scheme)
+	}
+}

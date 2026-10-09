@@ -1,9 +1,4 @@
 // internal/infrastructure/filestorage/gcsfilestorage.go
-//Para GCS especificamente, **NÃO é necessário** criar um wrapper do `storage.Client` do Google porque:
-//1. ✅ O SDK do Google já é bem abstraído
-//2. ✅ Não vou trocar implementações internas do GCS
-//3. ✅ Seria over-engineering
-
 package filestorage
 
 import (
@@ -13,7 +8,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 
@@ -28,7 +22,6 @@ type GCSObjectStorage struct {
 }
 
 var _ documentprocessing.FileStorageService = (*GCSObjectStorage)(nil)
-var _ capture.FileStorage = (*GCSObjectStorage)(nil)
 
 func NewGCSObjectStorage(
 	ctx context.Context,

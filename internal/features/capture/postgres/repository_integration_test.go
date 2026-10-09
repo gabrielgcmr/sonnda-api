@@ -53,7 +53,10 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 	if err != nil || storedSession.ClaimedAt == nil {
 		t.Fatalf("claim session: %+v %v", storedSession, err)
 	}
-	if _, err = repo.AuthenticateUpload(ctx, session.ID, claimed.UploadTokenHash, now.Add(2*time.Minute), now); err != nil {
+	if _, err = repo.AuthenticateMobile(ctx, claimed.UploadTokenHash, now.Add(2*time.Minute)); err != nil {
+		t.Fatalf("authenticate mobile: %v", err)
+	}
+	if _, err = repo.AuthenticateUpload(ctx, claimed.UploadTokenHash, now.Add(2*time.Minute), now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,16 +124,16 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 	if _, err = repo.ClaimSession(ctx, replacement.PairingCodeHash, replacementClaim, now.Add(4*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = repo.AuthenticateUpload(ctx, replacement.ID, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+	if _, err = repo.AuthenticateUpload(ctx, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
 		t.Fatalf("upload with stale desktop presence error = %v", err)
 	}
 	if err = repo.TouchDesktop(ctx, replacement.ID, accountID, now.Add(7*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = repo.AuthenticateUpload(ctx, replacement.ID, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); err != nil {
+	if _, err = repo.AuthenticateUpload(ctx, replacementClaim.UploadTokenHash, now.Add(7*time.Minute), now.Add(6*time.Minute)); err != nil {
 		t.Fatalf("upload after restored desktop presence: %v", err)
 	}
-	if _, err = repo.AuthenticateUpload(ctx, session.ID, claimed.UploadTokenHash, now.Add(7*time.Minute), now.Add(4*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
+	if _, err = repo.AuthenticateUpload(ctx, claimed.UploadTokenHash, now.Add(7*time.Minute), now.Add(4*time.Minute)); !errors.Is(err, capture.ErrSessionNotFound) {
 		t.Fatalf("upload after session replacement error = %v", err)
 	}
 	reusedClaim, err := capturedomain.NewSessionClaim(hashWithByte(6), now.Add(7*time.Minute))
@@ -172,6 +175,51 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 	}
 }
 
+func TestClaimCaptureSessionIsSingleUseUnderConcurrency(t *testing.T) {
+	_, repo, accountID, _, _ := captureTestDatabase(t)
+	ctx := context.Background()
+	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.UTC)
+	pairingHash := hashWithByte(20)
+	session, err := capturedomain.NewSession(accountID, pairingHash, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, tokenByte := range []byte{21, 22} {
+		tokenByte := tokenByte
+		go func() {
+			<-start
+			claim, claimErr := capturedomain.NewSessionClaim(hashWithByte(tokenByte), now.Add(time.Minute))
+			if claimErr == nil {
+				_, claimErr = repo.ClaimSession(ctx, pairingHash, claim, now.Add(-time.Minute))
+			}
+			results <- claimErr
+		}()
+	}
+	close(start)
+
+	var successes, conflicts int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, capture.ErrStateConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent claim error: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent claim results: successes=%d conflicts=%d", successes, conflicts)
+	}
+}
+
 func captureTestDatabase(t *testing.T) (*postgress.Client, *Repository, uuid.UUID, uuid.UUID, string) {
 	t.Helper()
 	rawURL := os.Getenv("CAPTURES_TEST_DATABASE_URL")
@@ -208,14 +256,19 @@ func captureTestDatabase(t *testing.T) (*postgress.Client, *Repository, uuid.UUI
 	if _, err = admin.Exec(ctx, "CREATE TABLE "+identifier+".accounts (id uuid PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
-	migrationPath := filepath.Join("..", "..", "..", "..", "supabase", "migrations", "20261009132454_create_capture_sessions_and_captures.sql")
-	migration, err := os.ReadFile(migrationPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	migrationSQL := strings.ReplaceAll(string(migration), "public.", identifier+".")
-	if _, err = admin.Exec(ctx, migrationSQL); err != nil {
-		t.Fatal(err)
+	for _, migrationName := range []string{
+		"20261009132454_create_capture_sessions_and_captures.sql",
+		"20261009153157_reduce_capture_file_size_to_5_mib.sql",
+	} {
+		migrationPath := filepath.Join("..", "..", "..", "..", "supabase", "migrations", migrationName)
+		migration, readErr := os.ReadFile(migrationPath)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		migrationSQL := strings.ReplaceAll(string(migration), "public.", identifier+".")
+		if _, err = admin.Exec(ctx, migrationSQL); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	params := databaseURL.Query()

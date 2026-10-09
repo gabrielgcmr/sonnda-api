@@ -89,6 +89,21 @@ func main() {
 	}
 	defer storageService.Close()
 
+	supabaseStorageClient, err := filestorage.NewSupabaseStorageClient(filestorage.SupabaseClientConfig{
+		ProjectURL: cfg.Auth.SupabaseProjectURL,
+		SecretKey:  cfg.Storage.SupabaseSecretKey,
+	})
+	if err != nil {
+		logInfraFatal("falha ao criar cliente do Supabase Storage", err)
+	}
+	captureStorage, err := supabaseStorageClient.ForBucket(filestorage.BucketConfig{
+		BucketName:  cfg.Storage.SupabaseCapturesBucket,
+		MaxFileSize: 5 * 1024 * 1024,
+	})
+	if err != nil {
+		logInfraFatal("falha ao configurar bucket de capturas", err)
+	}
+
 	var labTextExtractor labextraction.LabReportTextExtractor
 	if strings.TrimSpace(cfg.Gemini.APIKey) != "" {
 		geminiClient, err := geminiinfra.NewClient(ctx, cfg.Gemini)
@@ -112,7 +127,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, cfg.OCR, cfg.ProfessionalActivation)
+	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, captureStorage, cfg.OCR, cfg.ProfessionalActivation)
 
 	//8 Middlewares
 	//8.1 API
@@ -135,6 +150,7 @@ func main() {
 			Account:                        modules.Account.Middleware,
 			AccountHandler:                 modules.Account.Handler,
 			CaptureHandler:                 modules.Capture.Handler,
+			CaptureAuth:                    modules.Capture.Middleware,
 			PatientAccessHandler:           modules.PatientAccess.Handler,
 			PatientCreationHandler:         modules.Patient.CreationHandler,
 			PatientHandler:                 modules.Patient.ProfileHandler,

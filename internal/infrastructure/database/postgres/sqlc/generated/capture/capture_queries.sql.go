@@ -12,29 +12,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const authenticateCaptureMobile = `-- name: AuthenticateCaptureMobile :one
+SELECT id, account_id, pairing_code_hash, pairing_expires_at, upload_token_hash, upload_token_expires_at, claimed_at, desktop_last_seen_at, mobile_last_seen_at, revoked_at, created_at, updated_at FROM capture_sessions
+WHERE upload_token_hash = $1
+  AND revoked_at IS NULL
+  AND upload_token_expires_at > $2
+`
+
+type AuthenticateCaptureMobileParams struct {
+	UploadTokenHash []byte             `json:"upload_token_hash"`
+	Now             pgtype.Timestamptz `json:"now"`
+}
+
+func (q *Queries) AuthenticateCaptureMobile(ctx context.Context, arg AuthenticateCaptureMobileParams) (CaptureSession, error) {
+	row := q.db.QueryRow(ctx, authenticateCaptureMobile, arg.UploadTokenHash, arg.Now)
+	var i CaptureSession
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.PairingCodeHash,
+		&i.PairingExpiresAt,
+		&i.UploadTokenHash,
+		&i.UploadTokenExpiresAt,
+		&i.ClaimedAt,
+		&i.DesktopLastSeenAt,
+		&i.MobileLastSeenAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const authenticateCaptureUpload = `-- name: AuthenticateCaptureUpload :one
 SELECT id, account_id, pairing_code_hash, pairing_expires_at, upload_token_hash, upload_token_expires_at, claimed_at, desktop_last_seen_at, mobile_last_seen_at, revoked_at, created_at, updated_at FROM capture_sessions
-WHERE id = $1
-  AND upload_token_hash = $2
+WHERE upload_token_hash = $1
   AND revoked_at IS NULL
-  AND upload_token_expires_at > $3
-  AND desktop_last_seen_at >= $4
+  AND upload_token_expires_at > $2
+  AND desktop_last_seen_at >= $3
 `
 
 type AuthenticateCaptureUploadParams struct {
-	ID                    uuid.UUID          `json:"id"`
 	UploadTokenHash       []byte             `json:"upload_token_hash"`
 	Now                   pgtype.Timestamptz `json:"now"`
 	DesktopPresenceCutoff pgtype.Timestamptz `json:"desktop_presence_cutoff"`
 }
 
 func (q *Queries) AuthenticateCaptureUpload(ctx context.Context, arg AuthenticateCaptureUploadParams) (CaptureSession, error) {
-	row := q.db.QueryRow(ctx, authenticateCaptureUpload,
-		arg.ID,
-		arg.UploadTokenHash,
-		arg.Now,
-		arg.DesktopPresenceCutoff,
-	)
+	row := q.db.QueryRow(ctx, authenticateCaptureUpload, arg.UploadTokenHash, arg.Now, arg.DesktopPresenceCutoff)
 	var i CaptureSession
 	err := row.Scan(
 		&i.ID,
