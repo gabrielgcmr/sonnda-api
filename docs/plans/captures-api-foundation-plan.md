@@ -58,13 +58,60 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
-**Status: concluída em código com serviço de limpeza em lote, comando CLI `cmd/cleanup-captures`, export OpenAPI e suite de testes.**
+**Status: implementação inicial concluída; correções 1.5.1–1.5.4 pendentes.**
 
 - Criar um comando de limpeza executável como job agendado de hora em hora. Ele percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
-- Aplicar a migration antes de publicar os endpoints. Configurar e validar o job agendado antes de habilitar uploads em produção. Publicar o artefato OpenAPI identificado pelo SHA da API para consumo posterior pelo Svelte.
+- Aplicar a migration antes de publicar os endpoints. O cron horário fica fora do repositório: o ambiente executa `cmd/cleanup-captures`. Não criar `pg_cron` nem Vault.
 
-**Aceite:** o job elimina arquivos e registros vencidos, recupera uploads e exclusões interrompidos e não afeta capturas válidas; o OpenAPI expressa corretamente as duas formas de autenticação; o fluxo de pareamento, upload, listagem, revogação e limpeza funciona com dois clientes HTTP independentes.
+**Aceite:** o job elimina arquivos e registros vencidos, recupera uploads e exclusões interrompidos e não afeta capturas válidas; o OpenAPI expressa corretamente as duas formas de autenticação; o fluxo de pareamento, upload, listagem, revogação e limpeza funciona com dois clientes HTTP independentes. Esse fluxo com dois clientes permanece verificação manual e não faz parte das correções abaixo.
+
+#### 1.5.1 — Parar o lote sem progresso
+
+**Status: pendente.**
+
+`Cleanup` em `internal/features/capture/service.go` só interrompe a leitura de capturas quando o lote volta menor que o tamanho pedido. Se a exclusão no Storage falha, o registro continua candidato (`deleting` ou expirado). Com um lote cheio de falhas, a mesma consulta se repete até o timeout, e a limpeza de sessões não chega a rodar.
+
+- Guardar os IDs já tentados nesta execução. Se um lote inteiro já foi visto, ou se nenhuma captura foi excluída, encerrar o laço de capturas e seguir para as sessões.
+- Registrar também a falha de `MarkCaptureDeleting`, em vez de ignorar o erro. O registro permanece para a próxima execução.
+- Ajustar o repositório falso de `internal/features/capture/service_test.go` para devolver de novo quem não foi excluído, como a SQL faz.
+
+**Aceite:** um lote cheio em que todo `Delete` do Storage falha termina, não reprocessa o mesmo ID e ainda remove as sessões vencidas sem capturas.
+
+#### 1.5.2 — Falha parcial encerra o comando com erro
+
+**Status: pendente.**
+
+O serviço devolve o relatório sem erro quando há falhas por captura. `POST /internal/jobs/cleanup-captures` já responde 500 nesse caso. O CLI em `cmd/cleanup-captures` só olha o erro fatal, registra aviso e termina com código 0.
+
+- Sair com código 1 quando a execução falhar ou o relatório tiver erros.
+- Não registrar a execução como concluída com sucesso nesse caso.
+- Extrair a decisão do código de saída para uma função testável no pacote `main`.
+
+**Aceite:** falha parcial e falha fatal encerram o comando com código 1; execução sem erros continua com código 0.
+
+#### 1.5.3 — Testar a SQL e o token do job
+
+**Status: pendente.**
+
+A escolha do que apagar só existe na query e não passa pelo PostgreSQL. O handler do token também não tem teste.
+
+- Em `internal/features/capture/postgres/repository_integration_test.go`, no mesmo schema isolado de `CAPTURES_TEST_DATABASE_URL`:
+  - entra na limpeza: expirada, `deleting` ainda válida, `uploading` com `updated_at` anterior ao corte de 1 hora;
+  - fica de fora: `available` não expirada e `uploading` recente;
+  - `DeleteExpiredSessions` remove sessão revogada ou vencida sem capturas e preserva sessão com captura ou ainda válida.
+- Testar o handler em `internal/features/capture/http/cleanup.go`: token ausente ou diferente responde não autorizado; relatório com erros responde falha interna; relatório limpo devolve as contagens.
+
+**Aceite:** a SQL do job e a autenticação do endpoint interno ficam cobertas por teste; capturas válidas não entram na limpeza.
+
+#### 1.5.4 — Comentário do token
+
+**Status: pendente.**
+
+- Em `.env.example`, remover a frase que manda gravar `CAPTURE_CLEANUP_TOKEN` no Vault. O token continua obrigatório porque protege o endpoint interno e o `config.Load` compartilhado pelo CLI.
+- Ao concluir 1.5.1–1.5.3, atualizar o status destas subetapas.
+
+**Aceite:** o exemplo de ambiente não promete Vault nem `pg_cron`; o cron horário permanece no ambiente, chamando o CLI.
 
 ## Verificação por entrega
 
