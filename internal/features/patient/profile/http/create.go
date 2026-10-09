@@ -31,7 +31,7 @@ type createPatientRequest struct {
 	Race         string  `json:"race" minLength:"1"`
 	Phone        *string `json:"phone,omitempty"`
 	AvatarURL    *string `json:"avatar_url,omitempty"`
-	RelationType string  `json:"relation_type" minLength:"1" doc:"Relação entre a conta atual e o paciente"`
+	RelationType string  `json:"relation_type" minLength:"1" enum:"self,family,caregiver,professional" doc:"Relação entre a conta atual e o paciente; professional exige uma conta profissional"`
 }
 
 type createPatientResponse struct {
@@ -73,7 +73,7 @@ func (h *Handler) createPatient(ctx context.Context, input *createPatientInput) 
 		avatarURL = *input.Body.AvatarURL
 	}
 
-	patient, err := h.creator.Execute(ctx, creatorAccount.ID, patientcreation.Input{
+	patient, err := h.creator.Execute(ctx, creatorAccount, patientcreation.Input{
 		Profile: patientprofile.CreateInput{
 			CPF:       input.Body.CPF,
 			CNS:       input.Body.CNS,

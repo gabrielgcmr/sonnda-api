@@ -19,18 +19,18 @@ import (
 )
 
 type creationUseCaseStub struct {
-	accountID uuid.UUID
-	input     patientcreation.Input
-	called    bool
+	account *accountdomain.Account
+	input   patientcreation.Input
+	called  bool
 }
 
 func (s *creationUseCaseStub) Execute(
 	_ context.Context,
-	accountID uuid.UUID,
+	account *accountdomain.Account,
 	input patientcreation.Input,
 ) (*profiledomain.Patient, error) {
 	s.called = true
-	s.accountID = accountID
+	s.account = account
 	s.input = input
 	return &profiledomain.Patient{ID: uuid.New()}, nil
 }
