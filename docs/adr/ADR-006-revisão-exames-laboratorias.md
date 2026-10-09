@@ -1,4 +1,4 @@
-<!-- docs/architecture/adr/ADR-006-revisão-exames-laboratorias.md -->
+<!-- docs/adr/ADR-006-revisão-exames-laboratorias.md -->
 # ADR-006 — Extração compartilhada e confirmação de exames
 
 Status: implementada. Substitui as decisões de orquestração/persistência anteriores da ADR-005; preserva o extrator semântico e seu contrato.
@@ -9,7 +9,7 @@ Status: implementada. Substitui as decisões de orquestração/persistência ant
 - Paciente: verificar acesso → extrair → salvar PDF no GCS e rascunho no Postgres → conferir → confirmar no histórico. Não grava resultados clínicos antes da confirmação.
 - Terminal: comandos de terminal/CLI para extração foram descontinuados e removidos para evitar abusos; o processamento fica restrito aos fluxos autenticados da API (temporário e rascunho).
 
-Limite de 10 MiB por PDF. Processamento síncrono, sem fila e sem OCR remoto nos endpoints web. Falhas anteriores à criação do rascunho exigem novo envio.
+O fluxo temporário aceita PDFs de até 10 MiB. O fluxo persistente por paciente aceita PDFs de até 5 MiB, alinhado ao bucket `exam-documents`. O processamento é síncrono, sem fila e sem OCR remoto nos endpoints web. Falhas anteriores à criação do rascunho exigem novo envio.
 
 ## Organização e Responsabilidades
 

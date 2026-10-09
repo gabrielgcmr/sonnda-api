@@ -56,7 +56,7 @@ CREATE TABLE captures (
         REFERENCES capture_sessions(id, account_id) ON DELETE RESTRICT,
     CHECK (btrim(original_filename) <> ''),
     CHECK (mime_type IN ('application/pdf', 'image/jpeg', 'image/png')),
-    CHECK (size_bytes > 0 AND size_bytes <= 10485760),
+    CHECK (size_bytes > 0 AND size_bytes <= 5242880),
     CHECK (status IN ('uploading', 'available', 'deleting')),
     CHECK (status <> 'available' OR (storage_uri IS NOT NULL AND btrim(storage_uri) <> '')),
     CHECK (expires_at = created_at + interval '24 hours'),

@@ -6,7 +6,7 @@
 
 Entregar, em subetapas revisáveis, o pareamento por QR, o envio pelo celular sem login e uma caixa de entrada temporária por conta. Este plano detalha a etapa 1 de `sonnda-svelte/docs/plans/captures-implementation-plan.md`. A captura não recebe paciente, categoria ou resultado clínico. Extração avulsa e criação de rascunho de exame a partir de uma captura pertencem às etapas 3 e 4 do plano web.
 
-Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio dura no máximo **12 horas**; o computador precisa manter presença recente para aceitar uploads; cada captura fica disponível por **24 horas**, mesmo após a desconexão e após seu uso em um destino. Aceitar PDF, JPEG e PNG de até **10 MiB** por arquivo.
+Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio dura no máximo **12 horas**; o computador precisa manter presença recente para aceitar uploads; cada captura fica disponível por **24 horas**, mesmo após a desconexão e após seu uso em um destino. Aceitar PDF, JPEG e PNG de até **5 MiB** por arquivo.
 
 ## Arquitetura
 
@@ -40,7 +40,7 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 - Adicionar `POST /capture-sessions/claim`, sem login Supabase, com `{ "code": "..." }`. A troca exige código válido, sessão não revogada e presença do computador; devolve `session_id`, uma credencial opaca de upload e `expires_at`, limitado a **12 horas após a reivindicação**. Armazenar somente o hash da credencial. Código inválido, expirado ou já usado recebe a mesma resposta de falha, sem revelar dados da conta. Aplicar `Cache-Control: no-store` também à resposta com a credencial.
 - Adicionar `POST /capture-sessions/{sessionId}/mobile-heartbeat` e `POST /captures` com autenticação própria pela credencial de upload; ela não concede acesso às rotas protegidas pelo Supabase nem permite listar, ler ou excluir capturas. Cada heartbeat atualiza a presença do celular; a sessão é apresentada como conectada quando as presenças do celular e do computador tiverem no máximo **60 segundos**.
-- O upload exige credencial válida, sessão não revogada e presença recente do computador. Validar exatamente um arquivo não vazio, limite de 10 MiB e conteúdo real de PDF/JPEG/PNG, sem confiar apenas no nome ou MIME enviado. Responder `201` com ID e metadados da captura; nunca aceitar paciente ou categoria no pedido.
+- O upload exige credencial válida, sessão não revogada e presença recente do computador. Validar exatamente um arquivo não vazio, limite de 5 MiB e conteúdo real de PDF/JPEG/PNG, sem confiar apenas no nome ou MIME enviado. Responder `201` com ID e metadados da captura; nunca aceitar paciente ou categoria no pedido.
 - Reservar no banco uma captura em `uploading` antes de gravar o objeto privado de nome opaco no GCS; marcá-la `available` somente após concluir o upload. Se o upload ou a finalização falhar, marcar `deleting`, tentar remover o objeto e deixar a limpeza recuperar interrupções. Não expor o código do QR, a credencial ou o conteúdo do documento nos logs.
 
 **Aceite:** um celular sem login consegue enviar após reivindicar o QR; sem credencial, após revogação, após 12 horas ou sem presença do computador, o envio falha; cabeçalhos e extensões falsos não passam pela validação.

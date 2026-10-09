@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	MaxFileSizeBytes = 10 * 1024 * 1024
+	MaxFileSizeBytes = 5 * 1024 * 1024
 	RetentionPeriod  = 24 * time.Hour
 )
 

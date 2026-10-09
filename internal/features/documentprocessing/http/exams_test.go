@@ -115,6 +115,23 @@ func TestUploadCreatesDraftAndCleansStandaloneFile(t *testing.T) {
 		}
 	}
 }
+
+func TestUploadRejectsPDFOverPersistentLimit(t *testing.T) {
+	stub := &reviewStub{}
+	router, _, patient := reviewRouter(false, stub)
+	payload := append([]byte("%PDF-"), make([]byte, examDocumentMaxFileSize)...)
+	body, contentType := standaloneLabMultipart(t, "large.pdf", "application/pdf", payload)
+	req := httptest.NewRequest(http.MethodPost, "/patients/"+patient.String()+"/exam-documents", body)
+	req.Header.Set("Content-Type", contentType)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusRequestEntityTooLarge || stub.created {
+		t.Fatalf("expected 413 without draft creation, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
 func TestReviewSuccessAndConflict(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		for _, method := range []string{http.MethodPost, http.MethodDelete} {
