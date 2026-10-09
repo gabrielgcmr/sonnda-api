@@ -7,32 +7,51 @@ Feature responsável pelo processamento de documentos clínicos e laudos laborat
 
 ```text
 internal/features/documentprocessing/
+├── authorization.go        # Autoriza operações standalone e vinculadas a paciente/documento
+├── drafts.go               # Criação, leitura e exclusão de rascunhos
+├── dto.go                  # DTOs de saída dos documentos e textos extraídos
+├── error.go                # Tradução de erros de persistência para AppError
+├── file_storage.go         # Contrato de armazenamento de arquivos
+├── policy.go               # Ações e regras de autorização desta feature
 ├── queries.go              # Consultas de documentos e textos extraídos
-├── drafts.go               # Coordenação de criação, conferência e exclusão de rascunhos
-├── snapshot.go             # Codificação e decodificação do snapshot persistido
-├── dto.go                  # DTOs públicos de documentos
-├── repository.go           # Contratos de persistência de documentos
-├── textextraction/         # Contrato de leitura, qualidade e normalização de texto
-├── labextraction/          # Contrato, tipos e schema da extração estruturada
-├── extraction/             # Coordenação, normalização dos dados, avaliação e resumo
-├── http/                   # Handlers Huma (extração temporária e rascunhos)
-└── postgres/               # Adaptadores PostgreSQL para documentos e rascunhos
+├── repository.go           # Contrato de consulta de documentos
+├── service.go              # Interface pública interna para consultas
+├── snapshot.go             # Codificação e decodificação do snapshot da extração
+├── standalone.go           # Coordenação da extração temporária de laudos
+├── domain/                 # Modelos e regras dos documentos e textos extraídos
+├── extraction/             # Coordenação, normalização, avaliação e resumo da extração
+├── http/                   # Handlers Huma para documentos, revisão e extração temporária
+├── labextraction/          # Tipos, schema e contrato da extração estruturada
+├── postgres/               # Adaptadores PostgreSQL para documentos e rascunhos
+└── textextraction/         # Contratos e regras de leitura, normalização e qualidade do texto
 ```
+
+Os testes ficam junto aos pacotes, em arquivos `*_test.go`; os testes PostgreSQL
+que exigem banco estão identificados como testes de integração.
 
 ## Direção das Dependências
 
-1. **`textextraction` e `labextraction` (Folhas)**:
+1. **`domain`**:
+   - Contém os modelos e regras de domínio de documentos, textos extraídos,
+     metadados laboratoriais e revisão.
+   - Não depende de HTTP, persistência ou da raiz da feature.
+2. **`textextraction` e `labextraction` (Folhas)**:
    - Definem interfaces (`Extractor`, `LabReportTextExtractor`), schemas e DTOs puros.
    - Não dependem da raiz da feature, de HTTP, banco de dados ou SDKs de terceiros.
-2. **`extraction` (Coordenação de extração)**:
+3. **`extraction` (Coordenação de extração)**:
    - Compõe `textextraction.Extractor` e `labextraction.LabReportTextExtractor`.
    - Executa normalização de entrada semântica, avaliação de resultados e geração de resumo.
    - Não depende de HTTP, banco de dados, storage nem da raiz de `documentprocessing`.
-3. **Raiz de `documentprocessing`**:
-   - `queries.go` expõe a interface pública interna `Service` para consultas de documentos.
-   - `drafts.go` coordena a extração via `PDFExtractor`, upload no storage e persistência atômica do rascunho com snapshot.
+4. **Raiz de `documentprocessing`**:
+   - Mantém contratos, DTOs, consultas e coordenação dos fluxos de documentos.
+   - `authorization.go` e `policy.go` verificam acesso ao paciente e regras por ação; não substituem a autorização compartilhada de `authz`.
+   - `drafts.go` coordena extração, upload no storage e persistência do rascunho com snapshot. `standalone.go` coordena a extração temporária sem persistência.
    - `snapshot.go` (`EncodeExtractionSnapshot` / `DecodeExtractionSnapshot`) serializa `extraction.Result` preservando metadados privados (texto bruto, status, confiança e avisos por item). Fica na raiz para evitar dependências circulares com `extraction`.
-4. **Infraestrutura e Casos de Uso Externos**:
+5. **Adapters HTTP e PostgreSQL**:
+   - `http` registra as rotas Huma e traduz erros para respostas HTTP.
+   - `postgres` implementa os contratos de persistência da feature.
+   - Ambos dependem dos contratos e tipos necessários da feature; a raiz não depende desses adapters.
+6. **Infraestrutura e casos de uso externos**:
    - Adapters concretos de texto e Gemini vivem em `internal/infrastructure/textextraction` e `internal/infrastructure/gemini`.
    - A conversão do snapshot em histórico clínico é responsabilidade do caso de uso `internal/application/usecase/labdocumentconfirmation`.
 
