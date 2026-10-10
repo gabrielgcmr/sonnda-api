@@ -6,7 +6,7 @@ Simple instructions for coding agents working on this repo.
 ## General
 
 - The project is being done by a solo developer.
-- The project was started while the developer was learning Go, REST, and other concepts. Please promptly point out any parts that do not follow best practices.gb
+- The project was started while the developer was learning Go, REST, and other concepts. Please promptly point out any parts that do not follow best practices.
 - Call out any assumptions or open questions before finishing.
 - Follow the existing error-handling and logging architecture described below.
 - Always start every source file you create or modify with a one-line header comment containing the workspace-relative path to that file, formatted as "path/to/file".
