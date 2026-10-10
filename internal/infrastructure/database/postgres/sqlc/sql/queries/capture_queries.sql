@@ -120,10 +120,20 @@ LIMIT @page_limit OFFSET @page_offset;
 
 -- name: ListCaptureCleanupCandidates :many
 SELECT * FROM captures
-WHERE expires_at <= @now
-   OR status = 'deleting'
-   OR (status = 'uploading' AND updated_at <= @uploading_cutoff)
-ORDER BY expires_at, created_at
+WHERE (
+    expires_at <= @now
+    OR status = 'deleting'
+    OR (status = 'uploading' AND updated_at <= @uploading_cutoff)
+)
+AND (
+    NOT @has_cursor::boolean
+    OR (expires_at, created_at, id) > (
+        @cursor_expires_at::timestamptz,
+        @cursor_created_at::timestamptz,
+        @cursor_id::uuid
+    )
+)
+ORDER BY expires_at, created_at, id
 LIMIT @page_limit;
 
 -- name: DeleteCapture :execrows
@@ -146,3 +156,26 @@ WHERE session.id IN (
     )
     LIMIT @page_limit
 );
+
+-- name: CreateCaptureCleanupRun :exec
+INSERT INTO capture_cleanup_runs (
+    id,
+    status,
+    started_at
+) VALUES (
+    @id,
+    'running',
+    @started_at
+);
+
+-- name: FinishCaptureCleanupRun :execrows
+UPDATE capture_cleanup_runs
+SET status = @status,
+    captures_processed = @captures_processed,
+    captures_deleted = @captures_deleted,
+    storage_deleted = @storage_deleted,
+    sessions_deleted = @sessions_deleted,
+    error_count = @error_count,
+    finished_at = @finished_at
+WHERE id = @id
+  AND status = 'running';

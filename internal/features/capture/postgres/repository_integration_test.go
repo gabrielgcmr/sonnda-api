@@ -209,7 +209,7 @@ func TestCaptureMigrationAndRepositoryLifecycle(t *testing.T) {
 		t.Fatalf("expired pairing code error = %v", err)
 	}
 
-	for _, table := range []string{"capture_sessions", "captures"} {
+	for _, table := range []string{"capture_sessions", "captures", "capture_cleanup_runs"} {
 		var rls, authenticatedAllowed, anonymousAllowed bool
 		qualified := pgx.Identifier{schema, table}.Sanitize()
 		err = client.Pool().QueryRow(ctx, `SELECT relrowsecurity,
@@ -299,7 +299,7 @@ func TestListCleanupCandidatesSelectsOnlyEligibleCaptures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	candidates, err := repo.ListCleanupCandidates(ctx, now, now.Add(-time.Hour), 20)
+	candidates, err := repo.ListCleanupCandidates(ctx, now, now.Add(-time.Hour), nil, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,12 +320,83 @@ func TestListCleanupCandidatesSelectsOnlyEligibleCaptures(t *testing.T) {
 	if len(want) != 0 {
 		t.Fatalf("eligible captures not selected: %v", want)
 	}
+	cursor := capture.CleanupCursor{
+		ExpiresAt: candidates[0].ExpiresAt,
+		CreatedAt: candidates[0].CreatedAt,
+		ID:        candidates[0].ID,
+	}
+	nextPage, err := repo.ListCleanupCandidates(ctx, now, now.Add(-time.Hour), &cursor, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nextPage) != len(candidates)-1 {
+		t.Fatalf("cleanup candidates after cursor = %d, want %d", len(nextPage), len(candidates)-1)
+	}
+	for _, candidate := range nextPage {
+		if candidate.ID == cursor.ID {
+			t.Fatal("cleanup cursor repeated the last candidate from the previous page")
+		}
+	}
 	for _, excludedID := range []uuid.UUID{recentUploading.ID, available.ID} {
 		for _, candidate := range candidates {
 			if candidate.ID == excludedID {
 				t.Fatalf("valid capture %s selected for cleanup", excludedID)
 			}
 		}
+	}
+}
+
+func TestCleanupRunLifecyclePersistsMetrics(t *testing.T) {
+	client, repo, _, _, _ := captureTestDatabase(t)
+	ctx := t.Context()
+	startedAt := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	run := capture.CleanupRun{ID: uuid.New(), StartedAt: startedAt}
+	if err := repo.CreateCleanupRun(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	completion := capture.CleanupRunCompletion{
+		ID:                run.ID,
+		Succeeded:         false,
+		CapturesProcessed: 4,
+		CapturesDeleted:   3,
+		StorageDeleted:    2,
+		SessionsDeleted:   1,
+		ErrorCount:        1,
+		FinishedAt:        startedAt.Add(time.Minute),
+	}
+	if err := repo.FinishCleanupRun(ctx, completion); err != nil {
+		t.Fatal(err)
+	}
+
+	var status string
+	var capturesProcessed, capturesDeleted, storageDeleted, sessionsDeleted int64
+	var errorCount int
+	var finishedAt time.Time
+	err := client.Pool().QueryRow(ctx, `
+		SELECT status, captures_processed, captures_deleted, storage_deleted,
+		       sessions_deleted, error_count, finished_at
+		FROM capture_cleanup_runs
+		WHERE id = $1
+	`, run.ID).Scan(
+		&status,
+		&capturesProcessed,
+		&capturesDeleted,
+		&storageDeleted,
+		&sessionsDeleted,
+		&errorCount,
+		&finishedAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || capturesProcessed != 4 || capturesDeleted != 3 ||
+		storageDeleted != 2 || sessionsDeleted != 1 || errorCount != 1 ||
+		!finishedAt.Equal(completion.FinishedAt) {
+		t.Fatalf("unexpected persisted cleanup run: status=%s processed=%d captures=%d storage=%d sessions=%d errors=%d finished=%s",
+			status, capturesProcessed, capturesDeleted, storageDeleted, sessionsDeleted, errorCount, finishedAt)
+	}
+	if err := repo.FinishCleanupRun(ctx, completion); !errors.Is(err, capture.ErrStateConflict) {
+		t.Fatalf("second cleanup completion error = %v, want state conflict", err)
 	}
 }
 
@@ -458,6 +529,7 @@ func captureTestDatabase(t *testing.T) (*postgress.Client, *Repository, uuid.UUI
 	for _, migrationName := range []string{
 		"20261009132454_create_capture_sessions_and_captures.sql",
 		"20261009153157_reduce_capture_file_size_to_5_mib.sql",
+		"20261010022320_add_capture_cleanup_run_observability.sql",
 	} {
 		migrationPath := filepath.Join("..", "..", "..", "..", "supabase", "migrations", migrationName)
 		migration, readErr := os.ReadFile(migrationPath)

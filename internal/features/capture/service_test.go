@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,12 @@ type serviceRepository struct {
 	cleanupNow              time.Time
 	cleanupUploadingCutoff  time.Time
 	cleanupLimit            int
+	cleanupCursor           *CleanupCursor
+	cleanupRun              *CleanupRun
+	cleanupRunCompletion    *CleanupRunCompletion
+	createCleanupRunErr     error
+	finishCleanupRunErr     error
+	finishCleanupContextErr error
 	deletedCaptureIDs       []uuid.UUID
 	deleteCaptureErr        error
 	deleteCaptureErrByID    map[uuid.UUID]error
@@ -216,21 +223,62 @@ func (r *serviceRepository) DeleteOwnedCapture(_ context.Context, accountID, cap
 	return nil
 }
 
-func (r *serviceRepository) ListCleanupCandidates(_ context.Context, now, uploadingCutoff time.Time, limit int) ([]capturedomain.Capture, error) {
+func (r *serviceRepository) ListCleanupCandidates(
+	_ context.Context,
+	now, uploadingCutoff time.Time,
+	cursor *CleanupCursor,
+	limit int,
+) ([]capturedomain.Capture, error) {
 	r.operations = append(r.operations, "list-cleanup-candidates")
 	r.cleanupListCalls++
 	r.cleanupNow, r.cleanupUploadingCutoff, r.cleanupLimit = now, uploadingCutoff, limit
+	if cursor == nil {
+		r.cleanupCursor = nil
+	} else {
+		cloned := *cursor
+		r.cleanupCursor = &cloned
+	}
 	if r.err != nil {
 		return nil, r.err
 	}
 	if len(r.cleanupCandidates) == 0 {
 		return nil, nil
 	}
-	n := limit
-	if n > len(r.cleanupCandidates) {
-		n = len(r.cleanupCandidates)
+	candidates := append([]capturedomain.Capture(nil), r.cleanupCandidates...)
+	sort.Slice(candidates, func(i, j int) bool {
+		return cleanupPositionLess(candidates[i], candidates[j])
+	})
+	page := make([]capturedomain.Capture, 0, limit)
+	for _, item := range candidates {
+		if cursor != nil && !cleanupPositionAfter(item, *cursor) {
+			continue
+		}
+		page = append(page, item)
+		if len(page) == limit {
+			break
+		}
 	}
-	return append([]capturedomain.Capture(nil), r.cleanupCandidates[:n]...), nil
+	return page, nil
+}
+
+func cleanupPositionLess(left, right capturedomain.Capture) bool {
+	if !left.ExpiresAt.Equal(right.ExpiresAt) {
+		return left.ExpiresAt.Before(right.ExpiresAt)
+	}
+	if !left.CreatedAt.Equal(right.CreatedAt) {
+		return left.CreatedAt.Before(right.CreatedAt)
+	}
+	return left.ID.String() < right.ID.String()
+}
+
+func cleanupPositionAfter(item capturedomain.Capture, cursor CleanupCursor) bool {
+	if !item.ExpiresAt.Equal(cursor.ExpiresAt) {
+		return item.ExpiresAt.After(cursor.ExpiresAt)
+	}
+	if !item.CreatedAt.Equal(cursor.CreatedAt) {
+		return item.CreatedAt.After(cursor.CreatedAt)
+	}
+	return item.ID.String() > cursor.ID.String()
 }
 
 func (r *serviceRepository) DeleteCapture(_ context.Context, captureID uuid.UUID) error {
@@ -279,6 +327,27 @@ func (r *serviceRepository) DeleteExpiredSessions(_ context.Context, _ time.Time
 	}
 	r.deletedExpiredSessions += toDelete
 	return toDelete, nil
+}
+
+func (r *serviceRepository) CreateCleanupRun(_ context.Context, run CleanupRun) error {
+	r.operations = append(r.operations, "create-cleanup-run")
+	if r.createCleanupRunErr != nil {
+		return r.createCleanupRunErr
+	}
+	cloned := run
+	r.cleanupRun = &cloned
+	return nil
+}
+
+func (r *serviceRepository) FinishCleanupRun(ctx context.Context, completion CleanupRunCompletion) error {
+	r.operations = append(r.operations, "finish-cleanup-run")
+	r.finishCleanupContextErr = ctx.Err()
+	if r.finishCleanupRunErr != nil {
+		return r.finishCleanupRunErr
+	}
+	cloned := completion
+	r.cleanupRunCompletion = &cloned
+	return nil
 }
 
 type captureStorageStub struct {
@@ -818,6 +887,12 @@ func TestCleanup_RemovesExpiredDeletingAndStuckUploading(t *testing.T) {
 	if len(report.Errors) != 0 {
 		t.Errorf("expected no errors, got: %v", report.Errors)
 	}
+	if report.RunID == uuid.Nil || repository.cleanupRun == nil || repository.cleanupRun.ID != report.RunID {
+		t.Fatalf("cleanup run was not created consistently: report=%s run=%+v", report.RunID, repository.cleanupRun)
+	}
+	if repository.cleanupRunCompletion == nil || !repository.cleanupRunCompletion.Succeeded {
+		t.Fatalf("cleanup run was not completed successfully: %+v", repository.cleanupRunCompletion)
+	}
 
 	// Verify storage deletions
 	if len(storage.deletedURIs) != 3 || storage.deletedURIs[0] != uri1 || storage.deletedURIs[1] != uri2 || storage.deletedURIs[2] != uri3 {
@@ -934,6 +1009,9 @@ func TestCleanup_StorageFailurePreservesDatabaseRecordAndMarksDeleting(t *testin
 	if len(report.Errors) != 1 {
 		t.Errorf("expected 1 recorded error, got %d: %v", len(report.Errors), report.Errors)
 	}
+	if repository.cleanupRunCompletion == nil || repository.cleanupRunCompletion.Succeeded || repository.cleanupRunCompletion.ErrorCount != 1 {
+		t.Fatalf("partial cleanup run completion = %+v, want failed with one error", repository.cleanupRunCompletion)
+	}
 	if !repository.markedDeleting {
 		t.Error("failed capture should have been marked deleting to prevent access and retry later")
 	}
@@ -942,35 +1020,40 @@ func TestCleanup_StorageFailurePreservesDatabaseRecordAndMarksDeleting(t *testin
 	}
 }
 
-func TestCleanup_FullFailedBatchStopsAndStillDeletesExpiredSessions(t *testing.T) {
+func TestCleanup_AdvancesPastFullFailedBatchAndStillDeletesExpiredSessions(t *testing.T) {
 	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
 	firstURI := "supabase://captures/acc/failed-1.pdf"
 	secondURI := "supabase://captures/acc/failed-2.pdf"
+	thirdURI := "supabase://captures/acc/ok.pdf"
 	repository := &serviceRepository{
 		cleanupCandidates: []capturedomain.Capture{
-			{ID: uuid.New(), StorageURI: &firstURI, Status: capturedomain.StatusDeleting},
-			{ID: uuid.New(), StorageURI: &secondURI, Status: capturedomain.StatusDeleting},
+			{ID: uuid.New(), StorageURI: &firstURI, Status: capturedomain.StatusDeleting, ExpiresAt: now.Add(-3 * time.Hour), CreatedAt: now.Add(-27 * time.Hour)},
+			{ID: uuid.New(), StorageURI: &secondURI, Status: capturedomain.StatusDeleting, ExpiresAt: now.Add(-2 * time.Hour), CreatedAt: now.Add(-26 * time.Hour)},
+			{ID: uuid.New(), StorageURI: &thirdURI, Status: capturedomain.StatusDeleting, ExpiresAt: now.Add(-time.Hour), CreatedAt: now.Add(-25 * time.Hour)},
 		},
 		expiredSessionsToDelete: 1,
 	}
-	storage := &captureStorageStub{deleteErr: errors.New("storage unavailable")}
+	storage := &captureStorageStub{deleteErrByURI: map[string]error{
+		firstURI:  errors.New("storage unavailable"),
+		secondURI: errors.New("storage unavailable"),
+	}}
 	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
 
 	report, err := service.Cleanup(t.Context(), CleanupOptions{BatchSize: 2})
 	if err != nil {
 		t.Fatalf("cleanup should report partial failures without a fatal error: %v", err)
 	}
-	if repository.cleanupListCalls != 1 {
-		t.Fatalf("cleanup candidate queries = %d, want 1", repository.cleanupListCalls)
+	if repository.cleanupListCalls != 2 {
+		t.Fatalf("cleanup candidate queries = %d, want 2", repository.cleanupListCalls)
 	}
-	if report.CapturesProcessed != 2 || report.CapturesDeleted != 0 || len(report.Errors) != 2 {
+	if report.CapturesProcessed != 3 || report.CapturesDeleted != 1 || len(report.Errors) != 2 {
 		t.Fatalf("unexpected capture report: %+v", report)
 	}
 	if report.SessionsDeleted != 1 {
 		t.Fatalf("expired sessions deleted = %d, want 1", report.SessionsDeleted)
 	}
-	if len(storage.deletedURIs) != 2 {
-		t.Fatalf("storage delete attempts = %d, want 2", len(storage.deletedURIs))
+	if len(storage.deletedURIs) != 3 {
+		t.Fatalf("storage delete attempts = %d, want 3", len(storage.deletedURIs))
 	}
 }
 
@@ -1084,5 +1167,36 @@ func TestCleanup_IdempotentOnRetry(t *testing.T) {
 
 	if report.CapturesProcessed != 0 || report.CapturesDeleted != 0 || report.SessionsDeleted != 0 {
 		t.Errorf("expected 0 across all metrics on empty run, got %+v", report)
+	}
+}
+
+func TestCleanup_AbortsWhenRunCannotBeRecorded(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	repository := &serviceRepository{createCleanupRunErr: errors.New("database unavailable")}
+	service := newService(repository, &captureStorageStub{}, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	report, err := service.Cleanup(t.Context(), CleanupOptions{})
+	if err == nil || report != nil {
+		t.Fatalf("cleanup result = (%+v, %v), want nil report and error", report, err)
+	}
+	if repository.cleanupListCalls != 0 || repository.cleanupRunCompletion != nil {
+		t.Fatalf("cleanup continued without observability: list calls=%d completion=%+v", repository.cleanupListCalls, repository.cleanupRunCompletion)
+	}
+}
+
+func TestCleanup_ReturnsErrorWhenRunCannotBeFinalized(t *testing.T) {
+	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
+	repository := &serviceRepository{finishCleanupRunErr: errors.New("database unavailable")}
+	service := newService(repository, &captureStorageStub{}, fixedPairingCodeGenerator{}, func() time.Time { return now })
+
+	report, err := service.Cleanup(t.Context(), CleanupOptions{})
+	if err == nil || report == nil {
+		t.Fatalf("cleanup result = (%+v, %v), want report and finalization error", report, err)
+	}
+	if len(report.Errors) != 1 {
+		t.Fatalf("cleanup errors = %d, want finalization error: %v", len(report.Errors), report.Errors)
+	}
+	if repository.finishCleanupContextErr != nil {
+		t.Fatalf("finalization context was unexpectedly canceled: %v", repository.finishCleanupContextErr)
 	}
 }

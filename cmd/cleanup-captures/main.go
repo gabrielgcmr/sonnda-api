@@ -97,6 +97,7 @@ func run() int {
 	if err != nil {
 		slog.Error("falha fatal na execução do job de limpeza",
 			"error", err,
+			"run_id", cleanupRunID(report),
 			"duration", duration,
 		)
 		return exitCode
@@ -112,6 +113,7 @@ func run() int {
 			slog.Error("falha durante limpeza de captura", "error", cleanupErr)
 		}
 		slog.Error("job de limpeza de capturas concluído com falhas",
+			slog.String("run_id", report.RunID.String()),
 			slog.Int("captures_processed", report.CapturesProcessed),
 			slog.Int("captures_deleted", report.CapturesDeleted),
 			slog.Int("storage_deleted", report.StorageDeleted),
@@ -124,6 +126,7 @@ func run() int {
 	}
 
 	slog.Info("job de limpeza de capturas concluído com sucesso",
+		slog.String("run_id", report.RunID.String()),
 		slog.Int("captures_processed", report.CapturesProcessed),
 		slog.Int("captures_deleted", report.CapturesDeleted),
 		slog.Int("storage_deleted", report.StorageDeleted),
@@ -142,4 +145,11 @@ func cleanupExitCode(report *capture.CleanupReport, err error) int {
 		return exitFailure
 	}
 	return exitSuccess
+}
+
+func cleanupRunID(report *capture.CleanupReport) string {
+	if report == nil {
+		return ""
+	}
+	return report.RunID.String()
 }

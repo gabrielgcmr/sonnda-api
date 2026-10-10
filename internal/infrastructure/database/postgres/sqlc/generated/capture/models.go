@@ -44,6 +44,18 @@ type Capture struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CaptureCleanupRun struct {
+	ID                uuid.UUID          `json:"id"`
+	Status            string             `json:"status"`
+	CapturesProcessed int64              `json:"captures_processed"`
+	CapturesDeleted   int64              `json:"captures_deleted"`
+	StorageDeleted    int64              `json:"storage_deleted"`
+	SessionsDeleted   int64              `json:"sessions_deleted"`
+	ErrorCount        int32              `json:"error_count"`
+	StartedAt         pgtype.Timestamptz `json:"started_at"`
+	FinishedAt        pgtype.Timestamptz `json:"finished_at"`
+}
+
 type CaptureSession struct {
 	ID                   uuid.UUID          `json:"id"`
 	AccountID            uuid.UUID          `json:"account_id"`

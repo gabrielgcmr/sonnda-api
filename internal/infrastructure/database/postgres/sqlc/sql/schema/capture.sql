@@ -66,3 +66,32 @@ CREATE TABLE captures (
 CREATE INDEX captures_account_created_at_idx ON captures(account_id, created_at DESC);
 CREATE INDEX captures_session_idx ON captures(capture_session_id);
 CREATE INDEX captures_cleanup_idx ON captures(status, expires_at, updated_at);
+CREATE INDEX captures_cleanup_order_idx ON captures(expires_at, created_at, id);
+
+CREATE TABLE capture_cleanup_runs (
+    id uuid PRIMARY KEY,
+    status text NOT NULL,
+    captures_processed bigint NOT NULL DEFAULT 0,
+    captures_deleted bigint NOT NULL DEFAULT 0,
+    storage_deleted bigint NOT NULL DEFAULT 0,
+    sessions_deleted bigint NOT NULL DEFAULT 0,
+    error_count integer NOT NULL DEFAULT 0,
+    started_at timestamptz NOT NULL,
+    finished_at timestamptz,
+    CHECK (status IN ('running', 'succeeded', 'failed')),
+    CHECK (
+        captures_processed >= 0
+        AND captures_deleted >= 0
+        AND storage_deleted >= 0
+        AND sessions_deleted >= 0
+        AND error_count >= 0
+    ),
+    CHECK (
+        (status = 'running' AND finished_at IS NULL)
+        OR
+        (status IN ('succeeded', 'failed') AND finished_at IS NOT NULL AND finished_at >= started_at)
+    )
+);
+
+CREATE INDEX capture_cleanup_runs_started_at_idx
+    ON capture_cleanup_runs(started_at DESC);

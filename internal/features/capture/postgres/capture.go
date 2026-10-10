@@ -86,10 +86,24 @@ func (r *Repository) ListCaptures(ctx context.Context, accountID uuid.UUID, now 
 	return mapCaptures(rows)
 }
 
-func (r *Repository) ListCleanupCandidates(ctx context.Context, now, uploadingCutoff time.Time, limit int) ([]capturedomain.Capture, error) {
-	rows, err := r.queries.ListCaptureCleanupCandidates(ctx, capturesqlc.ListCaptureCleanupCandidatesParams{
-		Now: timestamp(now), UploadingCutoff: timestamp(uploadingCutoff), PageLimit: int32(limit),
-	})
+func (r *Repository) ListCleanupCandidates(
+	ctx context.Context,
+	now, uploadingCutoff time.Time,
+	cursor *capture.CleanupCursor,
+	limit int,
+) ([]capturedomain.Capture, error) {
+	params := capturesqlc.ListCaptureCleanupCandidatesParams{
+		Now:             timestamp(now),
+		UploadingCutoff: timestamp(uploadingCutoff),
+		PageLimit:       int32(limit),
+	}
+	if cursor != nil {
+		params.HasCursor = true
+		params.CursorExpiresAt = timestamp(cursor.ExpiresAt)
+		params.CursorCreatedAt = timestamp(cursor.CreatedAt)
+		params.CursorID = cursor.ID
+	}
+	rows, err := r.queries.ListCaptureCleanupCandidates(ctx, params)
 	if err != nil {
 		return nil, persistenceError("list capture cleanup candidates", err)
 	}

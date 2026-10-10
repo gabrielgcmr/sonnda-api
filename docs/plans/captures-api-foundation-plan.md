@@ -58,7 +58,7 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 ### 1.5 — Expiração, publicação e operação
 
-**Status: implementação inicial e correções 1.5.1–1.5.4 concluídas em código; queries destrutivas, autenticação do job e agendamento foram validados no Supabase local.**
+**Status: implementação inicial e correções 1.5.1–1.5.5 concluídas em código; queries destrutivas, autenticação, observabilidade do job e agendamento foram validados no Supabase local.**
 
 - Criar um comando e um endpoint interno de limpeza. O Supabase Cron chama o endpoint de hora em hora. A limpeza percorre, em lotes, capturas expiradas após **24 horas**, em `deleting` ou presas em `uploading` por mais de **1 hora**, remove objetos do Supabase Storage e depois os registros; somente então remove sessões vencidas sem capturas associadas. Repetir o job após falha deve ser seguro. Todas as consultas e operações recusam capturas expiradas mesmo antes da limpeza física.
 - Registrar as rotas no OpenAPI gerado pelo Huma, com esquemas de segurança distintos para Supabase Bearer e credencial de captura; a rota de reivindicação é pública. Manter `AppError`, Problem Details e logs centralizados, sem dados clínicos ou segredos. Conectar handlers, repositórios, Supabase Storage e configuração no bootstrap da API.
@@ -66,17 +66,17 @@ Decisões já tomadas: o QR autoriza o celular sem login; a credencial de envio 
 
 **Aceite:** o job elimina arquivos e registros vencidos, recupera uploads e exclusões interrompidos e não afeta capturas válidas; o OpenAPI expressa corretamente as duas formas de autenticação; o fluxo de pareamento, upload, listagem, revogação e limpeza funciona com dois clientes HTTP independentes. Esse fluxo com dois clientes permanece verificação manual e não faz parte das correções abaixo.
 
-#### 1.5.1 — Parar o lote sem progresso
+#### 1.5.1 — Paginar a limpeza sem starvation
 
-**Status: concluída em código e coberta por testes unitários.**
+**Status: concluída em código e coberta por testes unitários e de integração PostgreSQL.**
 
-`Cleanup` em `internal/features/capture/service.go` só interrompe a leitura de capturas quando o lote volta menor que o tamanho pedido. Se a exclusão no Storage falha, o registro continua candidato (`deleting` ou expirado). Com um lote cheio de falhas, a mesma consulta se repete até o timeout, e a limpeza de sessões não chega a rodar.
+`Cleanup` em `internal/features/capture/service.go` usa paginação keyset determinística por `(expires_at, created_at, id)`. Uma falha no Storage preserva o registro para a próxima execução, mas o cursor avança nesta execução para que capturas posteriores não fiquem bloqueadas por um lote inteiro de falhas.
 
-- Guardar os IDs já tentados nesta execução. Se um lote inteiro já foi visto, ou se nenhuma captura foi excluída, encerrar o laço de capturas e seguir para as sessões.
+- Avançar o cursor com o último candidato retornado, independentemente do sucesso da exclusão.
+- Ordenar também por `id` para eliminar ambiguidades entre capturas com os mesmos timestamps.
 - Registrar também a falha de `MarkCaptureDeleting`, em vez de ignorar o erro. O registro permanece para a próxima execução.
-- Ajustar o repositório falso de `internal/features/capture/service_test.go` para devolver de novo quem não foi excluído, como a SQL faz.
 
-**Aceite:** um lote cheio em que todo `Delete` do Storage falha termina, não reprocessa o mesmo ID e ainda remove as sessões vencidas sem capturas.
+**Aceite:** um lote cheio em que todo `Delete` do Storage falha não é reprocessado na mesma execução, não impede o processamento da página seguinte e ainda permite remover as sessões vencidas sem capturas.
 
 #### 1.5.2 — Falha parcial encerra o comando com erro
 
@@ -128,6 +128,17 @@ select vault.create_secret(
 ```
 
 **Aceite:** `cron.job` contém o job ativo com agenda horária; o comando referencia apenas os nomes dos segredos, e o endpoint recusa token ausente ou diferente.
+
+#### 1.5.5 — Observabilidade persistente da limpeza
+
+**Status: concluída em código e validada em PostgreSQL local.**
+
+- Cada execução cria um registro em `capture_cleanup_runs` antes de processar capturas.
+- A finalização persiste estado `succeeded` ou `failed`, horários, contagens processadas e quantidade de erros, sem armazenar mensagens internas, nomes de arquivos ou conteúdo clínico.
+- O endpoint e os logs do CLI incluem o `run_id` para correlação. A finalização usa um contexto curto independente do cancelamento da chamada HTTP, permitindo registrar timeouts enquanto o processo da API continuar vivo.
+- A tabela tem RLS habilitada e não concede acesso a `anon` nem `authenticated`.
+
+**Aceite:** sucesso e falha parcial ficam registrados com métricas; uma segunda finalização da mesma execução é rejeitada; o `run_id` retornado pelo endpoint corresponde ao registro persistido.
 
 ## Verificação por entrega
 

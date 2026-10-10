@@ -13,6 +13,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
+	"github.com/google/uuid"
 )
 
 type cleanupService interface {
@@ -29,10 +30,11 @@ type cleanupInput struct {
 }
 
 type cleanupResponse struct {
-	CapturesProcessed int `json:"captures_processed"`
-	CapturesDeleted   int `json:"captures_deleted"`
-	StorageDeleted    int `json:"storage_deleted"`
-	SessionsDeleted   int `json:"sessions_deleted"`
+	RunID             uuid.UUID `json:"run_id" format:"uuid"`
+	CapturesProcessed int       `json:"captures_processed"`
+	CapturesDeleted   int       `json:"captures_deleted"`
+	StorageDeleted    int       `json:"storage_deleted"`
+	SessionsDeleted   int       `json:"sessions_deleted"`
 }
 
 type cleanupOutput struct {
@@ -72,6 +74,7 @@ func (h *CleanupHandler) cleanup(ctx context.Context, input *cleanupInput) (*cle
 	return &cleanupOutput{
 		CacheControl: captureSessionCacheControl,
 		Body: cleanupResponse{
+			RunID:             report.RunID,
 			CapturesProcessed: report.CapturesProcessed,
 			CapturesDeleted:   report.CapturesDeleted,
 			StorageDeleted:    report.StorageDeleted,

@@ -37,15 +37,39 @@ type Repository interface {
 	FindCapture(ctx context.Context, accountID, captureID uuid.UUID) (*capturedomain.Capture, error)
 	FindAvailableCapture(ctx context.Context, accountID, captureID uuid.UUID, now time.Time) (*capturedomain.Capture, error)
 	ListCaptures(ctx context.Context, accountID uuid.UUID, now time.Time, page Pagination) ([]capturedomain.Capture, error)
-	ListCleanupCandidates(ctx context.Context, now, uploadingCutoff time.Time, limit int) ([]capturedomain.Capture, error)
+	ListCleanupCandidates(ctx context.Context, now, uploadingCutoff time.Time, cursor *CleanupCursor, limit int) ([]capturedomain.Capture, error)
 	DeleteCapture(ctx context.Context, captureID uuid.UUID) error
 	DeleteOwnedCapture(ctx context.Context, accountID, captureID uuid.UUID) error
 	DeleteExpiredSessions(ctx context.Context, now time.Time, limit int) (int64, error)
+	CreateCleanupRun(ctx context.Context, run CleanupRun) error
+	FinishCleanupRun(ctx context.Context, completion CleanupRunCompletion) error
 }
 
 type Pagination struct {
 	Limit  int
 	Offset int
+}
+
+type CleanupCursor struct {
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	ID        uuid.UUID
+}
+
+type CleanupRun struct {
+	ID        uuid.UUID
+	StartedAt time.Time
+}
+
+type CleanupRunCompletion struct {
+	ID                uuid.UUID
+	Succeeded         bool
+	CapturesProcessed int
+	CapturesDeleted   int
+	StorageDeleted    int
+	SessionsDeleted   int
+	ErrorCount        int
+	FinishedAt        time.Time
 }
 
 type FileStorage interface {

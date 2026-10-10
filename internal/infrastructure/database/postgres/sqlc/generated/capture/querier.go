@@ -15,11 +15,13 @@ type Querier interface {
 	AuthenticateCaptureUpload(ctx context.Context, arg AuthenticateCaptureUploadParams) (CaptureSession, error)
 	ClaimCaptureSession(ctx context.Context, arg ClaimCaptureSessionParams) (CaptureSession, error)
 	CreateCapture(ctx context.Context, arg CreateCaptureParams) error
+	CreateCaptureCleanupRun(ctx context.Context, arg CreateCaptureCleanupRunParams) error
 	// internal/infrastructure/database/postgres/sqlc/sql/queries/capture_queries.sql
 	CreateCaptureSession(ctx context.Context, arg CreateCaptureSessionParams) error
 	DeleteCapture(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredCaptureSessions(ctx context.Context, arg DeleteExpiredCaptureSessionsParams) (int64, error)
 	DeleteOwnedCapture(ctx context.Context, arg DeleteOwnedCaptureParams) (int64, error)
+	FinishCaptureCleanupRun(ctx context.Context, arg FinishCaptureCleanupRunParams) (int64, error)
 	GetAvailableCaptureByAccount(ctx context.Context, arg GetAvailableCaptureByAccountParams) (Capture, error)
 	GetCaptureByAccount(ctx context.Context, arg GetCaptureByAccountParams) (Capture, error)
 	GetCaptureSessionByID(ctx context.Context, id uuid.UUID) (CaptureSession, error)

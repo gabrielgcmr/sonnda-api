@@ -9,6 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	"github.com/google/uuid"
 )
 
 type cleanupServiceStub struct {
@@ -44,7 +45,9 @@ func TestCleanupHandlerRejectsInvalidToken(t *testing.T) {
 }
 
 func TestCleanupHandlerReturnsReport(t *testing.T) {
+	runID := uuid.New()
 	service := &cleanupServiceStub{report: &capture.CleanupReport{
+		RunID:             runID,
 		CapturesProcessed: 4,
 		CapturesDeleted:   3,
 		StorageDeleted:    2,
@@ -61,6 +64,9 @@ func TestCleanupHandlerReturnsReport(t *testing.T) {
 	}
 	if output.CacheControl != captureSessionCacheControl {
 		t.Fatalf("cache control = %q, want %q", output.CacheControl, captureSessionCacheControl)
+	}
+	if output.Body.RunID != runID {
+		t.Fatalf("run ID = %s, want %s", output.Body.RunID, runID)
 	}
 	if output.Body.CapturesProcessed != 4 || output.Body.CapturesDeleted != 3 || output.Body.StorageDeleted != 2 || output.Body.SessionsDeleted != 1 {
 		t.Fatalf("unexpected cleanup response: %#v", output.Body)

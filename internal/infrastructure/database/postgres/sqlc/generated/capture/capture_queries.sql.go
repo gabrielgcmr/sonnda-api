@@ -167,6 +167,28 @@ func (q *Queries) CreateCapture(ctx context.Context, arg CreateCaptureParams) er
 	return err
 }
 
+const createCaptureCleanupRun = `-- name: CreateCaptureCleanupRun :exec
+INSERT INTO capture_cleanup_runs (
+    id,
+    status,
+    started_at
+) VALUES (
+    $1,
+    'running',
+    $2
+)
+`
+
+type CreateCaptureCleanupRunParams struct {
+	ID        uuid.UUID          `json:"id"`
+	StartedAt pgtype.Timestamptz `json:"started_at"`
+}
+
+func (q *Queries) CreateCaptureCleanupRun(ctx context.Context, arg CreateCaptureCleanupRunParams) error {
+	_, err := q.db.Exec(ctx, createCaptureCleanupRun, arg.ID, arg.StartedAt)
+	return err
+}
+
 const createCaptureSession = `-- name: CreateCaptureSession :exec
 INSERT INTO capture_sessions (
     id, account_id, pairing_code_hash, pairing_expires_at,
@@ -267,6 +289,47 @@ type DeleteOwnedCaptureParams struct {
 
 func (q *Queries) DeleteOwnedCapture(ctx context.Context, arg DeleteOwnedCaptureParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteOwnedCapture, arg.ID, arg.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const finishCaptureCleanupRun = `-- name: FinishCaptureCleanupRun :execrows
+UPDATE capture_cleanup_runs
+SET status = $1,
+    captures_processed = $2,
+    captures_deleted = $3,
+    storage_deleted = $4,
+    sessions_deleted = $5,
+    error_count = $6,
+    finished_at = $7
+WHERE id = $8
+  AND status = 'running'
+`
+
+type FinishCaptureCleanupRunParams struct {
+	Status            string             `json:"status"`
+	CapturesProcessed int64              `json:"captures_processed"`
+	CapturesDeleted   int64              `json:"captures_deleted"`
+	StorageDeleted    int64              `json:"storage_deleted"`
+	SessionsDeleted   int64              `json:"sessions_deleted"`
+	ErrorCount        int32              `json:"error_count"`
+	FinishedAt        pgtype.Timestamptz `json:"finished_at"`
+	ID                uuid.UUID          `json:"id"`
+}
+
+func (q *Queries) FinishCaptureCleanupRun(ctx context.Context, arg FinishCaptureCleanupRunParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishCaptureCleanupRun,
+		arg.Status,
+		arg.CapturesProcessed,
+		arg.CapturesDeleted,
+		arg.StorageDeleted,
+		arg.SessionsDeleted,
+		arg.ErrorCount,
+		arg.FinishedAt,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -441,21 +504,43 @@ func (q *Queries) ListAvailableCaptures(ctx context.Context, arg ListAvailableCa
 
 const listCaptureCleanupCandidates = `-- name: ListCaptureCleanupCandidates :many
 SELECT id, account_id, capture_session_id, storage_uri, original_filename, mime_type, size_bytes, status, expires_at, created_at, updated_at FROM captures
-WHERE expires_at <= $1
-   OR status = 'deleting'
-   OR (status = 'uploading' AND updated_at <= $2)
-ORDER BY expires_at, created_at
-LIMIT $3
+WHERE (
+    expires_at <= $1
+    OR status = 'deleting'
+    OR (status = 'uploading' AND updated_at <= $2)
+)
+AND (
+    NOT $3::boolean
+    OR (expires_at, created_at, id) > (
+        $4::timestamptz,
+        $5::timestamptz,
+        $6::uuid
+    )
+)
+ORDER BY expires_at, created_at, id
+LIMIT $7
 `
 
 type ListCaptureCleanupCandidatesParams struct {
 	Now             pgtype.Timestamptz `json:"now"`
 	UploadingCutoff pgtype.Timestamptz `json:"uploading_cutoff"`
+	HasCursor       bool               `json:"has_cursor"`
+	CursorExpiresAt pgtype.Timestamptz `json:"cursor_expires_at"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        uuid.UUID          `json:"cursor_id"`
 	PageLimit       int32              `json:"page_limit"`
 }
 
 func (q *Queries) ListCaptureCleanupCandidates(ctx context.Context, arg ListCaptureCleanupCandidatesParams) ([]Capture, error) {
-	rows, err := q.db.Query(ctx, listCaptureCleanupCandidates, arg.Now, arg.UploadingCutoff, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listCaptureCleanupCandidates,
+		arg.Now,
+		arg.UploadingCutoff,
+		arg.HasCursor,
+		arg.CursorExpiresAt,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

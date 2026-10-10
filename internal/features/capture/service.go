@@ -26,6 +26,7 @@ const (
 
 	DefaultCleanupBatchSize        = 50
 	DefaultUploadingCutoffDuration = time.Hour
+	cleanupFinalizationTimeout     = 5 * time.Second
 )
 
 type Service interface {
@@ -96,6 +97,7 @@ type CleanupOptions struct {
 }
 
 type CleanupReport struct {
+	RunID             uuid.UUID
 	CapturesProcessed int
 	CapturesDeleted   int
 	StorageDeleted    int
@@ -456,7 +458,7 @@ func (s *service) DeleteCapture(ctx context.Context, accountID, captureID uuid.U
 	return nil
 }
 
-func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupReport, error) {
+func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (report *CleanupReport, resultErr error) {
 	if err := s.validateDependencies(); err != nil {
 		return nil, err
 	}
@@ -480,12 +482,49 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 	now := s.now().UTC()
 	uploadingCutoff := now.Add(-uploadingWindow)
 
-	report := &CleanupReport{}
-	attemptedCaptureIDs := make(map[uuid.UUID]struct{})
+	run := CleanupRun{ID: uuid.New(), StartedAt: now}
+	if err := s.repository.CreateCleanupRun(ctx, run); err != nil {
+		return nil, mapRepositoryError("captureRepository.CreateCleanupRun", err)
+	}
+	report = &CleanupReport{RunID: run.ID}
+	defer func() {
+		panicValue := recover()
+		errorCount := len(report.Errors)
+		if panicValue != nil {
+			errorCount++
+		}
+		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupFinalizationTimeout)
+		defer cancel()
+
+		finishErr := s.repository.FinishCleanupRun(finishCtx, CleanupRunCompletion{
+			ID:                run.ID,
+			Succeeded:         panicValue == nil && resultErr == nil && errorCount == 0,
+			CapturesProcessed: report.CapturesProcessed,
+			CapturesDeleted:   report.CapturesDeleted,
+			StorageDeleted:    report.StorageDeleted,
+			SessionsDeleted:   report.SessionsDeleted,
+			ErrorCount:        errorCount,
+			FinishedAt:        s.now().UTC(),
+		})
+		if finishErr != nil {
+			mappedErr := mapRepositoryError("captureRepository.FinishCleanupRun", finishErr)
+			report.Errors = append(report.Errors, mappedErr)
+			if resultErr != nil {
+				resultErr = withAdditionalCauses(resultErr, mappedErr)
+			} else {
+				resultErr = mappedErr
+			}
+		}
+		if panicValue != nil {
+			panic(panicValue)
+		}
+	}()
+
+	var cursor *CleanupCursor
 
 	// 1. Limpeza de capturas elegíveis em lotes
 	for {
-		candidates, err := s.repository.ListCleanupCandidates(ctx, now, uploadingCutoff, batchSize)
+		candidates, err := s.repository.ListCleanupCandidates(ctx, now, uploadingCutoff, cursor, batchSize)
 		if err != nil {
 			mappedErr := mapRepositoryError("captureRepository.ListCleanupCandidates", err)
 			report.Errors = append(report.Errors, mappedErr)
@@ -495,14 +534,7 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 			break
 		}
 
-		capturesDeletedBeforeBatch := report.CapturesDeleted
-		attemptedInBatch := 0
 		for _, item := range candidates {
-			if _, alreadyAttempted := attemptedCaptureIDs[item.ID]; alreadyAttempted {
-				continue
-			}
-			attemptedCaptureIDs[item.ID] = struct{}{}
-			attemptedInBatch++
 			report.CapturesProcessed++
 
 			// Remove objeto do Supabase Storage se existir URI
@@ -534,7 +566,13 @@ func (s *service) Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupRep
 			report.CapturesDeleted++
 		}
 
-		if attemptedInBatch == 0 || report.CapturesDeleted == capturesDeletedBeforeBatch || len(candidates) < batchSize {
+		lastCandidate := candidates[len(candidates)-1]
+		cursor = &CleanupCursor{
+			ExpiresAt: lastCandidate.ExpiresAt,
+			CreatedAt: lastCandidate.CreatedAt,
+			ID:        lastCandidate.ID,
+		}
+		if len(candidates) < batchSize {
 			break
 		}
 	}
