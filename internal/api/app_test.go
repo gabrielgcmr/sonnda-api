@@ -93,3 +93,25 @@ func TestProblemRoutesRequireBearerAuthentication(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureSessionRoutesRequireBearerAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New(Options{
+		Deps:       &APIDependencies{},
+		Logger:     slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		CORSConfig: config.CORSConfig{AllowOrigins: []string{"https://app.example.test"}},
+	})
+	sessionID := "/76b550c7-4fdd-4b5b-8c40-c34ef31e363c"
+	for _, operation := range []struct{ method, path string }{
+		{http.MethodPost, "/capture-sessions"},
+		{http.MethodGet, "/capture-sessions/current"},
+		{http.MethodPost, "/capture-sessions" + sessionID + "/heartbeat"},
+		{http.MethodDelete, "/capture-sessions" + sessionID},
+	} {
+		response := httptest.NewRecorder()
+		app.router.ServeHTTP(response, httptest.NewRequest(operation.method, operation.path, nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s: %d %s", operation.method, operation.path, response.Code, response.Body.String())
+		}
+	}
+}

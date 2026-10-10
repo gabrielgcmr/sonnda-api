@@ -6,7 +6,7 @@ Simple instructions for coding agents working on this repo.
 ## General
 
 - The project is being done by a solo developer.
-- The project was started while the developer was learning Go, REST, and other concepts. Please promptly point out any parts that do not follow best practices.gb
+- The project was started while the developer was learning Go, REST, and other concepts. Please promptly point out any parts that do not follow best practices.
 - Call out any assumptions or open questions before finishing.
 - Follow the existing error-handling and logging architecture described below.
 - Always start every source file you create or modify with a one-line header comment containing the workspace-relative path to that file, formatted as "path/to/file".
@@ -29,7 +29,7 @@ Simple instructions for coding agents working on this repo.
 - `documentprocessing` owns document workflows, extraction coordination, snapshots, and the file-storage contract. Its specialized packages include `domain`, `extraction`, `labextraction`, `textextraction`, `http`, and `postgres`.
 - `internal/domain` contains shared domain concepts used by multiple features, currently including demographics. Feature-specific domain models live under their feature.
 - `internal/application/bootstrap` composes modules and dependencies. `internal/application/usecase` contains cross-feature workflows, including patient creation and laboratory-document confirmation.
-- `internal/api` owns Gin/Huma setup, shared middleware and helpers, route composition, and HTTP error translation. Feature handlers remain in their feature packages. Huma route registrations are the OpenAPI source of truth; CI publishes an immutable OpenAPI artifact identified by the API commit SHA.
+- `internal/api` owns Gin/Huma setup, shared middleware and helpers, route composition, and HTTP error translation. Feature handlers remain in their feature packages. Huma route registrations are the OpenAPI source of truth; export `artifacts/openapi.json` locally and use each consumer's Taskfile command to regenerate clients.
 - `internal/infrastructure` contains concrete adapters: PostgreSQL and generated sqlc code under `database/postgres`, plus `auth`, `filestorage`, `redis`, `documentai`, `gemini`, and `textextraction`.
 - `internal/kernel` contains cross-cutting application errors, persistence errors, and observability. `internal/config` owns environment and integration configuration.
 - Patient access checks live in `internal/features/patient/access`; the checker permits the patient owner or an account with an active grant. It does not currently implement action-level, account-type, or professional-kind authorization.

@@ -1,3 +1,4 @@
+# supabase/config.toml
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
@@ -116,12 +117,15 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+[storage.buckets.exam-documents]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["application/pdf"]
+
+[storage.buckets.captures]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["application/pdf", "image/jpeg", "image/png"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]

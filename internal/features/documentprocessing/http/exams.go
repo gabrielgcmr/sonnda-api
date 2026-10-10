@@ -34,7 +34,11 @@ type ExamsHandler struct {
 	storage   documentprocessing.FileStorageService
 }
 
-const examDocumentFileURLExpirationMinutes = 15
+const (
+	examDocumentFileURLExpirationMinutes = 15
+	examDocumentMaxFileSize              = 5 * 1024 * 1024
+	examDocumentMaxBodySize              = examDocumentMaxFileSize + 1024*1024
+)
 
 type examDocumentFileResponse struct {
 	URL       string    `json:"url"`
@@ -113,7 +117,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		Method:        http.MethodPost,
 		Path:          "/patients/{patientId}/exam-documents",
 		Summary:       "Extrair PDF laboratorial e criar rascunho para conferência",
-		MaxBodyBytes:  11 * 1024 * 1024,
+		MaxBodyBytes:  examDocumentMaxBodySize,
 		Tags:          []string{"Exam documents"},
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType},
@@ -200,7 +204,7 @@ func (h *ExamsHandler) uploadExamDocument(ctx context.Context, input *uploadExam
 	if len(fileHeaders) != 1 {
 		return nil, huma.Error422UnprocessableEntity("arquivo é obrigatório")
 	}
-	path, err := writeTemporaryPDF(fileHeaders[0])
+	path, err := writeTemporaryPDF(fileHeaders[0], examDocumentMaxFileSize)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}

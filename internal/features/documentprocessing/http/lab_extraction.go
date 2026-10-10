@@ -4,6 +4,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -69,7 +70,7 @@ func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *sta
 	if len(files) != 1 {
 		return nil, huma.Error422UnprocessableEntity("arquivo PDF e obrigatorio")
 	}
-	path, err := writeTemporaryPDF(files[0])
+	path, err := writeTemporaryPDF(files[0], standaloneLabExtractionMaxFileSize)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -82,15 +83,15 @@ func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *sta
 	return &standaloneLabExtractionOutput{Body: *result}, nil
 }
 
-func writeTemporaryPDF(header *multipart.FileHeader) (string, error) {
+func writeTemporaryPDF(header *multipart.FileHeader, maxFileSize int64) (string, error) {
 	if header == nil {
 		return "", apperr.Validation("arquivo PDF e obrigatorio", apperr.Violation{Field: "file", Reason: "required"})
 	}
 	if header.Size <= 0 {
 		return "", apperr.Validation("arquivo vazio", apperr.Violation{Field: "file", Reason: "empty"})
 	}
-	if header.Size > standaloneLabExtractionMaxFileSize {
-		return "", &apperr.AppError{Kind: apperr.UPLOAD_SIZE_EXCEEDED, Message: "o PDF deve ter no maximo 10 MB"}
+	if header.Size > maxFileSize {
+		return "", pdfSizeExceededError(maxFileSize)
 	}
 
 	source, err := header.Open()
@@ -110,20 +111,27 @@ func writeTemporaryPDF(header *multipart.FileHeader) (string, error) {
 		return "", apperr.Internal("falha ao preparar arquivo temporario", err)
 	}
 	path := target.Name()
-	count, err := io.Copy(target, io.LimitReader(source, standaloneLabExtractionMaxFileSize+1))
+	count, err := io.Copy(target, io.LimitReader(source, maxFileSize+1))
 	if err != nil {
 		target.Close()
 		os.Remove(path)
 		return "", apperr.Internal("falha ao preparar arquivo temporario", err)
 	}
-	if count > standaloneLabExtractionMaxFileSize {
+	if count > maxFileSize {
 		_ = target.Close()
 		_ = os.Remove(path)
-		return "", &apperr.AppError{Kind: apperr.UPLOAD_SIZE_EXCEEDED, Message: "O PDF deve ter no máximo 10 MB."}
+		return "", pdfSizeExceededError(maxFileSize)
 	}
 	if err := target.Close(); err != nil {
 		os.Remove(path)
 		return "", apperr.Internal("falha ao preparar arquivo temporario", err)
 	}
 	return path, nil
+}
+
+func pdfSizeExceededError(maxFileSize int64) error {
+	return &apperr.AppError{
+		Kind:    apperr.UPLOAD_SIZE_EXCEEDED,
+		Message: fmt.Sprintf("o PDF deve ter no máximo %d MiB", maxFileSize/(1024*1024)),
+	}
 }

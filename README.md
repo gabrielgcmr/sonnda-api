@@ -35,9 +35,8 @@ A Sonnda resolve um problema recorrente na pratica clinica: pacientes precisam c
 ## OpenAPI
 
 O contrato HTTP é gerado dinamicamente pelo Huma a partir das rotas da API.
-Use `make openapi-export` para criar `artifacts/openapi.json`; o CI publica esse
-arquivo como artefato imutável identificado pelo SHA do commit da API. Web e
-mobile geram seus clientes a partir desse mesmo artefato.
+Use `make openapi-export` para criar `artifacts/openapi.json`. Em cada consumidor,
+execute `task openapi` para regenerar o cliente a partir desse arquivo local.
 - Erros HTTP: RFC 9457 (Problem Details) via `application/problem+json`.
 
 ## Arquitetura
