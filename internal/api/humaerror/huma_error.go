@@ -71,6 +71,8 @@ func StatusFromKind(kind apperr.ErrorKind) int {
 		return http.StatusForbidden
 	case apperr.VALIDATION_FAILED, apperr.REQUIRED_FIELD_MISSING, apperr.INVALID_FIELD_FORMAT, apperr.INVALID_ENUM_VALUE, apperr.INVALID_DATE:
 		return http.StatusBadRequest
+	case apperr.UNSUPPORTED_MEDIA_TYPE:
+		return http.StatusUnsupportedMediaType
 	case apperr.NOT_FOUND:
 		return http.StatusNotFound
 	case apperr.RESOURCE_CONFLICT, apperr.RESOURCE_ALREADY_EXISTS:

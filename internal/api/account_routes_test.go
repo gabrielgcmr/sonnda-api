@@ -95,6 +95,10 @@ func TestAccountHTTPContractAndOnboardingBoundary(t *testing.T) {
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("pending onboarding reached business route: %d %s", response.Code, response.Body.String())
 	}
+	response = accountRequest(router, http.MethodPost, "/capture-sessions", "")
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("pending onboarding reached capture route: %d %s", response.Code, response.Body.String())
+	}
 	if strings.Contains(response.Body.String(), "ONBOARDING_REQUIRED") {
 		t.Fatalf("internal error code leaked: %s", response.Body.String())
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/middleware"
 	accounthttp "github.com/gabrielgcmr/sonnda/internal/features/account/http"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
+	capturehttp "github.com/gabrielgcmr/sonnda/internal/features/capture/http"
 	documentprocessinghttp "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/http"
 	accesshttp "github.com/gabrielgcmr/sonnda/internal/features/patient/access/http"
 	laboratoryhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/http"
@@ -22,6 +23,9 @@ type APIDependencies struct {
 	Auth                           *authhttp.Middleware
 	Account                        *accounthttp.Middleware
 	AccountHandler                 *accounthttp.Handler
+	CaptureHandler                 *capturehttp.Handler
+	CaptureAuth                    *capturehttp.Middleware
+	CaptureCleanup                 *capturehttp.CleanupHandler
 	PatientAccessHandler           *accesshttp.Handler
 	PatientHandler                 *profilehttp.Handler
 	PatientProblemHandler          *problemhttp.Handler
@@ -54,9 +58,18 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 	onboarded := huma.NewGroup(resolved)
 	onboarded.UseMiddleware(middleware.RequireCompletedOnboarding(api))
 
+	captureMobile := huma.NewGroup(api)
+	captureMobile.UseMiddleware(middleware.RequireCaptureToken(api, deps.CaptureAuth))
+
 	deps.AccountHandler.RegisterAuthenticatedRoutes(authenticated, bearerSecurity())
 	deps.AccountHandler.RegisterResolvedRoutes(resolved, bearerSecurity())
 	deps.AccountHandler.RegisterOnboardedRoutes(onboarded, bearerSecurity())
+	deps.CaptureHandler.RegisterPublicRoutes(api)
+	deps.CaptureHandler.RegisterMobileRoutes(captureMobile, captureTokenSecurity())
+	deps.CaptureHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
+	if deps.CaptureCleanup != nil {
+		deps.CaptureCleanup.RegisterHumaRoutes(api)
+	}
 
 	deps.PatientAccessHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
 	deps.PatientHandler.RegisterHumaRoutes(onboarded, bearerSecurity())
@@ -69,4 +82,8 @@ func registerHumaRoutes(api huma.API, deps *APIDependencies) {
 
 func bearerSecurity() []map[string][]string {
 	return []map[string][]string{{bearerAuthScheme: {}}}
+}
+
+func captureTokenSecurity() []map[string][]string {
+	return []map[string][]string{{captureTokenAuthScheme: {}}}
 }

@@ -19,7 +19,10 @@ func OpenAPI(info APIInfo) *huma.OpenAPI {
 	return humaAPI.OpenAPI()
 }
 
-const bearerAuthScheme = "bearerAuth"
+const (
+	bearerAuthScheme       = "bearerAuth"
+	captureTokenAuthScheme = "captureTokenAuth"
+)
 
 type APIInfo struct {
 	Name    string
@@ -47,6 +50,11 @@ func newHumaAPI(r *gin.Engine, info APIInfo) huma.API {
 			Type:         "http",
 			Scheme:       "bearer",
 			BearerFormat: "JWT",
+		},
+		captureTokenAuthScheme: {
+			Type: "apiKey",
+			In:   "header",
+			Name: "X-Capture-Token",
 		},
 	}
 

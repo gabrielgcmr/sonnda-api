@@ -9,6 +9,8 @@ const (
 	envGCSBucket                        = "GCS_BUCKET"
 	envGCPLocation                      = "GCP_LOCATION"
 	envGCPExtractLabsProcessorID        = "GCP_EXTRACT_LABS_PROCESSOR_ID"
+	envSupabaseSecretKey                = "SUPABASE_SECRET_KEY"
+	envSupabaseCapturesBucket           = "SUPABASE_CAPTURES_BUCKET"
 )
 
 type StorageConfig struct {
@@ -19,6 +21,8 @@ type StorageConfig struct {
 	GCSBucket                        string
 	GCPLocation                      string
 	GCPExtractLabsProcessorID        string
+	SupabaseSecretKey                string
+	SupabaseCapturesBucket           string
 }
 
 func loadStorageConfig() StorageConfig {
@@ -30,5 +34,7 @@ func loadStorageConfig() StorageConfig {
 		GCSBucket:                        getEnv(envGCSBucket),
 		GCPLocation:                      getEnv(envGCPLocation),
 		GCPExtractLabsProcessorID:        getEnv(envGCPExtractLabsProcessorID),
+		SupabaseSecretKey:                getEnv(envSupabaseSecretKey),
+		SupabaseCapturesBucket:           getEnv(envSupabaseCapturesBucket),
 	}
 }

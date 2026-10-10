@@ -47,7 +47,7 @@ func loadCORSConfig(appEnv string) CORSConfig {
 	return CORSConfig{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Request-ID"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Request-ID", "X-Capture-Token"},
 		ExposeHeaders:    []string{"Content-Length", "X-Request-ID"},
 		AllowCredentials: allowCredentials,
 		MaxAge:           time.Duration(maxAgeHours) * time.Hour,

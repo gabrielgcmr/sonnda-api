@@ -79,6 +79,8 @@ func ProblemTitleFromCode(code ErrorCode, status int) string {
 		apperr.INVALID_ENUM_VALUE,
 		apperr.INVALID_DATE:
 		return "Falha de validação"
+	case apperr.UNSUPPORTED_MEDIA_TYPE:
+		return "Tipo de mídia não suportado"
 
 	// NOT FOUND
 	case apperr.NOT_FOUND:

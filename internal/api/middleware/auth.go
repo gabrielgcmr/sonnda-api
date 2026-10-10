@@ -10,6 +10,8 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
 	accounthttp "github.com/gabrielgcmr/sonnda/internal/features/account/http"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
+	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	capturehttp "github.com/gabrielgcmr/sonnda/internal/features/capture/http"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
@@ -24,6 +26,21 @@ func RequireBearer(api huma.API, auth *authhttp.Middleware) func(huma.Context, f
 
 		ginContext := humagin.Unwrap(ctx)
 		ginContext.Request = ginContext.Request.WithContext(authhttp.ContextWithIdentity(ctx.Context(), identity))
+		next(ctx)
+	}
+}
+
+// RequireCaptureToken authenticates the restricted credential used by the mobile capture client.
+func RequireCaptureToken(api huma.API, auth *capturehttp.Middleware) func(huma.Context, func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		credential, err := auth.Authenticate(ctx.Context(), ctx.Header("X-Capture-Token"))
+		if err != nil {
+			_ = humaerror.Write(api, ctx, err)
+			return
+		}
+
+		ginContext := humagin.Unwrap(ctx)
+		ginContext.Request = ginContext.Request.WithContext(capture.ContextWithMobileCredential(ctx.Context(), *credential))
 		next(ctx)
 	}
 }
