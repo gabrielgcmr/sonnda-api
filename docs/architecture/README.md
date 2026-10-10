@@ -44,6 +44,7 @@ O backend está em camadas globais para contextos em `internal/features`, manten
   Implementações concretas de persistência e integrações externas.  
   - **Persistence (`internal/infrastructure/persistence`)**: repositórios (sqlc/pgx), cache.
   - **Auth (`internal/infrastructure/auth`)**: Supabase auth provider.
+  - **File storage (`internal/infrastructure/filestorage`)**: cliente HTTP do Supabase Storage vinculado aos buckets privados `exam-documents` e `captures`.
   - **Document AI (`internal/infrastructure/documentai`)**: integração independente com Google Cloud Document AI, sem consumidor no fluxo laboratorial atual.
   - **Gemini (`internal/infrastructure/gemini`)**: cliente e extrator semântico estruturado baseado na API Google Gemini.
 
@@ -123,6 +124,7 @@ internal/features/documentprocessing/
 ### Consumidores da extração
 
 A extração de laudos atende a dois fluxos:
+
 1. **Temporário (`StandaloneLabExtractionHandler` / `POST /lab-extractions`)**: Processamento em memória e arquivos temporários para conferência rápida, descartando o PDF em seguida. Não grava banco nem storage permanente.
 2. **Rascunho (`Drafts` / `POST /patients/{patientId}/exam-documents`)**: Armazena o PDF no storage, grava a fotografia da extração e gera rascunho com status pendente para conferência do usuário.
 
@@ -133,21 +135,21 @@ A extração de laudos atende a dois fluxos:
 ## Fluxo de request
 
 1) **Middleware** autentica o usuário e adiciona informações ao contexto  
-   (request_id, usuário autenticado, etc.).
+  (request_id, usuário autenticado, etc.).
 
 2) **Handler HTTP**  
    - valida payload  
    - faz parsing de parâmetros  
    - monta o input do service  
 
-3) **Service / Use case (camada App)**  
-  - executa regras de negócio  
-  - aplica políticas de acesso  
-  - coordena chamadas a repositórios e serviços externos  
+3) **Service / Use case (camada App)**
+   - executa regras de negócio
+   - aplica políticas de acesso
+   - coordena chamadas a repositórios e serviços externos
 
-4) **Repository (Outbound)**  
-  - executa queries via sqlc/pgx  
-  - persiste ou consulta dados  
+4) **Repository (Outbound)**
+   - executa queries via sqlc/pgx
+   - persiste ou consulta dados
 
 5) **Resposta HTTP**  
    - erros são normalizados para um contrato estável via `internal/kernel/apperr`
@@ -210,6 +212,7 @@ Algumas decisões importantes do projeto **não são óbvias apenas pela leitura
 Para preservar o contexto dessas escolhas ao longo do tempo, o Sonnda adota o uso de **Architecture Decision Records (ADR)**.
 
 Os ADRs documentam:
+
 - o contexto da decisão
 - a decisão tomada
 - alternativas consideradas

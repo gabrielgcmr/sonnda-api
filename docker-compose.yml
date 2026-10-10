@@ -1,3 +1,4 @@
+# docker-compose.yml
 services:
   api:
     build: .
@@ -7,7 +8,3 @@ services:
     - "${PORT:-8080}:8080"
     env_file:
       - .env
-    environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sonnda-gcs.json
-    volumes:
-      - C:/Users/gabri/Dev/credentials/sonnda-gcs.json:/secrets/sonnda-gcs.json:ro

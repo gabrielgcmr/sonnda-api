@@ -4,10 +4,12 @@ package http
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
@@ -25,6 +27,23 @@ type documentStub struct {
 	documents.Service
 	document documents.ExamDocumentOutput
 	denied   bool
+}
+
+type examFileStorageStub struct {
+	uri       string
+	expiresIn time.Duration
+}
+
+func (s *examFileStorageStub) Upload(context.Context, io.Reader, string, string) (string, error) {
+	return "", nil
+}
+
+func (s *examFileStorageStub) Delete(context.Context, string) error { return nil }
+
+func (s *examFileStorageStub) GetSignedURL(_ context.Context, uri string, expiresIn time.Duration) (string, error) {
+	s.uri = uri
+	s.expiresIn = expiresIn
+	return "https://storage.test/signed", nil
 }
 
 func (s *documentStub) FindByID(context.Context, *account.Account, uuid.UUID) (*documents.ExamDocumentOutput, error) {
@@ -144,6 +163,35 @@ func TestUploadRejectsPDFOverPersistentLimit(t *testing.T) {
 
 	if res.Code != http.StatusRequestEntityTooLarge || stub.created {
 		t.Fatalf("expected 413 without draft creation, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestGetExamDocumentFileUsesPersistentLifetime(t *testing.T) {
+	documentID := uuid.New()
+	storageURI := "supabase://exam-documents/patients/patient/document.pdf"
+	storage := &examFileStorageStub{}
+	handler := NewExams(&documentStub{document: documents.ExamDocumentOutput{
+		ID:         documentID,
+		StorageURI: storageURI,
+	}}, nil, nil, storage)
+	ctx := helpers.ContextWithCurrentAccount(t.Context(), &account.Account{ID: uuid.New()})
+	startedAt := time.Now().UTC()
+
+	output, err := handler.getExamDocumentFile(ctx, &examDocumentInput{DocumentID: documentID})
+
+	if err != nil {
+		t.Fatalf("get exam document file: %v", err)
+	}
+	if storage.uri != storageURI || storage.expiresIn != examDocumentFileURLLifetime {
+		t.Fatalf("signed URL request = (%q, %s), want (%q, %s)", storage.uri, storage.expiresIn, storageURI, examDocumentFileURLLifetime)
+	}
+	if output.Body.URL != "https://storage.test/signed" {
+		t.Fatalf("signed URL = %q", output.Body.URL)
+	}
+	minimumExpiration := startedAt.Add(examDocumentFileURLLifetime)
+	maximumExpiration := time.Now().UTC().Add(examDocumentFileURLLifetime)
+	if output.Body.ExpiresAt.Before(minimumExpiration) || output.Body.ExpiresAt.After(maximumExpiration) {
+		t.Fatalf("expiration = %s, want between %s and %s", output.Body.ExpiresAt, minimumExpiration, maximumExpiration)
 	}
 }
 

@@ -6,7 +6,7 @@ Status: implementada. Substitui as decisões de orquestração/persistência ant
 ## Fluxos
 
 - Área de trabalho: PDF com texto selecionável → leitura local → Gemini → resumo copiável. Não grava banco nem armazenamento permanente; o arquivo temporário é removido ao terminar, inclusive em falhas.
-- Paciente: verificar acesso → extrair → salvar PDF no GCS e rascunho no Postgres → conferir → confirmar no histórico. Não grava resultados clínicos antes da confirmação.
+- Paciente: verificar acesso → extrair → salvar PDF no bucket privado `exam-documents` do Supabase Storage e rascunho no Postgres → conferir → confirmar no histórico. Não grava resultados clínicos antes da confirmação.
 - Terminal: comandos de terminal/CLI para extração foram descontinuados e removidos para evitar abusos; o processamento fica restrito aos fluxos autenticados da API (temporário e rascunho).
 
 O fluxo temporário aceita PDFs de até 10 MiB. O fluxo persistente por paciente aceita PDFs de até 5 MiB, alinhado ao bucket `exam-documents`. O processamento é síncrono, sem fila e sem OCR remoto nos endpoints web. Falhas anteriores à criação do rascunho exigem novo envio.

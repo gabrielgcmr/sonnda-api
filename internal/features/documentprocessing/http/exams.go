@@ -35,9 +35,9 @@ type ExamsHandler struct {
 }
 
 const (
-	examDocumentFileURLExpirationMinutes = 15
-	examDocumentMaxFileSize              = 5 * 1024 * 1024
-	examDocumentMaxBodySize              = examDocumentMaxFileSize + 1024*1024
+	examDocumentFileURLLifetime = 15 * time.Minute
+	examDocumentMaxFileSize     = documentprocessing.MaxFileSizeBytes
+	examDocumentMaxBodySize     = examDocumentMaxFileSize + 1024*1024
 )
 
 type examDocumentFileResponse struct {
@@ -185,13 +185,13 @@ func (h *ExamsHandler) getExamDocumentFile(ctx context.Context, input *examDocum
 	if h.storage == nil {
 		return nil, huma.Error500InternalServerError("armazenamento de documentos indisponível")
 	}
-	url, err := h.storage.GetSignedURL(ctx, document.StorageURI, examDocumentFileURLExpirationMinutes)
+	url, err := h.storage.GetSignedURL(ctx, document.StorageURI, examDocumentFileURLLifetime)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
 	return &examDocumentFileOutput{Body: examDocumentFileResponse{
 		URL:       url,
-		ExpiresAt: time.Now().UTC().Add(examDocumentFileURLExpirationMinutes * time.Minute),
+		ExpiresAt: time.Now().UTC().Add(examDocumentFileURLLifetime),
 	}}, nil
 }
 

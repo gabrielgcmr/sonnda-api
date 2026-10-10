@@ -119,7 +119,7 @@ func processingTestReport(patientID, userID uuid.UUID) *labs.LabReport {
 
 func createTestDraft(t *testing.T, repo *DraftRepository, patient, user uuid.UUID) *documents.ExamDocument {
 	t.Helper()
-	doc, err := documents.NewExamDocument(patient, user, "gs://test/exam.pdf", "exam.pdf", "application/pdf")
+	doc, err := documents.NewExamDocument(patient, user, "supabase://exam-documents/test/exam.pdf", "exam.pdf", "application/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := documents.NewExamDocument(patient, user, "gs://test/file.pdf", "file.pdf", "application/pdf")
+	doc, err := documents.NewExamDocument(patient, user, "supabase://exam-documents/test/file.pdf", "file.pdf", "application/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}

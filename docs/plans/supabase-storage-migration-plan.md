@@ -46,12 +46,14 @@ Serão usados dois buckets privados, um cliente HTTP compartilhado e dois adapte
 
 ### 3. Ajustar contratos e bootstrap
 
+**Status: concluída no código. Os dois contratos usam `time.Duration`; os buckets `exam-documents` e `captures` compartilham o cliente Supabase e são injetados nos respectivos módulos.**
+
 - Alterar os contratos de storage de `documentprocessing` e `capture` para receber `time.Duration` na geração de URL assinada.
 - Instanciar no bootstrap:
   - um adapter para `exam-documents`;
   - um adapter para `captures`.
 - Injetar imediatamente o primeiro em `ExamsModule`.
-- O adapter do bucket `captures` já está injetado em `CaptureModule` desde a etapa 1.3 da feature; a troca do storage de documentos permanentes permanece pendente nesta etapa.
+- O adapter do bucket `captures` permanece injetado em `CaptureModule`, e o adapter de `exam-documents` passa a ser injetado em `ExamsModule`.
 - No futuro endpoint de captura, limitar a URL assinada a `min(5 minutos, expires_at - agora)`.
 - No endpoint de documentos permanentes, preservar os 15 minutos atuais.
 
@@ -64,6 +66,8 @@ Serão usados dois buckets privados, um cliente HTTP compartilhado e dois adapte
 - O futuro fluxo “Exames a partir de captura” deverá usar `captures.Open` e criar uma cópia independente por `exam-documents.Upload`.
 
 ### 5. Configuração e remoção do GCS
+
+**Status: concluída no código e na documentação. A configuração ativa usa somente Supabase Storage; o adapter Document AI permanece isolado e inativo.**
 
 - Adicionar:
   - `SUPABASE_SECRET_KEY`;

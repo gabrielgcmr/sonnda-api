@@ -97,17 +97,17 @@ ser registrada como intencional.
 
 **Prioridade:** média.
 
-O limite de 5 MiB do bucket de capturas está repetido como
-`5 * 1024 * 1024` na composição da API e no comando de limpeza, enquanto o
-domínio já define `capturedomain.MaxFileSizeBytes`. A duplicação pode permitir
-que a configuração do Storage, a validação do domínio e a constraint
-`captures_size` do banco fiquem divergentes.
+O comando de limpeza ainda configura o limite de 5 MiB como
+`5 * 1024 * 1024`, enquanto o domínio já define
+`capturedomain.MaxFileSizeBytes`. A duplicação remanescente pode permitir que a
+configuração do Storage, a validação do domínio e a constraint `captures_size`
+do banco fiquem divergentes.
 
 Usar `capturedomain.MaxFileSizeBytes` ao configurar o bucket de capturas em
-`cmd/api/main.go` e `cmd/cleanup-captures/main.go`. Manter o limite genérico do
-adaptador de Storage independente do limite específico da feature e adicionar
-uma verificação automatizada que detecte divergência entre a constante do
-domínio e a constraint do banco.
+`cmd/cleanup-captures/main.go`, como já ocorre na composição da API. Manter o
+limite genérico do adaptador de Storage independente do limite específico da
+feature e adicionar uma verificação automatizada que detecte divergência entre
+a constante do domínio e a constraint do banco.
 
 **Critério de aceite:** a composição da aplicação não deve conter o valor
 numérico do limite de capturas; API, comando de limpeza e validações da feature

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type allowDocumentAuthorizer struct{}
@@ -45,7 +46,7 @@ func (s *draftStoreStub) GetExtraction(context.Context, uuid.UUID) ([]byte, erro
 }
 func (s *draftStoreStub) BeginDelete(context.Context, uuid.UUID) (*domain.ExamDocument, error) {
 	s.deleting = true
-	return &domain.ExamDocument{StorageURI: "gs://test/file.pdf"}, nil
+	return &domain.ExamDocument{StorageURI: "supabase://exam-documents/test/file.pdf"}, nil
 }
 func (s *draftStoreStub) FinishDelete(context.Context, uuid.UUID) error {
 	s.finished = true
@@ -68,10 +69,10 @@ type storageStub struct {
 
 func (s *storageStub) Upload(context.Context, io.Reader, string, string) (string, error) {
 	s.uploaded = true
-	return "gs://test/file.pdf", nil
+	return "supabase://exam-documents/test/file.pdf", nil
 }
 func (s *storageStub) Delete(context.Context, string) error { s.deleted = true; return s.deleteErr }
-func (s *storageStub) GetSignedURL(context.Context, string, int) (string, error) {
+func (s *storageStub) GetSignedURL(context.Context, string, time.Duration) (string, error) {
 	return "https://test/file.pdf", nil
 }
 func draftResult() *extraction.Result {

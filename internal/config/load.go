@@ -42,18 +42,10 @@ func Load() (*Config, error) {
 
 	appendRequired(&violations, envDatabaseURL, cfg.Database.URL)
 	appendRequired(&violations, envSupabaseProjectURL, cfg.Auth.SupabaseProjectURL)
-	appendRequired(&violations, envGCPProjectID, cfg.Storage.GCPProjectID)
-	appendRequired(&violations, envGCSBucket, cfg.Storage.GCSBucket)
 	appendRequired(&violations, envSupabaseSecretKey, cfg.Storage.SupabaseSecretKey)
+	appendRequired(&violations, envSupabaseExamDocumentsBucket, cfg.Storage.SupabaseExamDocumentsBucket)
 	appendRequired(&violations, envSupabaseCapturesBucket, cfg.Storage.SupabaseCapturesBucket)
 	appendRequired(&violations, envCaptureCleanupToken, cfg.Jobs.CaptureCleanupToken)
-	// Exigir pelo menos uma forma de credenciais do Google Cloud
-	if cfg.Storage.GoogleApplicationCredentials == "" && cfg.Storage.GoogleApplicationCredentialsJSON == "" {
-		violations = append(violations, apperr.Violation{
-			Field:  "GOOGLE_CREDENTIALS",
-			Reason: "either GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_APPLICATION_CREDENTIALS_JSON is required",
-		})
-	}
 	validateEnum(&violations, envAppEnv, cfg.App.Env, allowedEnvs)
 	validateEnum(&violations, envLogLevel, cfg.App.LogLevel, allowedLogLevels)
 	validateEnum(&violations, envLogFormat, cfg.App.LogFormat, allowedLogFormats)

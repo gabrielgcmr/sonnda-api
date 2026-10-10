@@ -44,8 +44,8 @@ func TestCaptureLifecycle(t *testing.T) {
 		capture.Status != StatusUploading || !capture.ExpiresAt.Equal(now.Add(RetentionPeriod)) {
 		t.Fatalf("unexpected capture: %+v", capture)
 	}
-	available, err := capture.MakeAvailable(" gs://private/capture ", now.Add(time.Second))
-	if err != nil || available.StorageURI == nil || *available.StorageURI != "gs://private/capture" {
+	available, err := capture.MakeAvailable(" supabase://captures/private/capture ", now.Add(time.Second))
+	if err != nil || available.StorageURI == nil || *available.StorageURI != "supabase://captures/private/capture" {
 		t.Fatalf("make available: %+v %v", available, err)
 	}
 	deleting, err := available.MarkDeleting(now.Add(2 * time.Second))

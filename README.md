@@ -21,6 +21,7 @@ A Sonnda resolve um problema recorrente na pratica clinica: pacientes precisam c
 - [Sonnda](#sonnda)
   - [O que este repositorio entrega (MVP)](#o-que-este-repositorio-entrega-mvp)
   - [Sumario](#sumario)
+  - [OpenAPI](#openapi)
   - [Arquitetura](#arquitetura)
   - [Stack Tecnologico](#stack-tecnologico)
   - [Logging](#logging)
@@ -37,6 +38,7 @@ A Sonnda resolve um problema recorrente na pratica clinica: pacientes precisam c
 O contrato HTTP é gerado dinamicamente pelo Huma a partir das rotas da API.
 Use `make openapi-export` para criar `artifacts/openapi.json`. Em cada consumidor,
 execute `task openapi` para regenerar o cliente a partir desse arquivo local.
+
 - Erros HTTP: RFC 9457 (Problem Details) via `application/problem+json`.
 
 ## Arquitetura
@@ -48,7 +50,7 @@ A aplicação é organizada principalmente por contexto de negócio em `internal
 - **Domain compartilhado (`internal/domain`)**: conceitos puros usados por mais de uma feature, atualmente incluindo demografia. Modelos específicos ficam dentro da feature proprietária.
 - **Application (`internal/application`)**: `bootstrap` compõe módulos e dependências; `usecase` contém fluxos entre features, como criação de pacientes e confirmação de laudos.
 - **API (`internal/api`)**: configura Gin e Huma, compõe rotas e mantém middleware, helpers e tradução de erros HTTP. Handlers de negócio ficam junto das features. As rotas Huma são a fonte do OpenAPI.
-- **Infrastructure (`internal/infrastructure`)**: adapters concretos para PostgreSQL/sqlc, autenticação, GCS, Redis e integrações de extração com Gemini, Document AI e comandos locais.
+- **Infrastructure (`internal/infrastructure`)**: adapters concretos para PostgreSQL/sqlc, autenticação, Supabase Storage, Redis e integrações de extração com Gemini, Document AI e comandos locais.
 - **Kernel (`internal/kernel`)**: contratos transversais de erro, persistência e observabilidade. `internal/config` concentra a configuração da aplicação e integrações.
 
 ---
@@ -56,15 +58,17 @@ A aplicação é organizada principalmente por contexto de negócio em `internal
 ## Stack Tecnologico
 
 **Backend:** API RESTful em Go
+
 - **Framework web:** Gin com Huma para rotas e OpenAPI
 - **Banco de dados:** PostgreSQL (gerenciado via Supabase) + Redis (Upstash)
 - **Geração de código SQL:** SQLC
 - **Autenticação:** Supabase Auth (JWT)
-- **Armazenamento de arquivos:** Google Cloud Storage (GCS)
+- **Armazenamento de arquivos:** Supabase Storage, com buckets privados para documentos permanentes e capturas temporárias
 - **Processamento de documentos:** extração textual por adapter de comandos e extração estruturada com Gemini; há também um adapter para Google Cloud Document AI
 - **Containerização:** Docker / docker-compose
 
 **Ferramentas de desenvolvimento:**
+
 - Air (live reload)
 - SQLC (geração de código SQL)
 - Make (automação de tarefas)
@@ -78,14 +82,17 @@ A aplicação é organizada principalmente por contexto de negócio em `internal
 - Configure com `LOG_LEVEL` (`debug|info|warn|error`) e `LOG_FORMAT` (`text|json|pretty`).
 
 ## Tratamento de Erros
+
 Este projeto usa um **contrato de erro centralizado** baseado em `AppError`.
 
 ### Regras centrais
+
 - **NÃO retorne strings brutas como contratos de erro.**
 - **NÃO exponha `err.Error()` em respostas HTTP.**
 - **NÃO construa JSON de erro manualmente em handlers ou middlewares.**
 
 ### AppError
+
 - Erros de nível de aplicação devem ser representados como `*apperr.AppError`.
 - Localização: `internal/kernel/apperr`
 - `AppError` contém:
@@ -129,7 +136,7 @@ Estrutura atual do projeto:
 │   ├── config/                     # Configuração
 │   ├── domain/                     # Conceitos compartilhados
 │   ├── features/                   # Contextos de negócio e seus adapters
-│   ├── infrastructure/             # PostgreSQL, GCS e integrações externas
+│   ├── infrastructure/             # PostgreSQL, Supabase Storage e integrações externas
 │   └── kernel/                     # Erros, persistência e observabilidade
 ├── static/                         # Assets embutidos
 ├── supabase/                       # Configuração e migrations do banco

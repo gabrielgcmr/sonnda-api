@@ -13,11 +13,12 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	"google.golang.org/api/option"
 
 	"github.com/gabrielgcmr/sonnda/internal/application/bootstrap"
 	"github.com/gabrielgcmr/sonnda/internal/config"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
+	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/observability"
@@ -81,14 +82,7 @@ func main() {
 	}
 
 	//6. Conectando outros servicos
-	//6.1 Storage Service (GCS)
-	gcpOpts := buildGCPClientOptions(cfg)
-	storageService, err := filestorage.NewGCSObjectStorage(ctx, cfg.Storage.GCSBucket, cfg.Storage.GCPProjectID, gcpOpts...)
-	if err != nil {
-		logInfraFatal("falha ao criar storage do GCS", err)
-	}
-	defer storageService.Close()
-
+	//6.1 Storage Service (Supabase)
 	supabaseStorageClient, err := filestorage.NewSupabaseStorageClient(filestorage.SupabaseClientConfig{
 		ProjectURL: cfg.Auth.SupabaseProjectURL,
 		SecretKey:  cfg.Storage.SupabaseSecretKey,
@@ -96,9 +90,16 @@ func main() {
 	if err != nil {
 		logInfraFatal("falha ao criar cliente do Supabase Storage", err)
 	}
+	examDocumentsStorage, err := supabaseStorageClient.ForBucket(filestorage.BucketConfig{
+		BucketName:  cfg.Storage.SupabaseExamDocumentsBucket,
+		MaxFileSize: documentprocessing.MaxFileSizeBytes,
+	})
+	if err != nil {
+		logInfraFatal("falha ao configurar bucket de documentos de exames", err)
+	}
 	captureStorage, err := supabaseStorageClient.ForBucket(filestorage.BucketConfig{
 		BucketName:  cfg.Storage.SupabaseCapturesBucket,
-		MaxFileSize: 5 * 1024 * 1024,
+		MaxFileSize: capturedomain.MaxFileSizeBytes,
 	})
 	if err != nil {
 		logInfraFatal("falha ao configurar bucket de capturas", err)
@@ -127,7 +128,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
+	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
 
 	//8 Middlewares
 	//8.1 API
@@ -195,17 +196,4 @@ func logInfraFatal(prefix string, err error) {
 
 	slog.Error(prefix, "error", err)
 	os.Exit(1)
-}
-
-func buildGCPClientOptions(cfg *config.Config) []option.ClientOption {
-	if cfg == nil {
-		return nil
-	}
-	if cfg.Storage.GoogleApplicationCredentialsJSON != "" {
-		return []option.ClientOption{option.WithCredentialsJSON([]byte(cfg.Storage.GoogleApplicationCredentialsJSON))}
-	}
-	if cfg.Storage.GoogleApplicationCredentials != "" {
-		return []option.ClientOption{option.WithCredentialsFile(cfg.Storage.GoogleApplicationCredentials)}
-	}
-	return nil
 }

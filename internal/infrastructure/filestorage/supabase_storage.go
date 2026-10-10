@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
@@ -105,7 +106,10 @@ type SupabaseBucketStorage struct {
 	maxFileSize int64
 }
 
-var _ capture.FileStorage = (*SupabaseBucketStorage)(nil)
+var (
+	_ capture.FileStorage                   = (*SupabaseBucketStorage)(nil)
+	_ documentprocessing.FileStorageService = (*SupabaseBucketStorage)(nil)
+)
 
 // ForBucket cria um adapter SupabaseBucketStorage vinculado ao bucket configurado.
 func (c *SupabaseStorageClient) ForBucket(cfg BucketConfig) (*SupabaseBucketStorage, error) {
