@@ -27,7 +27,7 @@ RUN apk add --no-cache ca-certificates poppler-utils tzdata
 COPY --from=build /bin/sonnda /app/sonnda
 
 # Expõe a porta
-ENV PORT=8080
+ENV APP_PORT=8080
 EXPOSE 8080
 
 ENTRYPOINT ["/app/sonnda"]

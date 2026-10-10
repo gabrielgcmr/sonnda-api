@@ -1,7 +1,7 @@
 // internal/config/http.go
 package config
 
-const envPort = "PORT"
+const envPort = "APP_PORT"
 
 type HTTPConfig struct {
 	Port string
