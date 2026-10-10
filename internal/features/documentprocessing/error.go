@@ -24,10 +24,3 @@ func mapRepoError(op string, err error) error {
 		Cause:   fmt.Errorf("%s: %w", op, err),
 	}
 }
-
-func patientNotFound() error {
-	return &apperr.AppError{
-		Kind:    apperr.NOT_FOUND,
-		Message: "paciente nao encontrado",
-	}
-}
