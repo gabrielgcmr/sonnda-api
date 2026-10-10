@@ -1,8 +1,9 @@
+-- internal/infrastructure/database/postgres/sqlc/sql/schema/professional.sql
 -- Professionals table: stores professional information
 -- Reflete a entidade 'Professional' que criamos.
 -- Relacionamento 1:1 com users.
 CREATE TABLE professionals (
-    user_id             UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id             UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
     kind                TEXT NOT NULL CHECK (kind IN ('doctor','nurse','nursing_tech','physiotherapist','psychologist','nutritionist','pharmacist','dentist')),
     registration_number TEXT NOT NULL,
     registration_issuer TEXT NOT NULL, -- Ex: CRM, COREN

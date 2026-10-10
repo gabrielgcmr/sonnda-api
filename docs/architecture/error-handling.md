@@ -19,9 +19,9 @@ domínio/aplicação -> AppError (classificação interna)
                    -> application/problem+json da Huma
 ```
 
-| Tipo de rota | Corpo de erro HTTP | Serialização |
-| --- | --- | --- |
-| Huma (`/me`) | RFC 9457 padrão da Huma | Huma |
+| Tipo de rota          | Corpo de erro HTTP                   | Serialização               |
+| --------------------- | ------------------------------------ | -------------------------- |
+| Huma (`/me`)          | RFC 9457 padrão da Huma              | Huma                       |
 | Gin ainda não migrada | Problem Details Sonnda com extensões | `presenter.ErrorResponder` |
 
 A coexistência é temporária. Não adicionar novas rotas ao formato
@@ -36,7 +36,8 @@ adotado.
 
 Este documento descreve a arquitetura de tratamento de erros da Sonnda API, inspirada em Hexagonal/Clean Architecture e aplicada de forma pragmática em Go.
 
-**Referências**
+### Referências
+
 - ADR: `docs/architecture/adr/ADR-002-error-handling-contrato.md`
 - Catálogo de códigos: `internal/kernel/apperr/catalog.go`
 - Política de log por erro: `internal/kernel/apperr/logging.go`

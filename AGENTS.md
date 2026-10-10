@@ -4,19 +4,18 @@
 Simple instructions for coding agents working on this repo.
 
 ## General
+
 - The project is being done by a solo developer.
-- When suggesting a solution to a problem, try offer the correct way (even if it requires refactoring) and a simple way to solve it.
-- Prefer small, readable functions and clear naming.
-- Avoid editing generated files unless explicitly asked.
+- The project was started while the developer was learning Go, REST, and other concepts. Please promptly point out any parts that do not follow best practices.gb
 - Call out any assumptions or open questions before finishing.
-- Do not touch secrets or files under `secrets/`.
 - Follow the existing error-handling and logging architecture described below.
-- Always start every source file you create or modify with a one-line header comment containing the workspace-relative path to that file, formatted as "path/to/file". 
-   - Use the language's comment syntax (Go/TS/JS: //, HTML/Markdown: <!-- -->, CSS: /* */). 
-   - Example: // internal/features/patient/profile/service.go.
-   - Skip only when the format does not support comments or the file is auto-generated.
+- Always start every source file you create or modify with a one-line header comment containing the workspace-relative path to that file, formatted as "path/to/file".
+  - Use the language's comment syntax (Go/TS/JS: //, HTML/Markdown: <!-- -->, CSS: /**/).
+  - Example: // internal/features/patient/profile/service.go.
+  - Skip only when the format does not support comments or the file is auto-generated.
 
 ## Stack
+
 - Backend: API REST in Go, using Gin with Huma for route definitions and OpenAPI.
 - **Database**: PostgreSQL hosted on Supabase, accessed through pgx and sqlc; Redis is available through the infrastructure adapter.
 - **Auth**: Supabase JWT authentication.
@@ -40,11 +39,13 @@ Simple instructions for coding agents working on this repo.
 This project uses a **centralized error contract** based on `AppError`.
 
 ### Core rules
+
 - **Do NOT return raw strings as error contracts.**
 - **Do NOT expose `err.Error()` in HTTP responses.**
 - **Do NOT manually build error JSON in handlers or middleware.**
 
 ### AppError
+
 - Application-level errors must be represented as `*apperr.AppError`.
 - Location: `internal/kernel/apperr`
 - `AppError` contains:
@@ -64,6 +65,7 @@ This project uses a **centralized error contract** based on `AppError`.
 ---
 
 ## Logging
+
 - The app uses `log/slog` via `internal/kernel/observability` (request-scoped logger is injected by HTTP middleware).
 - Configure with `LOG_LEVEL` (`debug|info|warn|error`) and `LOG_FORMAT` (`text|json|pretty`).
 

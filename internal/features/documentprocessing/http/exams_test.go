@@ -24,53 +24,68 @@ import (
 type documentStub struct {
 	documents.Service
 	document documents.ExamDocumentOutput
+	denied   bool
 }
 
-func (s *documentStub) FindByID(context.Context, uuid.UUID) (*documents.ExamDocumentOutput, error) {
+func (s *documentStub) FindByID(context.Context, *account.Account, uuid.UUID) (*documents.ExamDocumentOutput, error) {
+	if s.denied {
+		return nil, apperr.Forbidden("Sem acesso.")
+	}
 	return &s.document, nil
 }
-func (s *documentStub) ListByPatient(context.Context, uuid.UUID, int, int) ([]documents.ExamDocumentOutput, error) {
-	return []documents.ExamDocumentOutput{s.document}, nil
-}
-
-type accessStub struct{ denied bool }
-
-func (s accessStub) RequireAccess(context.Context, uuid.UUID, uuid.UUID) error {
+func (s *documentStub) ListByPatient(context.Context, *account.Account, uuid.UUID, int, int) ([]documents.ExamDocumentOutput, error) {
 	if s.denied {
-		return apperr.Forbidden("Sem acesso.")
+		return nil, apperr.Forbidden("Sem acesso.")
 	}
-	return nil
+	return []documents.ExamDocumentOutput{s.document}, nil
 }
 
 type reviewStub struct {
 	created, confirmed, deleted bool
 	path                        string
 	err                         error
+	denied                      bool
 }
 
-func (s *reviewStub) Create(_ context.Context, in documents.CreateDraftInput) (*documents.ExamDocumentOutput, error) {
+func (s *reviewStub) Create(_ context.Context, _ *account.Account, in documents.CreateDraftInput) (*documents.ExamDocumentOutput, error) {
+	if s.denied {
+		return nil, apperr.Forbidden("Sem acesso.")
+	}
 	s.created = true
 	s.path = in.LocalPath
 	state := "pending"
 	return &documents.ExamDocumentOutput{ID: uuid.New(), PatientID: in.PatientID, ReviewStatus: &state}, s.err
 }
-func (s *reviewStub) Extraction(context.Context, uuid.UUID) (*extraction.Result, error) {
+func (s *reviewStub) Extraction(context.Context, *account.Account, uuid.UUID) (*extraction.Result, error) {
+	if s.denied {
+		return nil, apperr.Forbidden("Sem acesso.")
+	}
 	return &extraction.Result{SummaryText: "Glicose: 90"}, s.err
 }
-func (s *reviewStub) Confirm(context.Context, uuid.UUID, uuid.UUID) (*labs.LabReportOutput, error) {
+func (s *reviewStub) Confirm(context.Context, *account.Account, uuid.UUID) (*labs.LabReportOutput, error) {
+	if s.denied {
+		return nil, apperr.Forbidden("Sem acesso.")
+	}
 	s.confirmed = true
 	return &labs.LabReportOutput{ID: uuid.New()}, s.err
 }
-func (s *reviewStub) Delete(context.Context, uuid.UUID) error { s.deleted = true; return s.err }
+func (s *reviewStub) Delete(context.Context, *account.Account, uuid.UUID) error {
+	if s.denied {
+		return apperr.Forbidden("Sem acesso.")
+	}
+	s.deleted = true
+	return s.err
+}
 
 func reviewRouter(denied bool, review *reviewStub) (*gin.Engine, uuid.UUID, uuid.UUID) {
 	gin.SetMode(gin.TestMode)
 	doc, patient := uuid.New(), uuid.New()
+	review.denied = denied
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &account.User{ID: uuid.New()}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &account.Account{ID: uuid.New()}))
 	})
-	NewExams(&documentStub{document: documents.ExamDocumentOutput{ID: doc, PatientID: patient}}, review, review, nil, accessStub{denied}).RegisterHumaRoutes(humagin.New(r, huma.DefaultConfig("test", "test")), nil)
+	NewExams(&documentStub{document: documents.ExamDocumentOutput{ID: doc, PatientID: patient}, denied: denied}, review, review, nil).RegisterHumaRoutes(humagin.New(r, huma.DefaultConfig("test", "test")), nil)
 	return r, doc, patient
 }
 

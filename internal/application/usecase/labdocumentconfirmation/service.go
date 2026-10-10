@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	domain "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
@@ -16,20 +17,20 @@ import (
 
 type Repository interface {
 	Confirm(context.Context, uuid.UUID, uuid.UUID, *labs.LabReport, string, *string) (uuid.UUID, error)
+	GetExtraction(context.Context, uuid.UUID) ([]byte, error)
 }
 type Service struct {
-	documents  documents.Service
-	drafts     *documents.Drafts
+	authorizer documents.Authorizer
 	repository Repository
 	labs       laboratory.Repository
 }
 
-func New(documents documents.Service, drafts *documents.Drafts, repo Repository, labs laboratory.Repository) *Service {
-	return &Service{documents: documents, drafts: drafts, repository: repo, labs: labs}
+func New(authorizer documents.Authorizer, repo Repository, labs laboratory.Repository) *Service {
+	return &Service{authorizer: authorizer, repository: repo, labs: labs}
 }
 
-func (s *Service) Confirm(ctx context.Context, id, userID uuid.UUID) (*laboratory.LabReportOutput, error) {
-	document, err := s.documents.FindByID(ctx, id)
+func (s *Service) Confirm(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*laboratory.LabReportOutput, error) {
+	document, err := s.authorizer.AuthorizeDocument(ctx, currentAccount, id, documents.ConfirmDocument)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +43,11 @@ func (s *Service) Confirm(ctx context.Context, id, userID uuid.UUID) (*laborator
 	if *document.ReviewStatus == "confirmed" && document.LabReportID != nil {
 		return s.report(ctx, *document.LabReportID)
 	}
-	result, err := s.drafts.Extraction(ctx, id)
+	snapshot, err := s.repository.GetExtraction(ctx, id)
+	if err != nil {
+		return nil, apperr.Internal("Falha ao ler a extração armazenada.", err)
+	}
+	result, err := documents.DecodeExtractionSnapshot(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +59,7 @@ func (s *Service) Confirm(ctx context.Context, id, userID uuid.UUID) (*laborator
 		return nil, apperr.DomainRuleViolation("Os dados extraídos não permitem confirmar este exame.")
 	}
 	report.ExamDocumentID = &id
-	reportID, err := s.repository.Confirm(ctx, id, userID, report, generateLabFingerprint(document.PatientID, report), result.Report.RawText)
+	reportID, err := s.repository.Confirm(ctx, id, currentAccount.ID, report, generateLabFingerprint(document.PatientID, report), result.Report.RawText)
 	if errors.Is(err, domain.ErrReviewConflict) {
 		return nil, apperr.Conflict("O rascunho foi descartado ou não pode ser confirmado.")
 	}

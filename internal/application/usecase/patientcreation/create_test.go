@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gabrielgcmr/sonnda/internal/domain/demographics"
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	accessdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/access/domain"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
@@ -36,7 +37,7 @@ func (r *creationRepository) CreateWithInitialAccess(
 func validInput(relationType string) Input {
 	return Input{
 		Profile: patientprofile.CreateInput{
-			CPF:       "12345678901",
+			CPF:       "52998224725",
 			FullName:  "Joana Silva",
 			BirthDate: time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC),
 			Gender:    demographics.GenderFemale,
@@ -47,22 +48,26 @@ func validInput(relationType string) Input {
 	}
 }
 
+func creatorAccount(accountType accountdomain.AccountType) *accountdomain.Account {
+	return &accountdomain.Account{ID: uuid.New(), AccountType: accountType}
+}
+
 func TestExecuteUsesRelationshipProvidedByCreator(t *testing.T) {
 	repo := &creationRepository{}
-	creatorID := uuid.New()
+	creator := creatorAccount(accountdomain.AccountTypeBasicCare)
 
-	patient, err := New(repo).Execute(context.Background(), creatorID, validInput("family"))
+	patient, err := New(repo).Execute(context.Background(), creator, validInput("family"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if repo.patient != patient || repo.access == nil {
 		t.Fatal("expected patient and initial access to be persisted together")
 	}
-	if repo.access.GranteeID != creatorID || repo.access.RelationType != accessdomain.RelationshipTypeFamily {
+	if repo.access.GranteeID != creator.ID || repo.access.RelationType != accessdomain.RelationshipTypeFamily {
 		t.Fatalf("unexpected initial access: %+v", repo.access)
 	}
-	if repo.access.GrantedBy == nil || *repo.access.GrantedBy != creatorID {
-		t.Fatalf("expected creator %s as grantor", creatorID)
+	if repo.access.GrantedBy == nil || *repo.access.GrantedBy != creator.ID {
+		t.Fatalf("expected creator %s as grantor", creator.ID)
 	}
 	if patient.OwnerUserID != nil {
 		t.Fatalf("non-self relationship must not set patient owner: %v", patient.OwnerUserID)
@@ -71,14 +76,14 @@ func TestExecuteUsesRelationshipProvidedByCreator(t *testing.T) {
 
 func TestExecuteSelfRelationshipSetsCreatorAsOwner(t *testing.T) {
 	repo := &creationRepository{}
-	creatorID := uuid.New()
+	creator := creatorAccount(accountdomain.AccountTypeBasicCare)
 
-	patient, err := New(repo).Execute(context.Background(), creatorID, validInput("self"))
+	patient, err := New(repo).Execute(context.Background(), creator, validInput("self"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if patient.OwnerUserID == nil || *patient.OwnerUserID != creatorID {
-		t.Fatalf("expected creator %s as patient owner", creatorID)
+	if patient.OwnerUserID == nil || *patient.OwnerUserID != creator.ID {
+		t.Fatalf("expected creator %s as patient owner", creator.ID)
 	}
 }
 
@@ -86,7 +91,11 @@ func TestExecuteRequiresExplicitRelationship(t *testing.T) {
 	for _, relationType := range []string{"", "unknown"} {
 		t.Run(relationType, func(t *testing.T) {
 			repo := &creationRepository{}
-			_, err := New(repo).Execute(context.Background(), uuid.New(), validInput(relationType))
+			_, err := New(repo).Execute(
+				context.Background(),
+				creatorAccount(accountdomain.AccountTypeBasicCare),
+				validInput(relationType),
+			)
 
 			var appErr *apperr.AppError
 			if !errors.As(err, &appErr) || appErr.Kind != apperr.VALIDATION_FAILED {
@@ -113,7 +122,7 @@ func TestExecuteMapsAtomicPersistenceFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := New(&creationRepository{err: test.err}).Execute(
 				context.Background(),
-				uuid.New(),
+				creatorAccount(accountdomain.AccountTypeBasicCare),
 				validInput("caregiver"),
 			)
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -20,7 +21,7 @@ import (
 const standaloneLabExtractionMaxFileSize = 10 * 1024 * 1024
 
 type pdfExtractor interface {
-	ExtractPDF(ctx context.Context, path, filename string) (*extraction.Result, error)
+	ExtractPDF(ctx context.Context, currentAccount *accountdomain.Account, path, filename string) (*extraction.Result, error)
 }
 
 type StandaloneLabExtractionHandler struct {
@@ -59,8 +60,9 @@ func (h *StandaloneLabExtractionHandler) RegisterHumaRoutes(registered huma.API,
 }
 
 func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *standaloneLabExtractionInput) (*standaloneLabExtractionOutput, error) {
-	if _, ok := helpers.GetCurrentUserFromContext(ctx); !ok {
-		return nil, huma.Error403Forbidden("conta registrada necess?ria")
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
+	if !ok {
+		return nil, humaerror.From(apperr.Unauthorized("autenticação necessária"))
 	}
 
 	files := input.RawBody.Form.File["file"]
@@ -73,7 +75,7 @@ func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *sta
 	}
 	defer os.Remove(path)
 
-	result, err := h.extractor.ExtractPDF(ctx, path, files[0].Filename)
+	result, err := h.extractor.ExtractPDF(ctx, currentAccount, path, files[0].Filename)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}

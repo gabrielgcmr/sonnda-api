@@ -20,9 +20,10 @@ func NewLabsModule(dbClient *postgress.Client) *LabsModule {
 	accessRepo := accesspostgres.NewRepository(dbClient)
 	labsRepo := labpostgres.NewRepository(dbClient)
 
-	svc := labsvc.New(patientRepo, labsRepo)
 	accessChecker := patientaccess.NewChecker(patientRepo, accessRepo)
+	authorizer := labsvc.NewAuthorizer(labsRepo, accessChecker)
+	svc := labsvc.New(labsRepo, authorizer)
 	return &LabsModule{
-		LaboratoryHandler: laboratoryhttp.NewHandler(svc, accessChecker),
+		LaboratoryHandler: laboratoryhttp.NewHandler(svc),
 	}
 }

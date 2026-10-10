@@ -109,3 +109,21 @@ func TestRequireAccessRejectsMissingIDsAndConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveAccessiblePatientReturnsLoadedEntity(t *testing.T) {
+	accountID, patientID := uuid.New(), uuid.New()
+	patient := &profiledomain.Patient{ID: patientID, OwnerUserID: &accountID}
+	patients := &patientLookup{result: patient}
+
+	resolved, err := NewChecker(patients, &accessLookup{}).ResolveAccessiblePatient(
+		context.Background(),
+		accountID,
+		patientID,
+	)
+	if err != nil {
+		t.Fatalf("unexpected resolution error: %v", err)
+	}
+	if resolved != patient {
+		t.Fatal("resolver did not return the entity loaded during authorization")
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	confirmation "github.com/gabrielgcmr/sonnda/internal/application/usecase/labdocumentconfirmation"
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	processing "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
@@ -25,6 +26,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+type confirmationAuthorizer struct {
+	processing.Authorizer
+	documents processing.DocumentRepository
+}
+
+func (a confirmationAuthorizer) AuthorizeDocument(ctx context.Context, _ *accountdomain.Account, id uuid.UUID, _ processing.Action) (*documents.ExamDocument, error) {
+	return a.documents.FindByID(ctx, id)
+}
 
 func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.UUID, uuid.UUID) {
 	t.Helper()
@@ -60,7 +70,7 @@ func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.U
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	if _, err := client.Pool().Exec(ctx, "CREATE TABLE users (id uuid PRIMARY KEY); CREATE TABLE patients (id uuid PRIMARY KEY)"); err != nil {
+	if _, err := client.Pool().Exec(ctx, "CREATE TABLE accounts (id uuid PRIMARY KEY); CREATE TABLE patients (id uuid PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
 	schemaDir := filepath.Join("..", "..", "..", "infrastructure", "database", "postgres", "sqlc", "sql", "schema")
@@ -74,7 +84,7 @@ func reviewTestDatabase(t *testing.T) (*pginfra.Client, *DraftRepository, uuid.U
 		}
 	}
 	patientID, userID := uuid.New(), uuid.New()
-	if _, err := client.Pool().Exec(ctx, "INSERT INTO users VALUES ($1); INSERT INTO patients VALUES ($2)", userID, patientID); err != nil {
+	if _, err := client.Pool().Exec(ctx, "INSERT INTO accounts VALUES ($1); INSERT INTO patients VALUES ($2)", userID, patientID); err != nil {
 		t.Fatal(err)
 	}
 	clinicalRepository := labpostgres.NewRepository(client)
@@ -247,8 +257,10 @@ func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	if err = repo.CreateDraft(context.Background(), doc, data); err != nil {
 		t.Fatal(err)
 	}
-	service := confirmation.New(processing.New(nil, repo.documents), processing.NewDrafts(repo, nil, nil), repo, labpostgres.NewRepository(client))
-	saved, err := service.Confirm(context.Background(), doc.ID, user)
+	authorizer := confirmationAuthorizer{documents: repo.documents}
+	service := confirmation.New(authorizer, repo, labpostgres.NewRepository(client))
+	account := &accountdomain.Account{ID: user, AccountType: accountdomain.AccountTypeBasicCare}
+	saved, err := service.Confirm(context.Background(), account, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +269,7 @@ func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	if *item.ResultValue != value || *item.ResultUnit != unit || *item.ReferenceText != reference || saved.Panels[0].CollectedAt.UTC().Format("2006-01-02") != date || saved.ExamDocumentID == nil {
 		t.Fatalf("confirmation changed reviewed values: %+v", saved)
 	}
-	again, err := service.Confirm(context.Background(), doc.ID, user)
+	again, err := service.Confirm(context.Background(), account, doc.ID)
 	if err != nil || again.ID != saved.ID {
 		t.Fatalf("retry changed report: %v", err)
 	}
@@ -272,7 +284,8 @@ func TestReviewMigrationPreservesLegacyAndProtectsSnapshots(t *testing.T) {
 	legacy := processingTestDocument(t, client, patient, user)
 	ctx := context.Background()
 	// Recreate the pre-review shape, then apply the actual migration in this isolated schema.
-	_, err := client.Pool().Exec(ctx, `DROP TABLE exam_document_extractions;
+	_, err := client.Pool().Exec(ctx, `ALTER TABLE accounts RENAME TO users;
+ DROP TABLE exam_document_extractions;
  ALTER TABLE exam_documents DROP COLUMN review_status,DROP COLUMN lab_report_id,DROP COLUMN confirmed_by_user_id,DROP COLUMN confirmed_at;
  DO $$ BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF;
@@ -288,6 +301,10 @@ func TestReviewMigrationPreservesLegacyAndProtectsSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = client.Pool().Exec(ctx, strings.ReplaceAll(string(migration), "public.", "")); err != nil {
+		t.Fatal(err)
+	}
+	// Restore the account table name after validating the historical migration.
+	if _, err = client.Pool().Exec(ctx, "ALTER TABLE users RENAME TO accounts"); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := repo.documents.FindByID(ctx, legacy)

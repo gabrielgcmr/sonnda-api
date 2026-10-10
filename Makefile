@@ -6,12 +6,12 @@ APP_NAME := sonnda
 MAIN     := ./cmd/api
 VERSION ?= 1.0.0
 LDFLAGS := -s -w -X github.com/gabrielgcmr/sonnda/cmd/api.version=$(VERSION)
-SQLC_SPEC := internal/infrastructure/persistence/postgres/sqlc/sqlc.yaml
+SQLC_SPEC := internal/infrastructure/database/postgres/sqlc/sqlc.yaml
 
 # ==============================================================================
 # 🎯 TARGETS PRINCIPAIS
 # ==============================================================================
-.PHONY: all dev dev-air build clean generate test help openapi-export tools-air
+.PHONY: all dev dev-air build clean generate test test-unit test-integration help openapi-export tools-air
 
 all: build
 
@@ -31,8 +31,13 @@ clean:
 	@echo "🧹 Limpando binários e cache..."
 	rm -rf bin
 
-test:
+test: test-unit
+
+test-unit:
 	go test ./... -v
+
+test-integration:
+	go test -tags=integration ./... -v
 
 # ==============================================================================
 # 🔄 WATCHERS E PROCESSOS INTERNOS
@@ -88,6 +93,8 @@ help:
 	@echo "  clean       - Limpa pastas geradas"
 	@echo "  generate    - Gera o SQLC"
 	@echo "  openapi-export - Exporta o OpenAPI dinamico do Huma para artifacts/openapi.json"
+	@echo "  test         - Executa apenas os testes unitarios"
+	@echo "  test-integration - Executa testes unitarios e de integracao com banco"
 	@echo "  tools-air   - Instala o Air em ./bin"
 	@echo "  docker-up   - Sobe o docker"
 	@echo "  docker-down - Derruba o docker"

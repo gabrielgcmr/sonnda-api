@@ -12,14 +12,16 @@ import (
 )
 
 type Querier interface {
-	// internal/adapters/outbound/database/sqlc/patients/queries.sql
+	// internal/infrastructure/database/postgres/sqlc/sql/queries/patient_queries.sql
 	// Common column set for patient fetches:
 	// id, owner_user_id, cpf, cns, full_name, birth_date, gender, race, phone, avatar_url, created_at, updated_at
 	CreatePatient(ctx context.Context, arg CreatePatientParams) (Patient, error)
+	FindPatientsByName(ctx context.Context, name string) ([]Patient, error)
 	GetPatientByCNS(ctx context.Context, cns pgtype.Text) (Patient, error)
 	GetPatientByCPF(ctx context.Context, cpf string) (Patient, error)
 	GetPatientByID(ctx context.Context, id uuid.UUID) (Patient, error)
 	GetPatientByOwnerUserID(ctx context.Context, ownerUserID pgtype.UUID) (Patient, error)
+	HardDeletePatient(ctx context.Context, id uuid.UUID) (int64, error)
 	ListPatients(ctx context.Context, arg ListPatientsParams) ([]Patient, error)
 	RestorePatient(ctx context.Context, id uuid.UUID) (int64, error)
 	SearchPatientsByName(ctx context.Context, arg SearchPatientsByNameParams) ([]Patient, error)

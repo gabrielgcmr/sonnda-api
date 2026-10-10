@@ -21,25 +21,24 @@ type fakeLabService struct {
 	listCalled     bool
 	listFullCalled bool
 	report         *laboratory.LabReportOutput
+	account        *accountdomain.Account
+	reportID       uuid.UUID
 }
 
-func (f *fakeLabService) List(context.Context, uuid.UUID, int, int) ([]laboratory.LabReportSummaryOutput, error) {
+func (f *fakeLabService) List(context.Context, *accountdomain.Account, uuid.UUID, int, int) ([]laboratory.LabReportSummaryOutput, error) {
 	f.listCalled = true
 	return []laboratory.LabReportSummaryOutput{}, nil
 }
 
-func (f *fakeLabService) ListFull(context.Context, uuid.UUID, int, int) ([]*laboratory.LabReportOutput, error) {
+func (f *fakeLabService) ListFull(context.Context, *accountdomain.Account, uuid.UUID, int, int) ([]*laboratory.LabReportOutput, error) {
 	f.listFullCalled = true
 	return []*laboratory.LabReportOutput{}, nil
 }
 
-func (f *fakeLabService) FindByID(context.Context, uuid.UUID) (*laboratory.LabReportOutput, error) {
+func (f *fakeLabService) FindByID(_ context.Context, account *accountdomain.Account, reportID uuid.UUID) (*laboratory.LabReportOutput, error) {
+	f.account, f.reportID = account, reportID
 	return f.report, nil
 }
-
-type allowAllAccess struct{}
-
-func (allowAllAccess) RequireAccess(context.Context, uuid.UUID, uuid.UUID) error { return nil }
 
 func TestListLabsReturnsSummaryByDefault(t *testing.T) {
 	assertListMode(t, "", false)
@@ -50,16 +49,15 @@ func TestListLabsCanReturnFullResults(t *testing.T) {
 	assertListMode(t, "?expand=full", true)
 }
 
-func TestGetLabReportChecksAccessToOwningPatient(t *testing.T) {
+func TestGetLabReportDelegatesAuthorizationContextToService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	patientID := uuid.New()
 	reportID := uuid.New()
 	svc := &fakeLabService{report: &laboratory.LabReportOutput{ID: reportID, PatientID: patientID}}
-	access := &recordingAccess{patientID: patientID}
-	handler := NewHandler(svc, access)
+	handler := NewHandler(svc)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	handler.RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
@@ -69,16 +67,9 @@ func TestGetLabReportChecksAccessToOwningPatient(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, response.Code, response.Body.String())
 	}
-	if access.patientID != patientID {
-		t.Fatalf("access checked for patient %s, want %s", access.patientID, patientID)
+	if svc.account == nil || svc.account.ID == uuid.Nil || svc.reportID != reportID {
+		t.Fatalf("authorization context not delegated: account=%+v report=%s", svc.account, svc.reportID)
 	}
-}
-
-type recordingAccess struct{ patientID uuid.UUID }
-
-func (a *recordingAccess) RequireAccess(_ context.Context, _, patientID uuid.UUID) error {
-	a.patientID = patientID
-	return nil
 }
 
 func assertListMode(t *testing.T, query string, wantFull bool) {
@@ -86,10 +77,10 @@ func assertListMode(t *testing.T, query string, wantFull bool) {
 	gin.SetMode(gin.TestMode)
 
 	svc := &fakeLabService{}
-	handler := NewHandler(svc, allowAllAccess{})
+	handler := NewHandler(svc)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(helpers.ContextWithCurrentUser(c.Request.Context(), &accountdomain.User{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}))
 		c.Next()
 	})
 	handler.RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)

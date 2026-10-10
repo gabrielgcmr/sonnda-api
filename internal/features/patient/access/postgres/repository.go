@@ -24,7 +24,7 @@ type Repository struct {
 
 var _ patientaccess.Repository = (*Repository)(nil)
 
-func NewRepository(client *postgress.Client) patientaccess.Repository {
+func NewRepository(client *postgress.Client) *Repository {
 	return &Repository{
 		client:  client,
 		queries: patientaccesssqlc.New(client.Pool()),

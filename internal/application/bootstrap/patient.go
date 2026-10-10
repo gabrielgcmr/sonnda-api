@@ -3,9 +3,13 @@ package bootstrap
 
 import (
 	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
+	accountpostgres "github.com/gabrielgcmr/sonnda/internal/features/account/postgres"
+	"github.com/gabrielgcmr/sonnda/internal/features/authz"
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	accesspostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/access/postgres"
-	patienthttp "github.com/gabrielgcmr/sonnda/internal/features/patient/http"
+	"github.com/gabrielgcmr/sonnda/internal/features/patient/problem"
+	problemhttp "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/http"
+	problempostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/postgres"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
 	profilehttp "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/http"
 	patientpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/postgres"
@@ -14,9 +18,11 @@ import (
 )
 
 type PatientModule struct {
-	Service         patientprofile.Service
-	ProfileHandler  *profilehttp.Handler
-	CreationHandler *patienthttp.CreationHandler
+	Service           patientprofile.Service
+	ProfileHandler    *profilehttp.Handler
+	ProfileAuthorizer patientprofile.Authorizer
+	ProblemAuthorizer problem.Authorizer
+	ProblemHandler    *problemhttp.Handler
 }
 
 func NewPatientModule(db *postgress.Client) *PatientModule {
@@ -24,12 +30,18 @@ func NewPatientModule(db *postgress.Client) *PatientModule {
 	accessRepo := accesspostgres.NewRepository(db)
 
 	accessChecker := patientaccess.NewChecker(patientRepo, accessRepo)
-	svc := patientprofile.New(patientRepo, accessRepo, accessChecker)
+	profileAuthorizer := patientprofile.NewAuthorizer(accessChecker)
+	svc := patientprofile.New(patientRepo, profileAuthorizer)
 	creator := patientcreation.New(patientcreationpostgres.NewRepository(db))
+	accounts := accountpostgres.New(db.Pool())
+	problemAuthorizer := problem.NewAuthorizer(authz.NewPatientContextResolver(accounts, accessChecker))
+	problemService := problem.New(problempostgres.NewRepository(db), problemAuthorizer)
 
 	return &PatientModule{
-		Service:         svc,
-		ProfileHandler:  profilehttp.NewHandler(svc),
-		CreationHandler: patienthttp.NewCreationHandler(creator),
+		Service:           svc,
+		ProfileHandler:    profilehttp.NewHandler(svc, creator),
+		ProfileAuthorizer: profileAuthorizer,
+		ProblemAuthorizer: problemAuthorizer,
+		ProblemHandler:    problemhttp.NewHandler(problemService),
 	}
 }

@@ -4,11 +4,12 @@ package laboratory
 import (
 	"context"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/google/uuid"
 )
 
 type Service interface {
-	List(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]LabReportSummaryOutput, error)
-	ListFull(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]*LabReportOutput, error)
-	FindByID(ctx context.Context, reportID uuid.UUID) (*LabReportOutput, error)
+	List(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]LabReportSummaryOutput, error)
+	ListFull(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]*LabReportOutput, error)
+	FindByID(ctx context.Context, currentAccount *accountdomain.Account, reportID uuid.UUID) (*LabReportOutput, error)
 }

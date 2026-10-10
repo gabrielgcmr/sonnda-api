@@ -1,4 +1,4 @@
--- internal/adapters/outbound/database/sqlc/patients/queries.sql
+-- internal/infrastructure/database/postgres/sqlc/sql/queries/patient_queries.sql
 
 -- Common column set for patient fetches:
 -- id, owner_user_id, cpf, cns, full_name, birth_date, gender, race, phone, avatar_url, created_at, updated_at
@@ -66,15 +66,22 @@ WHERE deleted_at IS NULL
 ORDER BY full_name
 LIMIT $1 OFFSET $2;
 
+-- name: FindPatientsByName :many
+SELECT *
+FROM patients
+WHERE deleted_at IS NULL
+  AND LOWER(full_name) = LOWER(sqlc.arg(name))
+ORDER BY full_name;
+
 -- name: UpdatePatient :one
 UPDATE patients
 SET
-    full_name  = COALESCE($2, full_name),
-    phone      = COALESCE($3, phone),
-    avatar_url = COALESCE($4, avatar_url),
-    gender     = COALESCE($5, gender),
-    race       = COALESCE($6, race),
-    cns        = COALESCE($7, cns),
+    full_name  = $2,
+    phone      = $3,
+    avatar_url = $4,
+    gender     = $5,
+    race       = $6,
+    cns        = $7,
     updated_at = now()
 WHERE id = $1
   AND deleted_at IS NULL
@@ -86,6 +93,10 @@ SET deleted_at = now(),
     updated_at = now()
 WHERE id = $1
   AND deleted_at IS NULL;
+
+-- name: HardDeletePatient :execrows
+DELETE FROM patients
+WHERE id = $1;
 
 -- name: RestorePatient :execrows
 UPDATE patients

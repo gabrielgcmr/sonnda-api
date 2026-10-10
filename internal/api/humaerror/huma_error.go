@@ -66,7 +66,8 @@ func StatusFromKind(kind apperr.ErrorKind) int {
 	switch kind {
 	case apperr.AUTH_REQUIRED, apperr.AUTH_TOKEN_INVALID, apperr.AUTH_TOKEN_EXPIRED:
 		return http.StatusUnauthorized
-	case apperr.PROFILE_NOT_FOUND, apperr.ACCESS_DENIED, apperr.ACTION_NOT_ALLOWED:
+	case apperr.PROFILE_NOT_FOUND, apperr.ACCESS_DENIED, apperr.ACTION_NOT_ALLOWED,
+		apperr.ONBOARDING_REQUIRED, apperr.ACCOUNT_DEACTIVATED:
 		return http.StatusForbidden
 	case apperr.VALIDATION_FAILED, apperr.REQUIRED_FIELD_MISSING, apperr.INVALID_FIELD_FORMAT, apperr.INVALID_ENUM_VALUE, apperr.INVALID_DATE:
 		return http.StatusBadRequest

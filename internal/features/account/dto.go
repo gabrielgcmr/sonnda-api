@@ -4,26 +4,29 @@ package account
 import (
 	"time"
 
-	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
-
 	"github.com/google/uuid"
 )
 
-type UserCreateInput struct {
-	Issuer      string
-	Subject     string
-	Email       string
-	AccountType accountdomain.AccountType
-	FullName    string
-	BirthDate   time.Time
-	CPF         string
-	Phone       string
+// AccountResolveInput identifies the authenticated principal whose local
+// account must be resolved or provisioned.
+type AccountResolveInput struct {
+	Issuer  string
+	Subject string
+	Email   *string
 }
 
-type UserUpdateInput struct {
-	UserID    uuid.UUID
-	FullName  *string
-	BirthDate *time.Time
-	CPF       *string
-	Phone     *string
+// OptionalField distinguishes an omitted patch field from an explicit null or
+// concrete value. Set=false preserves the stored value; Set=true with a nil
+// Value clears it.
+type OptionalField[T any] struct {
+	Set   bool
+	Value *T
+}
+
+type AccountUpdateInput struct {
+	AccountID uuid.UUID
+	FullName  OptionalField[string]
+	BirthDate OptionalField[time.Time]
+	CPF       OptionalField[string]
+	Phone     OptionalField[string]
 }

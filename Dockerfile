@@ -1,6 +1,6 @@
 # Dockerfile
 # Etapa 1: build
-FROM golang:1.27.1-alpine3.24 AS build
+FROM golang:1.26-alpine3.24 AS build
 WORKDIR /app
 ARG VERSION=0.1.0
 

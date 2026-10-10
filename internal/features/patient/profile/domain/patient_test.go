@@ -13,7 +13,7 @@ import (
 
 func TestNewPatient_Success_NormalizesAndSetsUTC(t *testing.T) {
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	cns := " 123456789012345 "
+	cns := " 174 5984 3528 0018 "
 	phone := " 11999999999 "
 	birthDate := time.Now().Add(-24 * time.Hour)
 
@@ -52,7 +52,7 @@ func TestNewPatient_Success_NormalizesAndSetsUTC(t *testing.T) {
 	if p.OwnerUserID == nil || *p.OwnerUserID != userID {
 		t.Fatalf("expected UserID to be present")
 	}
-	if p.CNS == nil || *p.CNS != "123456789012345" {
+	if p.CNS == nil || *p.CNS != "174598435280018" {
 		t.Fatalf("expected CNS to be present")
 	}
 	if p.Phone == nil || *p.Phone != "11999999999" {
@@ -71,7 +71,7 @@ func TestNewPatient_InvalidInputs(t *testing.T) {
 	}{
 		{
 			name: "missing fullName",
-			err:  ErrInvalidFullName,
+			err:  demographics.ErrInvalidFullName,
 			fn: func() NewPatientParams {
 				params := validParams(birthDate)
 				params.FullName = "   "
@@ -84,6 +84,44 @@ func TestNewPatient_InvalidInputs(t *testing.T) {
 			fn: func() NewPatientParams {
 				params := validParams(birthDate)
 				params.CPF = "123"
+				return params
+			},
+		},
+		{
+			name: "invalid cpf check digits",
+			err:  demographics.ErrInvalidCPF,
+			fn: func() NewPatientParams {
+				params := validParams(birthDate)
+				params.CPF = "12345678901"
+				return params
+			},
+		},
+		{
+			name: "repeated cpf",
+			err:  demographics.ErrInvalidCPF,
+			fn: func() NewPatientParams {
+				params := validParams(birthDate)
+				params.CPF = "00000000000"
+				return params
+			},
+		},
+		{
+			name: "invalid cns",
+			err:  demographics.ErrInvalidCNS,
+			fn: func() NewPatientParams {
+				params := validParams(birthDate)
+				cns := "123456789012345"
+				params.CNS = &cns
+				return params
+			},
+		},
+		{
+			name: "non numeric cns",
+			err:  demographics.ErrInvalidCNS,
+			fn: func() NewPatientParams {
+				params := validParams(birthDate)
+				cns := "not-a-cns"
+				params.CNS = &cns
 				return params
 			},
 		},
@@ -120,7 +158,7 @@ func TestNewPatient_InvalidInputs(t *testing.T) {
 	}
 }
 
-func TestPatient_ApplyUpdate_NormalizesAndUpdatesTimestamp(t *testing.T) {
+func TestPatient_ApplyUpdateRejectsEmptyNameAtomically(t *testing.T) {
 	p, err := NewPatient(NewPatientParams{
 		CPF:       "52998224725",
 		FullName:  "Paciente",
@@ -131,22 +169,70 @@ func TestPatient_ApplyUpdate_NormalizesAndUpdatesTimestamp(t *testing.T) {
 	}
 
 	before := p.UpdatedAt
-	oldName := p.FullName
+	oldName, oldAvatar := p.FullName, p.AvatarURL
 
 	emptyName := "   "
 	newAvatar := "  http://img  "
 	time.Sleep(2 * time.Millisecond)
 
-	p.ApplyUpdate(&emptyName, nil, &newAvatar, nil, nil, nil)
+	err = p.ApplyUpdate(&emptyName, nil, &newAvatar, nil, nil, nil)
 
-	if p.FullName != oldName {
-		t.Fatalf("expected empty name update to be ignored")
+	if !errors.Is(err, demographics.ErrInvalidFullName) {
+		t.Fatalf("expected invalid full name, got %v", err)
 	}
-	if p.AvatarURL != "http://img" {
-		t.Fatalf("expected avatar url trimmed")
+	if p.FullName != oldName || p.AvatarURL != oldAvatar {
+		t.Fatalf("invalid update changed patient: name=%q avatar=%q", p.FullName, p.AvatarURL)
 	}
-	if !p.UpdatedAt.After(before) {
-		t.Fatalf("expected UpdatedAt to move forward")
+	if !p.UpdatedAt.Equal(before) {
+		t.Fatalf("invalid update changed UpdatedAt: before=%s after=%s", before, p.UpdatedAt)
+	}
+}
+
+func TestPatient_ApplyUpdate_ClearsEmptyOptionalValues(t *testing.T) {
+	cns := "174598435280018"
+	phone := "11999999999"
+	p, err := NewPatient(NewPatientParams{
+		CPF:       "52998224725",
+		CNS:       &cns,
+		FullName:  "Paciente",
+		BirthDate: time.Now().Add(-24 * time.Hour),
+		Phone:     &phone,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	empty := "  "
+	if err := p.ApplyUpdate(nil, &empty, nil, nil, nil, &empty); err != nil {
+		t.Fatalf("unexpected update error: %v", err)
+	}
+
+	if p.Phone != nil || p.CNS != nil {
+		t.Fatalf("expected phone and CNS to be cleared: phone=%v CNS=%v", p.Phone, p.CNS)
+	}
+}
+
+func TestPatientApplyUpdateValidatesAndNormalizesCNS(t *testing.T) {
+	p, err := NewPatient(validParams(time.Now().Add(-24 * time.Hour)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	formatted := "174 5984 3528 0018"
+	if err := p.ApplyUpdate(nil, nil, nil, nil, nil, &formatted); err != nil {
+		t.Fatalf("unexpected valid CNS error: %v", err)
+	}
+	if p.CNS == nil || *p.CNS != "174598435280018" {
+		t.Fatalf("CNS was not normalized: %v", p.CNS)
+	}
+
+	before := *p.CNS
+	invalid := "174598435280019"
+	if err := p.ApplyUpdate(nil, nil, nil, nil, nil, &invalid); !errors.Is(err, demographics.ErrInvalidCNS) {
+		t.Fatalf("expected invalid CNS, got %v", err)
+	}
+	if p.CNS == nil || *p.CNS != before {
+		t.Fatalf("invalid CNS changed patient: %v", p.CNS)
 	}
 }
 

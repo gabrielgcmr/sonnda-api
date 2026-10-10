@@ -4,44 +4,40 @@ package laboratory
 import (
 	"context"
 
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	labdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/domain"
-	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 
 	"github.com/google/uuid"
 )
 
 type service struct {
-	patientRepo patientprofile.Repository
-	labsRepo    Repository
+	labsRepo   Repository
+	authorizer Authorizer
 }
 
 var _ Service = (*service)(nil)
 
 func New(
-	patientRepo patientprofile.Repository,
 	labsRepo Repository,
+	authorizer Authorizer,
 ) Service {
 	return &service{
-		patientRepo: patientRepo,
-		labsRepo:    labsRepo,
+		labsRepo:   labsRepo,
+		authorizer: authorizer,
 	}
 }
 
-func (s *service) List(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]LabReportSummaryOutput, error) {
+func (s *service) List(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]LabReportSummaryOutput, error) {
 	if patientID == uuid.Nil {
 		return nil, apperr.Validation("entrada inválida", apperr.Violation{Field: "patient_id", Reason: "required"})
 	}
 
-	p, err := s.patientRepo.FindByID(ctx, patientID)
-	if err != nil {
-		return nil, mapRepoError("patient.find_by_id", err)
-	}
-	if p == nil {
-		return nil, patientNotFound()
+	if err := s.authorizer.AuthorizePatient(ctx, currentAccount, patientID, ListPatientReports); err != nil {
+		return nil, err
 	}
 
-	reports, err := s.labsRepo.ListLabs(ctx, p.ID, limit, offset)
+	reports, err := s.labsRepo.ListLabs(ctx, patientID, limit, offset)
 	if err != nil {
 		return nil, mapRepoError("labs.list", err)
 	}
@@ -79,20 +75,16 @@ func (s *service) List(ctx context.Context, patientID uuid.UUID, limit, offset i
 	return out, nil
 }
 
-func (s *service) ListFull(ctx context.Context, patientID uuid.UUID, limit, offset int) ([]*LabReportOutput, error) {
+func (s *service) ListFull(ctx context.Context, currentAccount *accountdomain.Account, patientID uuid.UUID, limit, offset int) ([]*LabReportOutput, error) {
 	if patientID == uuid.Nil {
 		return nil, apperr.Validation("entrada inválida", apperr.Violation{Field: "patient_id", Reason: "required"})
 	}
 
-	p, err := s.patientRepo.FindByID(ctx, patientID)
-	if err != nil {
-		return nil, mapRepoError("patient.find_by_id", err)
-	}
-	if p == nil {
-		return nil, patientNotFound()
+	if err := s.authorizer.AuthorizePatient(ctx, currentAccount, patientID, ListPatientReports); err != nil {
+		return nil, err
 	}
 
-	headers, err := s.labsRepo.ListLabs(ctx, p.ID, limit, offset)
+	headers, err := s.labsRepo.ListLabs(ctx, patientID, limit, offset)
 	if err != nil {
 		return nil, mapRepoError("labs.list", err)
 	}
@@ -107,14 +99,14 @@ func (s *service) ListFull(ctx context.Context, patientID uuid.UUID, limit, offs
 	return out, nil
 }
 
-func (s *service) FindByID(ctx context.Context, reportID uuid.UUID) (*LabReportOutput, error) {
+func (s *service) FindByID(ctx context.Context, currentAccount *accountdomain.Account, reportID uuid.UUID) (*LabReportOutput, error) {
 	if reportID == uuid.Nil {
 		return nil, apperr.Validation("entrada inválida", apperr.Violation{Field: "id", Reason: "required"})
 	}
 
-	report, err := s.labsRepo.FindByID(ctx, reportID)
+	report, err := s.authorizer.AuthorizeReport(ctx, currentAccount, reportID, ReadReport)
 	if err != nil {
-		return nil, mapRepoError("labs.find_by_id", err)
+		return nil, err
 	}
 	if report == nil {
 		return nil, nil

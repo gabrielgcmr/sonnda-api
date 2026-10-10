@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	// internal/infrastructure/database/postgres/sqlc/sql/queries/professional_queries.sql
 	// Profissionais
 	// Cria apenas a parte "profissional" (O ID vem do User já criado)
 	CreateProfessional(ctx context.Context, arg CreateProfessionalParams) (Professional, error)

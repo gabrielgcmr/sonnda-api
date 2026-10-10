@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	helpers "github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
 	profiledomain "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/domain"
@@ -16,14 +17,14 @@ import (
 )
 
 type patientService interface {
-	Get(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) (*profiledomain.Patient, error)
-	Update(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID, input patientprofile.UpdateInput) (*profiledomain.Patient, error)
-	HardDelete(ctx context.Context, currentUser *accountdomain.User, id uuid.UUID) error
-	ListMyPatients(ctx context.Context, currentUser *accountdomain.User, limit, offset int) ([]*profiledomain.Patient, error)
+	Get(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*profiledomain.Patient, error)
+	Update(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID, input patientprofile.UpdateInput) (*profiledomain.Patient, error)
+	SoftDelete(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) error
 }
 
 type Handler struct {
-	svc patientService
+	svc     patientService
+	creator patientcreation.UseCase
 }
 
 type patientIDInput struct {
@@ -49,25 +50,22 @@ type patientOutput struct {
 	Body patientResponse
 }
 
-type patientListOutput struct {
-	Body []patientResponse
+func NewHandler(svc patientService, creator patientcreation.UseCase) *Handler {
+	return &Handler{svc: svc, creator: creator}
 }
 
-func NewHandler(svc patientService) *Handler {
-	return &Handler{svc: svc}
-}
-
-// RegisterHumaRoutes registers patient profile reads in the registered-account group.
+// RegisterHumaRoutes registers the patient profile lifecycle in the onboarded-account group.
 func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
 	huma.Register(registered, huma.Operation{
-		OperationID: "listPatients",
-		Method:      http.MethodGet,
-		Path:        "/patients",
-		Summary:     "Listar pacientes acessíveis pela conta atual",
-		Tags:        []string{"Patients"},
-		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
-		Security:    security,
-	}, h.listPatients)
+		OperationID:   "createPatient",
+		Method:        http.MethodPost,
+		Path:          "/patients",
+		Summary:       "Criar paciente e conceder acesso inicial à conta atual",
+		Tags:          []string{"Patients"},
+		DefaultStatus: http.StatusCreated,
+		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
+		Security:      security,
+	}, h.createPatient)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getPatient",
@@ -78,41 +76,40 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
 		Security:    security,
 	}, h.getPatient)
+
+	huma.Register(registered, huma.Operation{
+		OperationID: "updatePatient",
+		Method:      http.MethodPatch,
+		Path:        "/patients/{patientId}",
+		Summary:     "Atualizar o perfil de um paciente",
+		Tags:        []string{"Patients"},
+		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
+		Security:    security,
+	}, h.updatePatient)
+
+	huma.Register(registered, huma.Operation{
+		OperationID:   "deletePatient",
+		Method:        http.MethodDelete,
+		Path:          "/patients/{patientId}",
+		Summary:       "Desativar um paciente",
+		Tags:          []string{"Patients"},
+		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		Security:      security,
+	}, h.deletePatient)
 }
 
 func (h *Handler) getPatient(ctx context.Context, input *patientIDInput) (*patientOutput, error) {
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
+	currentAccount, ok := helpers.GetCurrentAccountFromContext(ctx)
 	if !ok {
 		return nil, huma.Error403Forbidden("conta registrada necessária")
 	}
 
-	patient, err := h.svc.Get(ctx, currentUser, input.PatientID)
+	patient, err := h.svc.Get(ctx, currentAccount, input.PatientID)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
 	return &patientOutput{Body: patientResponseFromDomain(patient)}, nil
-}
-
-func (h *Handler) listPatients(ctx context.Context, _ *struct{}) (*patientListOutput, error) {
-	if h == nil || h.svc == nil {
-		return nil, huma.Error500InternalServerError("serviço indisponível")
-	}
-
-	currentUser, ok := helpers.GetCurrentUserFromContext(ctx)
-	if !ok {
-		return nil, huma.Error403Forbidden("conta registrada necessária")
-	}
-
-	patients, err := h.svc.ListMyPatients(ctx, currentUser, 100, 0)
-	if err != nil {
-		return nil, humaerror.From(err)
-	}
-
-	response := make([]patientResponse, len(patients))
-	for i, patient := range patients {
-		response[i] = patientResponseFromDomain(patient)
-	}
-	return &patientListOutput{Body: response}, nil
 }
 
 func patientResponseFromDomain(patient *profiledomain.Patient) patientResponse {

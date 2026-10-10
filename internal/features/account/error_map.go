@@ -14,7 +14,7 @@ func mapDomainError(err error) error {
 	switch {
 	case errors.Is(err, accountdomain.ErrInvalidAuthIssuer),
 		errors.Is(err, accountdomain.ErrInvalidAuthSubject),
-		errors.Is(err, accountdomain.ErrInvalidEmail),
+		errors.Is(err, accountdomain.ErrInvalidAccountID),
 		errors.Is(err, accountdomain.ErrInvalidFullName),
 		errors.Is(err, accountdomain.ErrInvalidAccountType),
 		errors.Is(err, accountdomain.ErrInvalidBirthDate),
@@ -46,14 +46,14 @@ func mapRepoError(op string, err error) error {
 	}
 
 	switch {
-	case errors.Is(err, ErrUserAlreadyExists):
+	case errors.Is(err, ErrAccountAlreadyExists):
 		return &apperr.AppError{
 			Kind:    apperr.RESOURCE_ALREADY_EXISTS,
 			Message: "usuário já cadastrado",
 			Cause:   err,
 		}
 
-	case errors.Is(err, ErrUserNotFound):
+	case errors.Is(err, ErrAccountNotFound):
 		return &apperr.AppError{
 			Kind:    apperr.NOT_FOUND,
 			Message: "usuário não encontrado",
@@ -76,7 +76,7 @@ func mapRepoError(op string, err error) error {
 	}
 }
 
-func userNotFound() error {
+func accountNotFound() error {
 	return &apperr.AppError{
 		Kind:    apperr.NOT_FOUND,
 		Message: "usuário não encontrado",

@@ -27,6 +27,8 @@ import (
 	postgress "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
 	filestorage "github.com/gabrielgcmr/sonnda/internal/infrastructure/filestorage"
 	geminiinfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/gemini"
+	redisstore "github.com/gabrielgcmr/sonnda/internal/infrastructure/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 // version is overridden via -ldflags in build/release pipelines.
@@ -69,6 +71,15 @@ func main() {
 	}
 	defer dbClient.Close()
 
+	var redisClient *redis.Client
+	if cfg.Database.RedisURL != "" {
+		redisClient, err = redisstore.NewClient(cfg.Database.RedisURL)
+		if err != nil {
+			logInfraFatal("falha ao criar client do Redis", err)
+		}
+		defer redisClient.Close()
+	}
+
 	//6. Conectando outros servicos
 	//6.1 Storage Service (GCS)
 	gcpOpts := buildGCPClientOptions(cfg)
@@ -101,7 +112,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, labTextExtractor, storageService, cfg.OCR)
+	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, storageService, cfg.OCR, cfg.ProfessionalActivation)
 
 	//8 Middlewares
 	//8.1 API
@@ -124,8 +135,8 @@ func main() {
 			Account:                        modules.Account.Middleware,
 			AccountHandler:                 modules.Account.Handler,
 			PatientAccessHandler:           modules.PatientAccess.Handler,
-			PatientCreationHandler:         modules.Patient.CreationHandler,
 			PatientHandler:                 modules.Patient.ProfileHandler,
+			PatientProblemHandler:          modules.Patient.ProblemHandler,
 			LaboratoryHandler:              modules.Labs.LaboratoryHandler,
 			ExamsHandler:                   modules.Exams.Handler,
 			StandaloneLabExtractionHandler: modules.Exams.StandaloneLabExtractionHandler,
@@ -150,18 +161,22 @@ func main() {
 
 func logInfraFatal(prefix string, err error) {
 	if err == nil {
-		log.Fatal(prefix)
+		slog.Error(prefix)
+		os.Exit(1)
 	}
 
 	var appErr *apperr.AppError
 	if errors.As(err, &appErr) && appErr != nil {
 		if appErr.Cause != nil {
-			log.Fatalf("%s: %s (cause: %v)", prefix, appErr.Message, appErr.Cause)
+			slog.Error(prefix, "message", appErr.Message, "cause", appErr.Cause)
+		} else {
+			slog.Error(prefix, "message", appErr.Message)
 		}
-		log.Fatalf("%s: %s", prefix, appErr.Message)
+		os.Exit(1)
 	}
 
-	log.Fatalf("%s: %v", prefix, err)
+	slog.Error(prefix, "error", err)
+	os.Exit(1)
 }
 
 func buildGCPClientOptions(cfg *config.Config) []option.ClientOption {

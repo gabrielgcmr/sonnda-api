@@ -48,7 +48,7 @@ type CreatePatientParams struct {
 	AvatarUrl   pgtype.Text `json:"avatar_url"`
 }
 
-// internal/adapters/outbound/database/sqlc/patients/queries.sql
+// internal/infrastructure/database/postgres/sqlc/sql/queries/patient_queries.sql
 // Common column set for patient fetches:
 // id, owner_user_id, cpf, cns, full_name, birth_date, gender, race, phone, avatar_url, created_at, updated_at
 func (q *Queries) CreatePatient(ctx context.Context, arg CreatePatientParams) (Patient, error) {
@@ -81,6 +81,48 @@ func (q *Queries) CreatePatient(ctx context.Context, arg CreatePatientParams) (P
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const findPatientsByName = `-- name: FindPatientsByName :many
+SELECT id, owner_user_id, cpf, cns, full_name, birth_date, gender, race, phone, avatar_url, created_at, updated_at, deleted_at
+FROM patients
+WHERE deleted_at IS NULL
+  AND LOWER(full_name) = LOWER($1)
+ORDER BY full_name
+`
+
+func (q *Queries) FindPatientsByName(ctx context.Context, name string) ([]Patient, error) {
+	rows, err := q.db.Query(ctx, findPatientsByName, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Patient
+	for rows.Next() {
+		var i Patient
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerUserID,
+			&i.Cpf,
+			&i.Cns,
+			&i.FullName,
+			&i.BirthDate,
+			&i.Gender,
+			&i.Race,
+			&i.Phone,
+			&i.AvatarUrl,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPatientByCNS = `-- name: GetPatientByCNS :one
@@ -197,6 +239,19 @@ func (q *Queries) GetPatientByOwnerUserID(ctx context.Context, ownerUserID pgtyp
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const hardDeletePatient = `-- name: HardDeletePatient :execrows
+DELETE FROM patients
+WHERE id = $1
+`
+
+func (q *Queries) HardDeletePatient(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeletePatient, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listPatients = `-- name: ListPatients :many
@@ -330,12 +385,12 @@ func (q *Queries) SoftDeletePatient(ctx context.Context, id uuid.UUID) (int64, e
 const updatePatient = `-- name: UpdatePatient :one
 UPDATE patients
 SET
-    full_name  = COALESCE($2, full_name),
-    phone      = COALESCE($3, phone),
-    avatar_url = COALESCE($4, avatar_url),
-    gender     = COALESCE($5, gender),
-    race       = COALESCE($6, race),
-    cns        = COALESCE($7, cns),
+    full_name  = $2,
+    phone      = $3,
+    avatar_url = $4,
+    gender     = $5,
+    race       = $6,
+    cns        = $7,
     updated_at = now()
 WHERE id = $1
   AND deleted_at IS NULL
