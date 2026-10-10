@@ -89,7 +89,7 @@ type mergeInput struct {
 	}
 }
 
-func (h *Handler) registerChangeRoutes(api huma.API, security []map[string][]string) {
+func registerChangeRoutes(api huma.API, security []map[string][]string, endpoints endpoints) {
 	base := "/patients/{patientId}/problems/{problemId}"
 	operation := func(id, method, suffix, summary string) huma.Operation {
 		return huma.Operation{
@@ -101,16 +101,16 @@ func (h *Handler) registerChangeRoutes(api huma.API, security []map[string][]str
 	}
 	edit := operation("editPatientProblem", http.MethodPut, "", "Substituir nome e CID-11 (profissional com acesso)")
 	edit.Description += " name é obrigatório; cid11 omitido ou null remove o código anterior. Não altera classificação ou situação clínica."
-	huma.Register(api, edit, h.edit)
-	huma.Register(api, operation("classifyPatientProblem", http.MethodPut, "/classification", "Classificar problema (profissional com acesso)"), h.classify)
-	huma.Register(api, operation("resolvePatientProblem", http.MethodPost, "/resolve", "Resolver problema agudo ativo (qualquer conta com acesso)"), h.resolve)
-	huma.Register(api, operation("reopenPatientProblem", http.MethodPost, "/reopen", "Reabrir problema resolvido (profissional com acesso)"), h.reopen)
+	huma.Register(api, edit, endpoints.edit)
+	huma.Register(api, operation("classifyPatientProblem", http.MethodPut, "/classification", "Classificar problema (profissional com acesso)"), endpoints.classify)
+	huma.Register(api, operation("resolvePatientProblem", http.MethodPost, "/resolve", "Resolver problema agudo ativo (qualquer conta com acesso)"), endpoints.resolve)
+	huma.Register(api, operation("reopenPatientProblem", http.MethodPost, "/reopen", "Reabrir problema resolvido (profissional com acesso)"), endpoints.reopen)
 	rectify := operation("rectifyPatientProblem", http.MethodPost, "/rectify", "Retificar problema registrado por engano (profissional com acesso)")
 	rectify.Description += " reason é obrigatório. A retificação preserva conteúdo e histórico e remove o registro da listagem padrão."
-	huma.Register(api, rectify, h.rectify)
+	huma.Register(api, rectify, endpoints.rectify)
 	merge := operation("mergePatientProblems", http.MethodPost, "/merge", "Unificar problemas no destino (profissional com acesso)")
 	merge.Description += " O problema da rota é o destino. sources, name, cid11, classification e clinical_status são escolhas explícitas. cid11 deve ser objeto ou null. Destino, origens e eventos são atualizados na mesma transação."
-	huma.Register(api, merge, h.merge)
+	huma.Register(api, merge, endpoints.merge)
 }
 
 func (h *Handler) edit(ctx context.Context, input *editInput) (*problemOutput, error) {

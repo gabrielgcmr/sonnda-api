@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
@@ -80,27 +81,57 @@ func NewHandler(service captureService) *Handler {
 }
 
 func (h *Handler) RegisterHumaRoutes(api huma.API, security []map[string][]string) {
+	registerSessionRoutes(api, security, sessionEndpoints{
+		create: h.createSession, current: h.currentSession, heartbeat: h.heartbeat, revoke: h.revokeSession,
+	})
+	registerInboxRoutes(api, security, inboxEndpoints{
+		list: h.listCaptures, file: h.getCaptureFile, delete: h.deleteCapture,
+	})
+}
+
+// RegisterOpenAPIRoutes registers authenticated capture metadata without runtime dependencies.
+func RegisterOpenAPIRoutes(api huma.API, security []map[string][]string) {
+	registerSessionRoutes(api, security, sessionEndpoints{
+		create:    humaspec.NotImplemented[struct{}, createSessionOutput],
+		current:   humaspec.NotImplemented[struct{}, sessionOutput],
+		heartbeat: humaspec.NotImplemented[sessionPathInput, sessionOutput],
+		revoke:    humaspec.NotImplemented[sessionPathInput, struct{}],
+	})
+	registerInboxRoutes(api, security, inboxEndpoints{
+		list:   humaspec.NotImplemented[captureListInput, captureListOutput],
+		file:   humaspec.NotImplemented[capturePathInput, captureFileOutput],
+		delete: humaspec.NotImplemented[capturePathInput, struct{}],
+	})
+}
+
+type sessionEndpoints struct {
+	create    func(context.Context, *struct{}) (*createSessionOutput, error)
+	current   func(context.Context, *struct{}) (*sessionOutput, error)
+	heartbeat func(context.Context, *sessionPathInput) (*sessionOutput, error)
+	revoke    func(context.Context, *sessionPathInput) (*struct{}, error)
+}
+
+func registerSessionRoutes(api huma.API, security []map[string][]string, endpoints sessionEndpoints) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createCaptureSession", Method: http.MethodPost, Path: "/capture-sessions",
 		Summary: "Criar sessão de captura", Tags: []string{"Capture sessions"},
 		DefaultStatus: http.StatusCreated, Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusInternalServerError}, Security: security,
-	}, h.createSession)
+	}, endpoints.create)
 	huma.Register(api, huma.Operation{
 		OperationID: "getCurrentCaptureSession", Method: http.MethodGet, Path: "/capture-sessions/current",
 		Summary: "Obter sessão de captura atual", Tags: []string{"Capture sessions"},
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError}, Security: security,
-	}, h.currentSession)
+	}, endpoints.current)
 	huma.Register(api, huma.Operation{
 		OperationID: "heartbeatCaptureSession", Method: http.MethodPost, Path: "/capture-sessions/{sessionId}/heartbeat",
 		Summary: "Atualizar presença do computador", Tags: []string{"Capture sessions"},
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError}, Security: security,
-	}, h.heartbeat)
+	}, endpoints.heartbeat)
 	huma.Register(api, huma.Operation{
 		OperationID: "revokeCaptureSession", Method: http.MethodDelete, Path: "/capture-sessions/{sessionId}",
 		Summary: "Revogar sessão de captura", Tags: []string{"Capture sessions"}, DefaultStatus: http.StatusNoContent,
 		Errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError}, Security: security,
-	}, h.revokeSession)
-	h.registerInboxRoutes(api, security)
+	}, endpoints.revoke)
 }
 
 func (h *Handler) createSession(ctx context.Context, _ *struct{}) (*createSessionOutput, error) {

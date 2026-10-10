@@ -29,8 +29,8 @@ func TestAppTracesCORSResponses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
-			app := New(Options{
-				Deps:   &APIDependencies{},
+			app, err := New(Options{
+				Deps:   completeTestDependencies(),
 				Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
 				CORSConfig: config.CORSConfig{
 					AllowOrigins:  []string{allowedOrigin},
@@ -39,6 +39,9 @@ func TestAppTracesCORSResponses(t *testing.T) {
 					ExposeHeaders: []string{"X-Request-ID"},
 				},
 			})
+			if err != nil {
+				t.Fatal(err)
+			}
 			request := httptest.NewRequest(tc.method, tc.path, nil)
 			request.Header.Set("Origin", tc.origin)
 			if tc.method == http.MethodOptions {
@@ -75,11 +78,14 @@ func TestAppTracesCORSResponses(t *testing.T) {
 
 func TestProblemRoutesRequireBearerAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	app := New(Options{
-		Deps:       &APIDependencies{},
+	app, err := New(Options{
+		Deps:       completeTestDependencies(),
 		Logger:     slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 		CORSConfig: config.CORSConfig{AllowOrigins: []string{"https://app.example.test"}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := "/patients/af4c0732-3480-4076-a93d-d5c6d26e07db/problems"
 	id := "/76b550c7-4fdd-4b5b-8c40-c34ef31e363c"
 	for _, operation := range []struct{ method, path string }{
@@ -96,11 +102,14 @@ func TestProblemRoutesRequireBearerAuthentication(t *testing.T) {
 
 func TestCaptureSessionRoutesRequireBearerAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	app := New(Options{
-		Deps:       &APIDependencies{},
+	app, err := New(Options{
+		Deps:       completeTestDependencies(),
 		Logger:     slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 		CORSConfig: config.CORSConfig{AllowOrigins: []string{"https://app.example.test"}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	sessionID := "/76b550c7-4fdd-4b5b-8c40-c34ef31e363c"
 	for _, operation := range []struct{ method, path string }{
 		{http.MethodPost, "/capture-sessions"},

@@ -11,6 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
@@ -47,6 +48,18 @@ func NewCleanupHandler(service cleanupService, token string) *CleanupHandler {
 }
 
 func (h *CleanupHandler) RegisterHumaRoutes(api huma.API) {
+	registerCleanupRoute(api, h.cleanup)
+}
+
+// RegisterCleanupOpenAPIRoutes registers the hidden cleanup operation without runtime dependencies.
+func RegisterCleanupOpenAPIRoutes(api huma.API) {
+	registerCleanupRoute(api, humaspec.NotImplemented[cleanupInput, cleanupOutput])
+}
+
+func registerCleanupRoute(
+	api huma.API,
+	endpoint func(context.Context, *cleanupInput) (*cleanupOutput, error),
+) {
 	huma.Register(api, huma.Operation{
 		OperationID: "cleanupCapturesJob",
 		Method:      http.MethodPost,
@@ -54,7 +67,7 @@ func (h *CleanupHandler) RegisterHumaRoutes(api huma.API) {
 		Summary:     "Executar limpeza de capturas",
 		Hidden:      true,
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError, http.StatusGatewayTimeout},
-	}, h.cleanup)
+	}, endpoint)
 }
 
 func (h *CleanupHandler) cleanup(ctx context.Context, input *cleanupInput) (*cleanupOutput, error) {

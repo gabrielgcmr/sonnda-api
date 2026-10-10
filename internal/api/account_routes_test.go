@@ -46,11 +46,13 @@ func TestAccountHTTPContractAndOnboardingBoundary(t *testing.T) {
 	current, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
 	service := &routeAccountService{account: current}
 	router := gin.New()
-	SetupRoutes(router, &APIDependencies{
-		Auth:           authenticatedTestMiddleware(),
-		Account:        accounthttp.NewMiddleware(service),
-		AccountHandler: accounthttp.NewHandler(service, nil),
-	})
+	deps := completeTestDependencies()
+	deps.Auth = authenticatedTestMiddleware()
+	deps.Account = accounthttp.NewMiddleware(service)
+	deps.AccountHandler = accounthttp.NewHandler(service, nil)
+	if _, err := SetupRoutes(router, deps); err != nil {
+		t.Fatal(err)
+	}
 
 	response := accountRequest(router, http.MethodGet, "/me", "")
 	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "private, no-store" {

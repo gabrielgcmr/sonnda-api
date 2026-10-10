@@ -9,6 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
@@ -58,6 +59,18 @@ type captureOutput struct {
 }
 
 func (h *Handler) RegisterPublicRoutes(api huma.API) {
+	registerPublicRoutes(api, h.claimSession)
+}
+
+// RegisterPublicOpenAPIRoutes registers public capture metadata without runtime dependencies.
+func RegisterPublicOpenAPIRoutes(api huma.API) {
+	registerPublicRoutes(api, humaspec.NotImplemented[claimSessionInput, claimSessionOutput])
+}
+
+func registerPublicRoutes(
+	api huma.API,
+	endpoint func(context.Context, *claimSessionInput) (*claimSessionOutput, error),
+) {
 	huma.Register(api, huma.Operation{
 		OperationID: "claimCaptureSession",
 		Method:      http.MethodPost,
@@ -65,10 +78,30 @@ func (h *Handler) RegisterPublicRoutes(api huma.API) {
 		Summary:     "Reivindicar sessão de captura",
 		Tags:        []string{"Capture sessions"},
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusUnprocessableEntity, http.StatusInternalServerError},
-	}, h.claimSession)
+	}, endpoint)
 }
 
 func (h *Handler) RegisterMobileRoutes(api huma.API, security []map[string][]string) {
+	registerMobileRoutes(api, security, mobileEndpoints{
+		heartbeat: h.mobileHeartbeat,
+		upload:    h.uploadCapture,
+	})
+}
+
+// RegisterMobileOpenAPIRoutes registers mobile capture metadata without runtime dependencies.
+func RegisterMobileOpenAPIRoutes(api huma.API, security []map[string][]string) {
+	registerMobileRoutes(api, security, mobileEndpoints{
+		heartbeat: humaspec.NotImplemented[sessionPathInput, sessionOutput],
+		upload:    humaspec.NotImplemented[captureUploadInput, captureOutput],
+	})
+}
+
+type mobileEndpoints struct {
+	heartbeat func(context.Context, *sessionPathInput) (*sessionOutput, error)
+	upload    func(context.Context, *captureUploadInput) (*captureOutput, error)
+}
+
+func registerMobileRoutes(api huma.API, security []map[string][]string, endpoints mobileEndpoints) {
 	huma.Register(api, huma.Operation{
 		OperationID: "heartbeatMobileCaptureSession",
 		Method:      http.MethodPost,
@@ -77,7 +110,7 @@ func (h *Handler) RegisterMobileRoutes(api huma.API, security []map[string][]str
 		Tags:        []string{"Capture sessions"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 		Security:    security,
-	}, h.mobileHeartbeat)
+	}, endpoints.heartbeat)
 	huma.Register(api, huma.Operation{
 		OperationID:   "uploadCapture",
 		Method:        http.MethodPost,
@@ -96,7 +129,7 @@ func (h *Handler) RegisterMobileRoutes(api huma.API, security []map[string][]str
 			http.StatusGatewayTimeout,
 		},
 		Security: security,
-	}, h.uploadCapture)
+	}, endpoints.upload)
 }
 
 func (h *Handler) claimSession(ctx context.Context, input *claimSessionInput) (*claimSessionOutput, error) {

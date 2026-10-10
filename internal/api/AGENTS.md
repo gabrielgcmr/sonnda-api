@@ -15,6 +15,9 @@ Simple instructions for coding in api package
 ## Composition
 
 - `routes.go` composes feature routes; `health.go` owns the public health endpoint; `openapi.go` configures Huma and exports the specification.
+- Runtime registration uses the `public`, `authenticated`, `resolved`, `onboarded`, and `captureMobile` groups with their real middleware and handlers. Specification registration uses equivalent groups without middleware or infrastructure dependencies.
+- Each feature owns one shared operation definition. Runtime registrars provide real typed endpoints, while `Register*OpenAPIRoutes` provides typed documentation-only stubs that must never be executed.
+- `SetupRoutes` validates every required runtime dependency before registering any route. `SetupRoutes` and `New` return bootstrap errors instead of panicking on invalid configuration.
 - `APIInfo` contains only the API name and version; environment configuration belongs to application startup.
 - Global middleware order is RequestID, AccessLog, Recovery, CORS, then routes, so CORS early responses are observable.
 

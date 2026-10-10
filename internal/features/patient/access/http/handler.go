@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	helpers "github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	"github.com/google/uuid"
 )
@@ -44,6 +45,19 @@ type listPatientsOutput struct {
 
 // RegisterHumaRoutes registers the authenticated current-account patient list.
 func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, h.listForCurrentAccount)
+}
+
+// RegisterOpenAPIRoutes registers patient-access metadata without runtime dependencies.
+func RegisterOpenAPIRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, humaspec.NotImplemented[listPatientsInput, listPatientsOutput])
+}
+
+func registerRoutes(
+	registered huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *listPatientsInput) (*listPatientsOutput, error),
+) {
 	huma.Register(registered, huma.Operation{
 		OperationID: "listAccessiblePatients",
 		Method:      http.MethodGet,
@@ -52,7 +66,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Tags:        []string{"Patient access"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
 		Security:    security,
-	}, h.listForCurrentAccount)
+	}, endpoint)
 }
 
 func (h *Handler) listForCurrentAccount(ctx context.Context, input *listPatientsInput) (*listPatientsOutput, error) {

@@ -13,6 +13,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/features/account"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
@@ -108,6 +109,19 @@ func NewHandler(accountSvc accountService, activation professionalActivator) *Ha
 
 // RegisterOnboardedRoutes registers account operations that require completed onboarding.
 func (h *Handler) RegisterOnboardedRoutes(onboarded huma.API, security []map[string][]string) {
+	registerProfessionalActivationRoute(onboarded, security, h.activateCurrentAccountAsProfessional)
+}
+
+// RegisterOnboardedOpenAPIRoutes registers account metadata without runtime dependencies.
+func RegisterOnboardedOpenAPIRoutes(onboarded huma.API, security []map[string][]string) {
+	registerProfessionalActivationRoute(onboarded, security, humaspec.NotImplemented[professionalActivationInput, accountOutput])
+}
+
+func registerProfessionalActivationRoute(
+	onboarded huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *professionalActivationInput) (*accountOutput, error),
+) {
 	huma.Register(onboarded, huma.Operation{
 		OperationID: "activateCurrentAccountAsProfessional",
 		Method:      http.MethodPost,
@@ -116,11 +130,26 @@ func (h *Handler) RegisterOnboardedRoutes(onboarded huma.API, security []map[str
 		Tags:        []string{"Account"},
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusInternalServerError},
 		Security:    security,
-	}, h.activateCurrentAccountAsProfessional)
+	}, endpoint)
 }
 
 // RegisterResolvedRoutes registers account operations that require a resolved account.
 func (h *Handler) RegisterResolvedRoutes(resolved huma.API, security []map[string][]string) {
+	registerGetCurrentAccountRoute(resolved, security, h.getCurrentAccount)
+	registerUpdateCurrentAccountRoute(resolved, security, h.updateCurrentAccount)
+}
+
+// RegisterResolvedOpenAPIRoutes registers resolved-account metadata without runtime dependencies.
+func RegisterResolvedOpenAPIRoutes(resolved huma.API, security []map[string][]string) {
+	registerGetCurrentAccountRoute(resolved, security, humaspec.NotImplemented[struct{}, accountOutput])
+	registerUpdateCurrentAccountRoute(resolved, security, humaspec.NotImplemented[updateAccountInput, accountOutput])
+}
+
+func registerGetCurrentAccountRoute(
+	resolved huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *struct{}) (*accountOutput, error),
+) {
 	huma.Register(resolved, huma.Operation{
 		OperationID: "getCurrentAccount",
 		Method:      http.MethodGet,
@@ -129,8 +158,14 @@ func (h *Handler) RegisterResolvedRoutes(resolved huma.API, security []map[strin
 		Tags:        []string{"Account"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError},
 		Security:    security,
-	}, h.getCurrentAccount)
+	}, endpoint)
+}
 
+func registerUpdateCurrentAccountRoute(
+	resolved huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *updateAccountInput) (*accountOutput, error),
+) {
 	huma.Register(resolved, huma.Operation{
 		OperationID: "updateCurrentAccount",
 		Method:      http.MethodPatch,
@@ -139,11 +174,24 @@ func (h *Handler) RegisterResolvedRoutes(resolved huma.API, security []map[strin
 		Tags:        []string{"Account"},
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		Security:    security,
-	}, h.updateCurrentAccount)
+	}, endpoint)
 }
 
 // RegisterAuthenticatedRoutes registers account operations that only require authentication.
 func (h *Handler) RegisterAuthenticatedRoutes(authenticated huma.API, security []map[string][]string) {
+	registerDeleteCurrentAccountRoute(authenticated, security, h.deleteCurrentAccount)
+}
+
+// RegisterAuthenticatedOpenAPIRoutes registers authenticated-account metadata without runtime dependencies.
+func RegisterAuthenticatedOpenAPIRoutes(authenticated huma.API, security []map[string][]string) {
+	registerDeleteCurrentAccountRoute(authenticated, security, humaspec.NotImplemented[struct{}, struct{}])
+}
+
+func registerDeleteCurrentAccountRoute(
+	authenticated huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *struct{}) (*struct{}, error),
+) {
 	huma.Register(authenticated, huma.Operation{
 		OperationID:   "deleteCurrentAccount",
 		Method:        http.MethodDelete,
@@ -153,7 +201,7 @@ func (h *Handler) RegisterAuthenticatedRoutes(authenticated huma.API, security [
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 		Security:      security,
-	}, h.deleteCurrentAccount)
+	}, endpoint)
 }
 
 func (h *Handler) activateCurrentAccountAsProfessional(ctx context.Context, input *professionalActivationInput) (*accountOutput, error) {

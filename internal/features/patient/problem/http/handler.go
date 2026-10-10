@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/features/patient/problem"
 	problemdomain "github.com/gabrielgcmr/sonnda/internal/features/patient/problem/domain"
 	"github.com/google/uuid"
@@ -62,6 +63,43 @@ type listOutput struct{ Body ProblemPage }
 type historyOutput struct{ Body ProblemHistoryPage }
 
 func (h *Handler) RegisterHumaRoutes(api huma.API, security []map[string][]string) {
+	registerRoutes(api, security, endpoints{
+		create: h.create, list: h.list, get: h.get, history: h.history,
+		edit: h.edit, classify: h.classify, resolve: h.resolve, reopen: h.reopen,
+		rectify: h.rectify, merge: h.merge,
+	})
+}
+
+// RegisterOpenAPIRoutes registers patient-problem metadata without runtime dependencies.
+func RegisterOpenAPIRoutes(api huma.API, security []map[string][]string) {
+	registerRoutes(api, security, endpoints{
+		create:   humaspec.NotImplemented[createInput, createOutput],
+		list:     humaspec.NotImplemented[listInput, listOutput],
+		get:      humaspec.NotImplemented[ProblemInput, problemOutput],
+		history:  humaspec.NotImplemented[historyInput, historyOutput],
+		edit:     humaspec.NotImplemented[editInput, problemOutput],
+		classify: humaspec.NotImplemented[classifyInput, problemOutput],
+		resolve:  humaspec.NotImplemented[transitionInput, problemOutput],
+		reopen:   humaspec.NotImplemented[transitionInput, problemOutput],
+		rectify:  humaspec.NotImplemented[rectifyInput, problemOutput],
+		merge:    humaspec.NotImplemented[mergeInput, problemOutput],
+	})
+}
+
+type endpoints struct {
+	create   func(context.Context, *createInput) (*createOutput, error)
+	list     func(context.Context, *listInput) (*listOutput, error)
+	get      func(context.Context, *ProblemInput) (*problemOutput, error)
+	history  func(context.Context, *historyInput) (*historyOutput, error)
+	edit     func(context.Context, *editInput) (*problemOutput, error)
+	classify func(context.Context, *classifyInput) (*problemOutput, error)
+	resolve  func(context.Context, *transitionInput) (*problemOutput, error)
+	reopen   func(context.Context, *transitionInput) (*problemOutput, error)
+	rectify  func(context.Context, *rectifyInput) (*problemOutput, error)
+	merge    func(context.Context, *mergeInput) (*problemOutput, error)
+}
+
+func registerRoutes(api huma.API, security []map[string][]string, endpoints endpoints) {
 	base := "/patients/{patientId}/problems"
 	operation := func(id, method, path, summary string) huma.Operation {
 		return huma.Operation{
@@ -72,15 +110,15 @@ func (h *Handler) RegisterHumaRoutes(api huma.API, security []map[string][]strin
 	}
 	create := operation("createPatientProblem", http.MethodPost, base, "Criar problema do paciente (profissional com acesso)")
 	create.DefaultStatus = http.StatusCreated
-	huma.Register(api, create, h.create)
+	huma.Register(api, create, endpoints.create)
 	list := operation("listPatientProblems", http.MethodGet, base, "Listar problemas do paciente")
 	list.Description = "Registros válidos por padrão. Ordenação: updated_at DESC, id DESC. Paginação por limit/offset com has_more."
-	huma.Register(api, list, h.list)
-	huma.Register(api, operation("getPatientProblem", http.MethodGet, base+"/{problemId}", "Obter problema, inclusive unificado ou retificado"), h.get)
+	huma.Register(api, list, endpoints.list)
+	huma.Register(api, operation("getPatientProblem", http.MethodGet, base+"/{problemId}", "Obter problema, inclusive unificado ou retificado"), endpoints.get)
 	history := operation("listPatientProblemHistory", http.MethodGet, base+"/{problemId}/history", "Consultar histórico do problema")
 	history.Description = "Eventos em ordem de versão decrescente, com snapshots anteriores e posteriores. Problema inexistente ou de outro paciente retorna 404."
-	huma.Register(api, history, h.history)
-	h.registerChangeRoutes(api, security)
+	huma.Register(api, history, endpoints.history)
+	registerChangeRoutes(api, security, endpoints)
 }
 
 func (h *Handler) create(ctx context.Context, input *createInput) (*createOutput, error) {

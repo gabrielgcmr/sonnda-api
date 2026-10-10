@@ -141,7 +141,7 @@ func main() {
 	}
 	gin.SetMode(ginMode)
 
-	app := api.New(api.Options{
+	app, err := api.New(api.Options{
 		Name:       "Sonnda API",
 		Version:    version,
 		Logger:     appLogger,
@@ -161,6 +161,9 @@ func main() {
 			StandaloneLabExtractionHandler: modules.Exams.StandaloneLabExtractionHandler,
 		},
 	})
+	if err != nil {
+		logInfraFatal("falha ao configurar API", err)
+	}
 
 	// 10. Inicia o servidor
 	slog.Info(

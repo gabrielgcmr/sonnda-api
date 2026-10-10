@@ -2,10 +2,167 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/gin-gonic/gin"
 )
+
+type expectedOperation struct {
+	method, path, operationID, security string
+}
+
+func TestOpenAPIContainsExpectedOperationContract(t *testing.T) {
+	spec := OpenAPI(APIInfo{})
+	bearer := bearerAuthScheme
+	captureToken := captureTokenAuthScheme
+	expected := []expectedOperation{
+		{http.MethodGet, "/healthz", "getHealth", ""},
+		{http.MethodGet, "/me", "getCurrentAccount", bearer},
+		{http.MethodPatch, "/me", "updateCurrentAccount", bearer},
+		{http.MethodDelete, "/me", "deleteCurrentAccount", bearer},
+		{http.MethodPost, "/me/professional-activation", "activateCurrentAccountAsProfessional", bearer},
+		{http.MethodGet, "/me/patients", "listAccessiblePatients", bearer},
+		{http.MethodPost, "/patients", "createPatient", bearer},
+		{http.MethodGet, "/patients/{patientId}", "getPatient", bearer},
+		{http.MethodPatch, "/patients/{patientId}", "updatePatient", bearer},
+		{http.MethodDelete, "/patients/{patientId}", "deletePatient", bearer},
+		{http.MethodPost, "/patients/{patientId}/problems", "createPatientProblem", bearer},
+		{http.MethodGet, "/patients/{patientId}/problems", "listPatientProblems", bearer},
+		{http.MethodGet, "/patients/{patientId}/problems/{problemId}", "getPatientProblem", bearer},
+		{http.MethodPut, "/patients/{patientId}/problems/{problemId}", "editPatientProblem", bearer},
+		{http.MethodGet, "/patients/{patientId}/problems/{problemId}/history", "listPatientProblemHistory", bearer},
+		{http.MethodPut, "/patients/{patientId}/problems/{problemId}/classification", "classifyPatientProblem", bearer},
+		{http.MethodPost, "/patients/{patientId}/problems/{problemId}/resolve", "resolvePatientProblem", bearer},
+		{http.MethodPost, "/patients/{patientId}/problems/{problemId}/reopen", "reopenPatientProblem", bearer},
+		{http.MethodPost, "/patients/{patientId}/problems/{problemId}/rectify", "rectifyPatientProblem", bearer},
+		{http.MethodPost, "/patients/{patientId}/problems/{problemId}/merge", "mergePatientProblems", bearer},
+		{http.MethodGet, "/patients/{patientId}/exam-documents", "listExamDocuments", bearer},
+		{http.MethodPost, "/patients/{patientId}/exam-documents", "uploadExamDocument", bearer},
+		{http.MethodGet, "/patients/{patientId}/exam-document-texts", "listExamDocumentTexts", bearer},
+		{http.MethodGet, "/exam-documents/{documentId}", "getExamDocument", bearer},
+		{http.MethodDelete, "/exam-documents/{documentId}", "discardExamDocument", bearer},
+		{http.MethodGet, "/exam-documents/{documentId}/file", "getExamDocumentFile", bearer},
+		{http.MethodGet, "/exam-documents/{documentId}/extraction", "getExamDocumentExtraction", bearer},
+		{http.MethodPost, "/exam-documents/{documentId}/confirmation", "confirmExamDocument", bearer},
+		{http.MethodPost, "/lab-extractions", "extractStandaloneLabReport", bearer},
+		{http.MethodGet, "/patients/{patientId}/lab-reports", "listPatientLabReports", bearer},
+		{http.MethodGet, "/lab-reports/{labReportId}", "getLabReport", bearer},
+		{http.MethodPost, "/capture-sessions/claim", "claimCaptureSession", ""},
+		{http.MethodPost, "/capture-sessions/{sessionId}/mobile-heartbeat", "heartbeatMobileCaptureSession", captureToken},
+		{http.MethodPost, "/captures", "uploadCapture", captureToken},
+		{http.MethodPost, "/capture-sessions", "createCaptureSession", bearer},
+		{http.MethodGet, "/capture-sessions/current", "getCurrentCaptureSession", bearer},
+		{http.MethodPost, "/capture-sessions/{sessionId}/heartbeat", "heartbeatCaptureSession", bearer},
+		{http.MethodDelete, "/capture-sessions/{sessionId}", "revokeCaptureSession", bearer},
+		{http.MethodGet, "/captures", "listCaptures", bearer},
+		{http.MethodGet, "/captures/{captureId}/file", "getCaptureFile", bearer},
+		{http.MethodDelete, "/captures/{captureId}", "deleteCapture", bearer},
+	}
+
+	for _, want := range expected {
+		operation := openAPIOperation(spec, want.method, want.path)
+		if operation == nil {
+			t.Errorf("operação ausente: %s %s", want.method, want.path)
+			continue
+		}
+		if operation.OperationID != want.operationID {
+			t.Errorf("%s %s OperationID = %q; esperado %q", want.method, want.path, operation.OperationID, want.operationID)
+		}
+		if got := operationSecurity(operation); got != want.security {
+			t.Errorf("%s %s segurança = %q; esperado %q", want.method, want.path, got, want.security)
+		}
+	}
+	if got := operationCount(spec); got != len(expected) {
+		t.Fatalf("quantidade de operações = %d; esperado %d", got, len(expected))
+	}
+	if spec.Paths["/internal/jobs/cleanup-captures"] != nil {
+		t.Fatal("rota interna de limpeza foi publicada no OpenAPI")
+	}
+}
+
+func TestRuntimeAndDocumentationOpenAPIStayIdentical(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	runtimeAPI, err := SetupRoutes(router, completeTestDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeJSON, err := json.Marshal(runtimeAPI.OpenAPI())
+	if err != nil {
+		t.Fatal(err)
+	}
+	documentationJSON, err := json.Marshal(OpenAPI(APIInfo{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(runtimeJSON, documentationJSON) {
+		t.Fatal("as especificações de runtime e documentation-only são diferentes")
+	}
+
+	cleanupRegistered := false
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/internal/jobs/cleanup-captures" {
+			cleanupRegistered = true
+			break
+		}
+	}
+	if !cleanupRegistered {
+		t.Fatal("rota interna de limpeza não foi registrada no runtime")
+	}
+	if runtimeAPI.OpenAPI().Paths["/internal/jobs/cleanup-captures"] != nil {
+		t.Fatal("rota interna de limpeza foi publicada na especificação de runtime")
+	}
+}
+
+func openAPIOperation(spec *huma.OpenAPI, method, path string) *huma.Operation {
+	item := spec.Paths[path]
+	if item == nil {
+		return nil
+	}
+	switch method {
+	case http.MethodGet:
+		return item.Get
+	case http.MethodPost:
+		return item.Post
+	case http.MethodPut:
+		return item.Put
+	case http.MethodPatch:
+		return item.Patch
+	case http.MethodDelete:
+		return item.Delete
+	default:
+		return nil
+	}
+}
+
+func operationSecurity(operation *huma.Operation) string {
+	if len(operation.Security) == 0 {
+		return ""
+	}
+	if len(operation.Security) != 1 || len(operation.Security[0]) != 1 {
+		return "<invalid>"
+	}
+	for name := range operation.Security[0] {
+		return name
+	}
+	return ""
+}
+
+func operationCount(spec *huma.OpenAPI) int {
+	count := 0
+	for _, item := range spec.Paths {
+		for _, operation := range []*huma.Operation{item.Get, item.Post, item.Put, item.Patch, item.Delete, item.Head, item.Options, item.Trace} {
+			if operation != nil {
+				count++
+			}
+		}
+	}
+	return count
+}
 
 func TestOpenAPIUsesCurrentAccountPatchContract(t *testing.T) {
 	spec := OpenAPI(APIInfo{})

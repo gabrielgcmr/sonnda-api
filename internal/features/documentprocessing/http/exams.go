@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
@@ -91,7 +92,40 @@ func NewExams(
 
 // RegisterHumaRoutes registers the supported exam-document operations.
 func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
-	h.registerReviewRoutes(registered, security)
+	registerExamRoutes(registered, security, examEndpoints{
+		list: h.listExamDocuments, texts: h.listExamDocumentTexts, upload: h.uploadExamDocument,
+		get: h.getExamDocument, file: h.getExamDocumentFile, extraction: h.getExtraction,
+		confirm: h.confirm, discard: h.discard,
+	})
+}
+
+// RegisterExamsOpenAPIRoutes registers exam-document metadata without runtime dependencies.
+func RegisterExamsOpenAPIRoutes(registered huma.API, security []map[string][]string) {
+	registerExamRoutes(registered, security, examEndpoints{
+		list:       humaspec.NotImplemented[listExamDocumentsInput, listExamDocumentsOutput],
+		texts:      humaspec.NotImplemented[listExamDocumentsInput, listExamDocumentTextsOutput],
+		upload:     humaspec.NotImplemented[uploadExamDocumentInput, examDocumentOutput],
+		get:        humaspec.NotImplemented[examDocumentInput, examDocumentOutput],
+		file:       humaspec.NotImplemented[examDocumentInput, examDocumentFileOutput],
+		extraction: humaspec.NotImplemented[examDocumentInput, extractionOutput],
+		confirm:    humaspec.NotImplemented[examDocumentInput, confirmationOutput],
+		discard:    humaspec.NotImplemented[examDocumentInput, struct{}],
+	})
+}
+
+type examEndpoints struct {
+	list       func(context.Context, *listExamDocumentsInput) (*listExamDocumentsOutput, error)
+	texts      func(context.Context, *listExamDocumentsInput) (*listExamDocumentTextsOutput, error)
+	upload     func(context.Context, *uploadExamDocumentInput) (*examDocumentOutput, error)
+	get        func(context.Context, *examDocumentInput) (*examDocumentOutput, error)
+	file       func(context.Context, *examDocumentInput) (*examDocumentFileOutput, error)
+	extraction func(context.Context, *examDocumentInput) (*extractionOutput, error)
+	confirm    func(context.Context, *examDocumentInput) (*confirmationOutput, error)
+	discard    func(context.Context, *examDocumentInput) (*struct{}, error)
+}
+
+func registerExamRoutes(registered huma.API, security []map[string][]string, endpoints examEndpoints) {
+	registerReviewRoutes(registered, security, endpoints)
 	huma.Register(registered, huma.Operation{
 		OperationID: "listExamDocuments",
 		Method:      http.MethodGet,
@@ -100,7 +134,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		Tags:        []string{"Exam documents"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
 		Security:    security,
-	}, h.listExamDocuments)
+	}, endpoints.list)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "listExamDocumentTexts",
@@ -110,7 +144,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		Tags:        []string{"Exam documents"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
 		Security:    security,
-	}, h.listExamDocumentTexts)
+	}, endpoints.texts)
 
 	huma.Register(registered, huma.Operation{
 		OperationID:   "uploadExamDocument",
@@ -122,7 +156,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType},
 		Security:      security,
-	}, h.uploadExamDocument)
+	}, endpoints.upload)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getExamDocument",
@@ -132,7 +166,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		Tags:        []string{"Exam documents"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound},
 		Security:    security,
-	}, h.getExamDocument)
+	}, endpoints.get)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getExamDocumentFile",
@@ -142,7 +176,7 @@ func (h *ExamsHandler) RegisterHumaRoutes(registered huma.API, security []map[st
 		Tags:        []string{"Exam documents"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound},
 		Security:    security,
-	}, h.getExamDocumentFile)
+	}, endpoints.file)
 }
 
 func (h *ExamsHandler) listExamDocuments(ctx context.Context, input *listExamDocumentsInput) (*listExamDocumentsOutput, error) {

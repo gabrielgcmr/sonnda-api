@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/google/uuid"
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
@@ -52,6 +53,26 @@ func NewHandler(svc labService) *Handler {
 
 // RegisterHumaRoutes registers the laboratory-report operations.
 func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, endpoints{
+		list: h.listLabReports,
+		get:  h.getLabReport,
+	})
+}
+
+// RegisterOpenAPIRoutes registers laboratory-report metadata without runtime dependencies.
+func RegisterOpenAPIRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, endpoints{
+		list: humaspec.NotImplemented[listLabReportsInput, listLabReportsOutput],
+		get:  humaspec.NotImplemented[labReportInput, labReportOutput],
+	})
+}
+
+type endpoints struct {
+	list func(context.Context, *listLabReportsInput) (*listLabReportsOutput, error)
+	get  func(context.Context, *labReportInput) (*labReportOutput, error)
+}
+
+func registerRoutes(registered huma.API, security []map[string][]string, endpoints endpoints) {
 	huma.Register(registered, huma.Operation{
 		OperationID: "listPatientLabReports",
 		Method:      http.MethodGet,
@@ -60,7 +81,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Tags:        []string{"Lab reports"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden},
 		Security:    security,
-	}, h.listLabReports)
+	}, endpoints.list)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getLabReport",
@@ -70,7 +91,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Tags:        []string{"Lab reports"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound},
 		Security:    security,
-	}, h.getLabReport)
+	}, endpoints.get)
 }
 
 func (h *Handler) listLabReports(ctx context.Context, input *listLabReportsInput) (*listLabReportsOutput, error) {

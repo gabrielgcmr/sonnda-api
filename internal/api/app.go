@@ -34,9 +34,9 @@ type App struct {
 	router *gin.Engine
 }
 
-func New(opts Options) *App {
-	if opts.Deps == nil {
-		panic("api.New: Options.Deps is required")
+func New(opts Options) (*App, error) {
+	if err := validateAPIDependencies(opts.Deps); err != nil {
+		return nil, fmt.Errorf("configurar rotas da API: %w", err)
 	}
 
 	r := gin.New()
@@ -61,16 +61,24 @@ func New(opts Options) *App {
 		middleware.SetupCors(opts.CORSConfig),
 	)
 
-	deps := *opts.Deps
-	deps.APIInfo = APIInfo{
-		Name:    opts.Name,
-		Version: opts.Version,
+	deps := opts.Deps
+	if deps != nil {
+		depsCopy := *deps
+		depsCopy.APIInfo = APIInfo{
+			Name:    opts.Name,
+			Version: opts.Version,
+		}
+		deps = &depsCopy
 	}
-	humaAPI = SetupRoutes(r, &deps)
+	configuredAPI, err := SetupRoutes(r, deps)
+	if err != nil {
+		return nil, fmt.Errorf("configurar rotas da API: %w", err)
+	}
+	humaAPI = configuredAPI
 
 	return &App{
 		router: r,
-	}
+	}, nil
 }
 
 func (a *App) Run(ctx context.Context, addr string) error {

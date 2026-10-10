@@ -102,10 +102,12 @@ func TestCaptureClaimAndMobileRoutesUseRestrictedCredential(t *testing.T) {
 	}
 	handler := capturehttp.NewHandler(service)
 	router := gin.New()
-	SetupRoutes(router, &APIDependencies{
-		CaptureHandler: handler,
-		CaptureAuth:    capturehttp.NewMiddleware(service),
-	})
+	deps := completeTestDependencies()
+	deps.CaptureHandler = handler
+	deps.CaptureAuth = capturehttp.NewMiddleware(service)
+	if _, err := SetupRoutes(router, deps); err != nil {
+		t.Fatal(err)
+	}
 
 	claimRequest := httptest.NewRequest(http.MethodPost, "/capture-sessions/claim", bytes.NewBufferString(`{"code":"qr-secret"}`))
 	claimRequest.Header.Set("Content-Type", "application/json")
@@ -178,12 +180,14 @@ func TestCaptureSessionHTTPResponsesKeepPairingCodeOnlyOnCreation(t *testing.T) 
 		state:   state,
 	}
 	router := gin.New()
-	SetupRoutes(router, &APIDependencies{
-		Auth:           authenticatedTestMiddleware(),
-		Account:        accounthttp.NewMiddleware(accountService),
-		AccountHandler: accounthttp.NewHandler(accountService, nil),
-		CaptureHandler: capturehttp.NewHandler(captureService),
-	})
+	deps := completeTestDependencies()
+	deps.Auth = authenticatedTestMiddleware()
+	deps.Account = accounthttp.NewMiddleware(accountService)
+	deps.AccountHandler = accounthttp.NewHandler(accountService, nil)
+	deps.CaptureHandler = capturehttp.NewHandler(captureService)
+	if _, err := SetupRoutes(router, deps); err != nil {
+		t.Fatal(err)
+	}
 
 	created := accountRequest(router, http.MethodPost, "/capture-sessions", "")
 	if created.Code != http.StatusCreated || created.Header().Get("Cache-Control") != "private, no-store" {
@@ -231,12 +235,14 @@ func TestCaptureInboxUsesAccountScopeAndDoesNotExposeStorageURI(t *testing.T) {
 		file: &capture.SignedCaptureFile{URL: "https://storage.test/signed", ExpiresAt: now.Add(5 * time.Minute)},
 	}
 	router := gin.New()
-	SetupRoutes(router, &APIDependencies{
-		Auth:           authenticatedTestMiddleware(),
-		Account:        accounthttp.NewMiddleware(&routeAccountService{account: current}),
-		AccountHandler: accounthttp.NewHandler(&routeAccountService{account: current}, nil),
-		CaptureHandler: capturehttp.NewHandler(service),
-	})
+	deps := completeTestDependencies()
+	deps.Auth = authenticatedTestMiddleware()
+	deps.Account = accounthttp.NewMiddleware(&routeAccountService{account: current})
+	deps.AccountHandler = accounthttp.NewHandler(&routeAccountService{account: current}, nil)
+	deps.CaptureHandler = capturehttp.NewHandler(service)
+	if _, err := SetupRoutes(router, deps); err != nil {
+		t.Fatal(err)
+	}
 
 	listed := accountRequest(router, http.MethodGet, "/captures", "")
 	if listed.Code != http.StatusOK || bytes.Contains(listed.Body.Bytes(), []byte("storage_uri")) || bytes.Contains(listed.Body.Bytes(), []byte(storageURI)) {

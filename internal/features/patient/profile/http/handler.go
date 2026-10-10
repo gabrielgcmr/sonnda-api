@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	helpers "github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	patientcreation "github.com/gabrielgcmr/sonnda/internal/application/usecase/patientcreation"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	patientprofile "github.com/gabrielgcmr/sonnda/internal/features/patient/profile"
@@ -56,6 +57,32 @@ func NewHandler(svc patientService, creator patientcreation.UseCase) *Handler {
 
 // RegisterHumaRoutes registers the patient profile lifecycle in the onboarded-account group.
 func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, endpoints{
+		create: h.createPatient,
+		get:    h.getPatient,
+		update: h.updatePatient,
+		delete: h.deletePatient,
+	})
+}
+
+// RegisterOpenAPIRoutes registers patient-profile metadata without runtime dependencies.
+func RegisterOpenAPIRoutes(registered huma.API, security []map[string][]string) {
+	registerRoutes(registered, security, endpoints{
+		create: humaspec.NotImplemented[createPatientInput, createPatientOutput],
+		get:    humaspec.NotImplemented[patientIDInput, patientOutput],
+		update: humaspec.NotImplemented[updatePatientInput, patientOutput],
+		delete: humaspec.NotImplemented[patientIDInput, struct{}],
+	})
+}
+
+type endpoints struct {
+	create func(context.Context, *createPatientInput) (*createPatientOutput, error)
+	get    func(context.Context, *patientIDInput) (*patientOutput, error)
+	update func(context.Context, *updatePatientInput) (*patientOutput, error)
+	delete func(context.Context, *patientIDInput) (*struct{}, error)
+}
+
+func registerRoutes(registered huma.API, security []map[string][]string, endpoints endpoints) {
 	huma.Register(registered, huma.Operation{
 		OperationID:   "createPatient",
 		Method:        http.MethodPost,
@@ -65,7 +92,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		Security:      security,
-	}, h.createPatient)
+	}, endpoints.create)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "getPatient",
@@ -75,7 +102,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Tags:        []string{"Patients"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
 		Security:    security,
-	}, h.getPatient)
+	}, endpoints.get)
 
 	huma.Register(registered, huma.Operation{
 		OperationID: "updatePatient",
@@ -85,7 +112,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		Tags:        []string{"Patients"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		Security:    security,
-	}, h.updatePatient)
+	}, endpoints.update)
 
 	huma.Register(registered, huma.Operation{
 		OperationID:   "deletePatient",
@@ -96,7 +123,7 @@ func (h *Handler) RegisterHumaRoutes(registered huma.API, security []map[string]
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 		Security:      security,
-	}, h.deletePatient)
+	}, endpoints.delete)
 }
 
 func (h *Handler) getPatient(ctx context.Context, input *patientIDInput) (*patientOutput, error) {

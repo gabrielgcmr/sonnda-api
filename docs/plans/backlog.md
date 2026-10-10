@@ -1,28 +1,6 @@
 <!-- docs/plans/backlog.md -->
 # Backlog técnico da API
 
-## OpenAPI: permitir geração com dependências vazias
-
-**Prioridade:** alta.
-
-`OpenAPI()` registra as rotas usando uma estrutura `APIDependencies` vazia. Com
-as novas rotas de captura e as rotas existentes de contas e pacientes,
-`registerHumaRoutes` pode acessar campos de handlers ou middlewares que estejam
-com valor `nil`, causando um panic durante a exportação da especificação
-OpenAPI.
-
-Corrigir adotando uma das seguintes abordagens:
-
-1. tornar `registerHumaRoutes` tolerante a dependências ausentes, registrando
-   cada rota somente quando os handlers e middlewares correspondentes não forem
-   `nil`; ou
-2. construir handlers reais ou stubs exclusivamente para a geração da
-   especificação.
-
-**Critério de aceite:** a exportação do OpenAPI deve concluir sem panic e incluir
-as rotas esperadas de captura, contas e pacientes, com cobertura automatizada
-para o cenário de geração da especificação.
-
 ## Autenticação de captura: validar credencial nula
 
 **Prioridade:** alta.

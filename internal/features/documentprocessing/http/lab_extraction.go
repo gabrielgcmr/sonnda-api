@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
+	"github.com/gabrielgcmr/sonnda/internal/api/humaspec"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
@@ -48,6 +49,19 @@ func NewStandaloneLabExtraction(extractor pdfExtractor) *StandaloneLabExtraction
 }
 
 func (h *StandaloneLabExtractionHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
+	registerStandaloneLabExtractionRoute(registered, security, h.extract)
+}
+
+// RegisterStandaloneLabExtractionOpenAPIRoutes registers extraction metadata without runtime dependencies.
+func RegisterStandaloneLabExtractionOpenAPIRoutes(registered huma.API, security []map[string][]string) {
+	registerStandaloneLabExtractionRoute(registered, security, humaspec.NotImplemented[standaloneLabExtractionInput, standaloneLabExtractionOutput])
+}
+
+func registerStandaloneLabExtractionRoute(
+	registered huma.API,
+	security []map[string][]string,
+	endpoint func(context.Context, *standaloneLabExtractionInput) (*standaloneLabExtractionOutput, error),
+) {
 	huma.Register(registered, huma.Operation{
 		OperationID:  "extractStandaloneLabReport",
 		Method:       http.MethodPost,
@@ -57,7 +71,7 @@ func (h *StandaloneLabExtractionHandler) RegisterHumaRoutes(registered huma.API,
 		Tags:         []string{"Lab extraction"},
 		Errors:       []int{http.StatusUnauthorized, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity},
 		Security:     security,
-	}, h.extract)
+	}, endpoint)
 }
 
 func (h *StandaloneLabExtractionHandler) extract(ctx context.Context, input *standaloneLabExtractionInput) (*standaloneLabExtractionOutput, error) {

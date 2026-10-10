@@ -16,10 +16,10 @@ import (
 type extractionOutput struct{ Body extraction.Result }
 type confirmationOutput struct{ Body laboratory.LabReportOutput }
 
-func (h *ExamsHandler) registerReviewRoutes(api huma.API, security []map[string][]string) {
-	huma.Register(api, huma.Operation{OperationID: "getExamDocumentExtraction", Method: http.MethodGet, Path: "/exam-documents/{documentId}/extraction", Summary: "Conferir extração do documento", Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404}}, h.getExtraction)
-	huma.Register(api, huma.Operation{OperationID: "confirmExamDocument", Method: http.MethodPost, Path: "/exam-documents/{documentId}/confirmation", Summary: "Confirmar exame no histórico", Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404, 409, 422}}, h.confirm)
-	huma.Register(api, huma.Operation{OperationID: "discardExamDocument", Method: http.MethodDelete, Path: "/exam-documents/{documentId}", Summary: "Excluir rascunho e PDF", DefaultStatus: http.StatusNoContent, Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404, 409}}, h.discard)
+func registerReviewRoutes(api huma.API, security []map[string][]string, endpoints examEndpoints) {
+	huma.Register(api, huma.Operation{OperationID: "getExamDocumentExtraction", Method: http.MethodGet, Path: "/exam-documents/{documentId}/extraction", Summary: "Conferir extração do documento", Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404}}, endpoints.extraction)
+	huma.Register(api, huma.Operation{OperationID: "confirmExamDocument", Method: http.MethodPost, Path: "/exam-documents/{documentId}/confirmation", Summary: "Confirmar exame no histórico", Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404, 409, 422}}, endpoints.confirm)
+	huma.Register(api, huma.Operation{OperationID: "discardExamDocument", Method: http.MethodDelete, Path: "/exam-documents/{documentId}", Summary: "Excluir rascunho e PDF", DefaultStatus: http.StatusNoContent, Tags: []string{"Exam documents"}, Security: security, Errors: []int{401, 403, 404, 409}}, endpoints.discard)
 }
 
 func (h *ExamsHandler) getExtraction(ctx context.Context, input *examDocumentInput) (*extractionOutput, error) {

@@ -15,7 +15,7 @@ func OpenAPI(info APIInfo) *huma.OpenAPI {
 	router := gin.New()
 	apiInfo := normalizedAPIInfo(info)
 	humaAPI := newHumaAPI(router, apiInfo)
-	registerHumaRoutes(humaAPI, &APIDependencies{})
+	registerOpenAPIRoutes(specificationRouteGroups(humaAPI))
 	return humaAPI.OpenAPI()
 }
 

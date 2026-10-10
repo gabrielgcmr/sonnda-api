@@ -42,7 +42,13 @@ type captureFileOutput struct {
 	Body         captureFileResponse
 }
 
-func (h *Handler) registerInboxRoutes(api huma.API, security []map[string][]string) {
+type inboxEndpoints struct {
+	list   func(context.Context, *captureListInput) (*captureListOutput, error)
+	file   func(context.Context, *capturePathInput) (*captureFileOutput, error)
+	delete func(context.Context, *capturePathInput) (*struct{}, error)
+}
+
+func registerInboxRoutes(api huma.API, security []map[string][]string, endpoints inboxEndpoints) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listCaptures",
 		Method:      http.MethodGet,
@@ -52,7 +58,7 @@ func (h *Handler) registerInboxRoutes(api huma.API, security []map[string][]stri
 		Tags:        []string{"Captures"},
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		Security:    security,
-	}, h.listCaptures)
+	}, endpoints.list)
 	huma.Register(api, huma.Operation{
 		OperationID: "getCaptureFile",
 		Method:      http.MethodGet,
@@ -62,7 +68,7 @@ func (h *Handler) registerInboxRoutes(api huma.API, security []map[string][]stri
 		Tags:        []string{"Captures"},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError, http.StatusGatewayTimeout},
 		Security:    security,
-	}, h.getCaptureFile)
+	}, endpoints.file)
 	huma.Register(api, huma.Operation{
 		OperationID:   "deleteCapture",
 		Method:        http.MethodDelete,
@@ -73,7 +79,7 @@ func (h *Handler) registerInboxRoutes(api huma.API, security []map[string][]stri
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusGatewayTimeout},
 		Security:      security,
-	}, h.deleteCapture)
+	}, endpoints.delete)
 }
 
 func (h *Handler) listCaptures(ctx context.Context, input *captureListInput) (*captureListOutput, error) {
