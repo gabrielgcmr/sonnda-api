@@ -49,6 +49,7 @@ func TestOpenAPIContainsExpectedOperationContract(t *testing.T) {
 		{http.MethodGet, "/exam-documents/{documentId}/extraction", "getExamDocumentExtraction", bearer},
 		{http.MethodPost, "/exam-documents/{documentId}/confirmation", "confirmExamDocument", bearer},
 		{http.MethodPost, "/lab-extractions", "extractStandaloneLabReport", bearer},
+		{http.MethodPost, "/lab-extractions/from-capture", "extractStandaloneLabReportFromCapture", bearer},
 		{http.MethodGet, "/patients/{patientId}/lab-reports", "listPatientLabReports", bearer},
 		{http.MethodGet, "/lab-reports/{labReportId}", "getLabReport", bearer},
 		{http.MethodPost, "/capture-sessions/claim", "claimCaptureSession", ""},
@@ -317,6 +318,21 @@ func TestOpenAPIIncludesAuthenticatedCaptureSessionOperations(t *testing.T) {
 	items := referencedSchema(spec, list.Properties["items"].Items)
 	if items.Properties["id"] == nil || items.Properties["expires_at"] == nil || items.Properties["storage_uri"] != nil {
 		t.Fatalf("unexpected capture list item schema: %+v", items.Properties)
+	}
+}
+
+func TestOpenAPIPublishesCaptureLabExtractionContract(t *testing.T) {
+	spec := OpenAPI(APIInfo{})
+	fromCapture := spec.Paths["/lab-extractions/from-capture"].Post
+	upload := spec.Paths["/lab-extractions"].Post
+	request := referencedSchema(spec, fromCapture.RequestBody.Content["application/json"].Schema)
+	if request.Properties["capture_id"] == nil || len(request.Required) != 1 || request.Required[0] != "capture_id" {
+		t.Fatalf("unexpected capture extraction request: properties=%+v required=%v", request.Properties, request.Required)
+	}
+	got := fromCapture.Responses["200"].Content["application/json"].Schema.Ref
+	want := upload.Responses["200"].Content["application/json"].Schema.Ref
+	if got == "" || got != want {
+		t.Fatalf("capture extraction response %q must match upload extraction response %q", got, want)
 	}
 }
 

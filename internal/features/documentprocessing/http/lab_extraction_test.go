@@ -6,11 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -21,6 +23,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
 	domaintext "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/textextraction"
+	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -72,7 +75,7 @@ func TestStandaloneLabExtractionDiscardsPDFAndReturnsStructuredResult(t *testing
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
-	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(textExtractor, labExtractor))).RegisterHumaRoutes(api, nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(textExtractor, labExtractor)), nil).RegisterHumaRoutes(api, nil)
 
 	body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
@@ -102,7 +105,7 @@ func TestStandaloneLabExtractionRejectsNonPDF(t *testing.T) {
 		c.Next()
 	})
 	api := humagin.New(router, huma.DefaultConfig("test", "test"))
-	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{}))).RegisterHumaRoutes(api, nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{})), nil).RegisterHumaRoutes(api, nil)
 	body, contentType := standaloneLabMultipart(t, "exam.txt", "text/plain", []byte("not a PDF"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 	request.Header.Set("Content-Type", contentType)
@@ -120,7 +123,7 @@ func TestStandaloneExtractionFailureStillRemovesPDF(t *testing.T) {
 	router.Use(func(c *gin.Context) {
 		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 	})
-	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(reader, provider))).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extraction.New(reader, provider)), nil).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 	body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 	request.Header.Set("Content-Type", contentType)
@@ -149,7 +152,7 @@ func TestStandalonePDFValidation(t *testing.T) {
 			router.Use(func(c *gin.Context) {
 				c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), &accountdomain.Account{ID: uuid.New()}))
 			})
-			NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{}))).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+			NewStandaloneLabExtraction(authorizedStandalone(extraction.New(&standaloneTextExtractorStub{}, &standaloneLabExtractorStub{})), nil).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 			body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", tc.content)
 			request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body)
 			request.Header.Set("Content-Type", contentType)
@@ -192,7 +195,7 @@ func TestStandaloneLabExtractionUsesInjectedService(t *testing.T) {
 		return &want, nil
 	})
 	router := gin.New()
-	NewStandaloneLabExtraction(authorizedStandalone(extractor)).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+	NewStandaloneLabExtraction(authorizedStandalone(extractor), nil).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
 	body, contentType := standaloneLabMultipart(t, "injected.pdf", "application/pdf", []byte("%PDF-1.4"))
 	request := httptest.NewRequest(http.MethodPost, "/lab-extractions", body).WithContext(requestContext)
 	request.Header.Set("Content-Type", contentType)
@@ -210,6 +213,133 @@ func TestStandaloneLabExtractionUsesInjectedService(t *testing.T) {
 	}
 	if _, err := os.Stat(standalonePath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("standalone PDF was not removed: %v", err)
+	}
+}
+
+type denyStandaloneAuthorizer struct{ documents.Authorizer }
+
+func (denyStandaloneAuthorizer) AuthorizeStandalone(*accountdomain.Account, documents.Action) error {
+	return apperr.Forbidden("acesso negado")
+}
+
+type trackedBody struct {
+	io.Reader
+	closed bool
+}
+
+func (b *trackedBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+type capturedPDFSourceStub struct {
+	accountID uuid.UUID
+	captureID uuid.UUID
+	calls     int
+	content   []byte
+	body      *trackedBody
+	err       error
+}
+
+func (s *capturedPDFSourceStub) OpenCapturedPDF(_ context.Context, accountID, captureID uuid.UUID) (*CapturedPDF, error) {
+	s.calls++
+	s.accountID, s.captureID = accountID, captureID
+	if s.err != nil {
+		return nil, s.err
+	}
+	s.body = &trackedBody{Reader: bytes.NewReader(s.content)}
+	return &CapturedPDF{Body: s.body, Filename: "capturado.pdf"}, nil
+}
+
+func captureExtractionRouter(account *accountdomain.Account, extractor *documents.StandaloneLabExtraction, source CapturedPDFSource) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(helpers.ContextWithCurrentAccount(c.Request.Context(), account))
+		c.Next()
+	})
+	NewStandaloneLabExtraction(extractor, source).RegisterHumaRoutes(humagin.New(router, huma.DefaultConfig("test", "test")), nil)
+	return router
+}
+
+func postCaptureExtraction(router *gin.Engine, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, "/lab-extractions/from-capture", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
+}
+
+func TestCaptureLabExtractionReadsOwnedCaptureAndReturnsStandaloneResult(t *testing.T) {
+	account := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
+	captureID := uuid.New()
+	want := extraction.Result{Status: labextraction.ExtractionStatusSucceeded, SummaryText: "Glicose: 90 mg/dL"}
+	var extractedPath string
+	extractor := pdfExtractorFunc(func(_ context.Context, path, filename string) (*extraction.Result, error) {
+		extractedPath = path
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != "%PDF-1.4 capture" || filename != "capturado.pdf" {
+			t.Fatalf("captured file unavailable to extractor: %q %q %v", data, filename, err)
+		}
+		return &want, nil
+	})
+	source := &capturedPDFSourceStub{content: []byte("%PDF-1.4 capture")}
+	router := captureExtractionRouter(account, authorizedStandalone(extractor), source)
+
+	response := postCaptureExtraction(router, `{"capture_id":"`+captureID.String()+`"}`)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+	}
+	if source.accountID != account.ID || source.captureID != captureID {
+		t.Fatalf("capture lookup not scoped to account: account=%s capture=%s", source.accountID, source.captureID)
+	}
+	if !source.body.closed {
+		t.Fatal("capture body was not closed")
+	}
+	var got extraction.Result
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("result = %+v, err=%v", got, err)
+	}
+	if _, err := os.Stat(extractedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("captured PDF copy was not removed: %v", err)
+	}
+}
+
+func TestCaptureLabExtractionFailures(t *testing.T) {
+	account := &accountdomain.Account{ID: uuid.New()}
+	validBody := `{"capture_id":"` + uuid.NewString() + `"}`
+	for _, tc := range []struct {
+		name        string
+		authorizer  documents.Authorizer
+		source      *capturedPDFSourceStub
+		body        string
+		status      int
+		sourceCalls int
+	}{
+		{name: "capture from another account or expired", authorizer: allowStandaloneAuthorizer{}, source: &capturedPDFSourceStub{err: apperr.NotFound("captura não encontrada")}, body: validBody, status: http.StatusNotFound, sourceCalls: 1},
+		{name: "capture is not a PDF", authorizer: allowStandaloneAuthorizer{}, source: &capturedPDFSourceStub{err: &apperr.AppError{Kind: apperr.UNSUPPORTED_MEDIA_TYPE, Message: "a captura não é um PDF"}}, body: validBody, status: http.StatusUnsupportedMediaType, sourceCalls: 1},
+		{name: "stored content is not a PDF", authorizer: allowStandaloneAuthorizer{}, source: &capturedPDFSourceStub{content: []byte("not a PDF")}, body: validBody, status: http.StatusBadRequest, sourceCalls: 1},
+		{name: "account not allowed", authorizer: denyStandaloneAuthorizer{}, source: &capturedPDFSourceStub{content: []byte("%PDF-1.4")}, body: validBody, status: http.StatusForbidden},
+		{name: "invalid capture id", authorizer: allowStandaloneAuthorizer{}, source: &capturedPDFSourceStub{content: []byte("%PDF-1.4")}, body: `{"capture_id":"not-a-uuid"}`, status: http.StatusUnprocessableEntity},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			extractorCalled := false
+			extractor := pdfExtractorFunc(func(context.Context, string, string) (*extraction.Result, error) {
+				extractorCalled = true
+				return &extraction.Result{}, nil
+			})
+			router := captureExtractionRouter(account, documents.NewStandaloneLabExtraction(extractor, tc.authorizer), tc.source)
+
+			response := postCaptureExtraction(router, tc.body)
+
+			if response.Code != tc.status || tc.source.calls != tc.sourceCalls || extractorCalled {
+				t.Fatalf("status=%d sourceCalls=%d extractorCalled=%t body=%s", response.Code, tc.source.calls, extractorCalled, response.Body.String())
+			}
+			if tc.source.body != nil && !tc.source.body.closed {
+				t.Fatal("capture body was not closed")
+			}
+		})
 	}
 }
 

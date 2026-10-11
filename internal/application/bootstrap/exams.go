@@ -2,8 +2,11 @@
 package bootstrap
 
 import (
+	"context"
+
 	"github.com/gabrielgcmr/sonnda/internal/application/usecase/labdocumentconfirmation"
 	"github.com/gabrielgcmr/sonnda/internal/config"
+	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
@@ -16,6 +19,7 @@ import (
 	patientpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/postgres"
 	pginfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
 	textinfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/textextraction"
+	"github.com/google/uuid"
 )
 
 type ExamsModule struct {
@@ -23,7 +27,7 @@ type ExamsModule struct {
 	StandaloneLabExtractionHandler *documenthttp.StandaloneLabExtractionHandler
 }
 
-func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor, storage documentprocessing.FileStorageService, config config.OCRConfig) *ExamsModule {
+func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
 	patients := patientpostgres.NewRepository(db)
 	labs := labpostgres.NewRepository(db)
 	documentRepo := documentpostgres.NewDocumentRepository(db)
@@ -36,5 +40,20 @@ func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor
 	drafts := documents.NewDrafts(repo, extractor, storage, authorizer)
 	confirmer := labdocumentconfirmation.New(authorizer, repo, labs)
 	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
-	return &ExamsModule{Handler: documenthttp.NewExams(service, drafts, confirmer, storage), StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone)}
+	return &ExamsModule{
+		Handler:                        documenthttp.NewExams(service, drafts, confirmer, storage),
+		StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone, capturedPDFSource{captures: captures}),
+	}
+}
+
+type capturedPDFSource struct {
+	captures capture.Service
+}
+
+func (s capturedPDFSource) OpenCapturedPDF(ctx context.Context, accountID, captureID uuid.UUID) (*documenthttp.CapturedPDF, error) {
+	file, err := s.captures.OpenCapturePDF(ctx, accountID, captureID)
+	if err != nil {
+		return nil, err
+	}
+	return &documenthttp.CapturedPDF{Body: file.Body, Filename: file.OriginalFilename}, nil
 }

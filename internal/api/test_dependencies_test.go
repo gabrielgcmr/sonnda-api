@@ -24,6 +24,6 @@ func completeTestDependencies() *APIDependencies {
 		PatientProblemHandler:          problemhttp.NewHandler(nil),
 		LaboratoryHandler:              laboratoryhttp.NewHandler(nil),
 		ExamsHandler:                   documentprocessinghttp.NewExams(nil, nil, nil, nil),
-		StandaloneLabExtractionHandler: documentprocessinghttp.NewStandaloneLabExtraction(nil),
+		StandaloneLabExtractionHandler: documentprocessinghttp.NewStandaloneLabExtraction(nil, nil),
 	}
 }

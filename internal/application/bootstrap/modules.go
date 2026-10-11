@@ -29,12 +29,13 @@ func NewModules(
 	activationConfig config.ProfessionalActivationConfig,
 	captureCleanupToken string,
 ) *Modules {
+	captureModule := NewCaptureModule(dbClient, captureStorage, captureCleanupToken)
 	return &Modules{
 		Account:       NewAccountModule(dbClient, redisClient, activationConfig),
-		Capture:       NewCaptureModule(dbClient, captureStorage, captureCleanupToken),
+		Capture:       captureModule,
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),
-		Exams:         NewExamsModule(dbClient, labTextExtractor, storage, ocrConfig),
+		Exams:         NewExamsModule(dbClient, labTextExtractor, storage, captureModule.Service, ocrConfig),
 	}
 }
