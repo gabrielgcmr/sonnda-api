@@ -15,6 +15,7 @@ import (
 	authdomain "github.com/gabrielgcmr/sonnda/internal/features/auth/domain"
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type routeAccountService struct {
@@ -41,15 +42,27 @@ func (s *routeAccountService) DeactivateByIdentity(context.Context, string, stri
 	return nil
 }
 
+type routeProfessionalActivator struct {
+	calls    int
+	password string
+}
+
+func (a *routeProfessionalActivator) Activate(_ context.Context, _ uuid.UUID, password, _ string) (*accountdomain.Account, error) {
+	a.calls++
+	a.password = password
+	return accountdomain.NewAccount(accountdomain.NewAccountParams{AccountType: accountdomain.AccountTypeProfessional})
+}
+
 func TestAccountHTTPContractAndOnboardingBoundary(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	current, _ := accountdomain.NewAccount(accountdomain.NewAccountParams{})
 	service := &routeAccountService{account: current}
+	activator := &routeProfessionalActivator{}
 	router := gin.New()
 	deps := completeTestDependencies()
 	deps.Auth = authenticatedTestMiddleware()
 	deps.Account = accounthttp.NewMiddleware(service)
-	deps.AccountHandler = accounthttp.NewHandler(service, nil)
+	deps.AccountHandler = accounthttp.NewHandler(service, activator)
 	if _, err := SetupRoutes(router, deps); err != nil {
 		t.Fatal(err)
 	}
@@ -85,6 +98,18 @@ func TestAccountHTTPContractAndOnboardingBoundary(t *testing.T) {
 		if response.Code != http.StatusUnprocessableEntity || service.updateCalls != 1 {
 			t.Fatalf("invalid empty profile field accepted: body=%s status=%d response=%s updates=%d", invalidBody, response.Code, response.Body.String(), service.updateCalls)
 		}
+	}
+
+	response = accountRequest(router, http.MethodPost, "/me/professional-activation", `{"password":"activation-secret"}`)
+	if response.Code != http.StatusOK || activator.calls != 1 || activator.password != "activation-secret" {
+		t.Fatalf("pending onboarding could not activate professional account: %d calls=%d body=%s", response.Code, activator.calls, response.Body.String())
+	}
+	var activated map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &activated); err != nil {
+		t.Fatal(err)
+	}
+	if activated["account_type"] != "professional" || activated["onboarding_completed"] != false {
+		t.Fatalf("unexpected activation body: %s", response.Body.String())
 	}
 
 	resolveCalls := service.resolveCalls
