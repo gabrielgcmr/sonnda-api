@@ -98,7 +98,6 @@ func registerRuntimeRoutes(groups routeGroups, deps *APIDependencies) {
 
 	deps.AccountHandler.RegisterAuthenticatedRoutes(groups.authenticated, bearerSecurity())
 	deps.AccountHandler.RegisterResolvedRoutes(groups.resolved, bearerSecurity())
-	deps.AccountHandler.RegisterOnboardedRoutes(groups.onboarded, bearerSecurity())
 	deps.CaptureHandler.RegisterPublicRoutes(groups.public)
 	deps.CaptureHandler.RegisterMobileRoutes(groups.captureMobile, captureTokenSecurity())
 	deps.CaptureHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
@@ -118,7 +117,6 @@ func registerOpenAPIRoutes(groups routeGroups) {
 
 	accounthttp.RegisterAuthenticatedOpenAPIRoutes(groups.authenticated, bearerSecurity())
 	accounthttp.RegisterResolvedOpenAPIRoutes(groups.resolved, bearerSecurity())
-	accounthttp.RegisterOnboardedOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	capturehttp.RegisterPublicOpenAPIRoutes(groups.public)
 	capturehttp.RegisterMobileOpenAPIRoutes(groups.captureMobile, captureTokenSecurity())
 	capturehttp.RegisterOpenAPIRoutes(groups.onboarded, bearerSecurity())

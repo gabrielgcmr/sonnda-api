@@ -107,22 +107,12 @@ func NewHandler(accountSvc accountService, activation professionalActivator) *Ha
 	return &Handler{accountSvc: accountSvc, activation: activation}
 }
 
-// RegisterOnboardedRoutes registers account operations that require completed onboarding.
-func (h *Handler) RegisterOnboardedRoutes(onboarded huma.API, security []map[string][]string) {
-	registerProfessionalActivationRoute(onboarded, security, h.activateCurrentAccountAsProfessional)
-}
-
-// RegisterOnboardedOpenAPIRoutes registers account metadata without runtime dependencies.
-func RegisterOnboardedOpenAPIRoutes(onboarded huma.API, security []map[string][]string) {
-	registerProfessionalActivationRoute(onboarded, security, humaspec.NotImplemented[professionalActivationInput, accountOutput])
-}
-
 func registerProfessionalActivationRoute(
-	onboarded huma.API,
+	resolved huma.API,
 	security []map[string][]string,
 	endpoint func(context.Context, *professionalActivationInput) (*accountOutput, error),
 ) {
-	huma.Register(onboarded, huma.Operation{
+	huma.Register(resolved, huma.Operation{
 		OperationID: "activateCurrentAccountAsProfessional",
 		Method:      http.MethodPost,
 		Path:        "/me/professional-activation",
@@ -133,16 +123,19 @@ func registerProfessionalActivationRoute(
 	}, endpoint)
 }
 
-// RegisterResolvedRoutes registers account operations that require a resolved account.
+// RegisterResolvedRoutes registers account operations that require a resolved
+// account. Professional activation stays available while onboarding is pending.
 func (h *Handler) RegisterResolvedRoutes(resolved huma.API, security []map[string][]string) {
 	registerGetCurrentAccountRoute(resolved, security, h.getCurrentAccount)
 	registerUpdateCurrentAccountRoute(resolved, security, h.updateCurrentAccount)
+	registerProfessionalActivationRoute(resolved, security, h.activateCurrentAccountAsProfessional)
 }
 
 // RegisterResolvedOpenAPIRoutes registers resolved-account metadata without runtime dependencies.
 func RegisterResolvedOpenAPIRoutes(resolved huma.API, security []map[string][]string) {
 	registerGetCurrentAccountRoute(resolved, security, humaspec.NotImplemented[struct{}, accountOutput])
 	registerUpdateCurrentAccountRoute(resolved, security, humaspec.NotImplemented[updateAccountInput, accountOutput])
+	registerProfessionalActivationRoute(resolved, security, humaspec.NotImplemented[professionalActivationInput, accountOutput])
 }
 
 func registerGetCurrentAccountRoute(
