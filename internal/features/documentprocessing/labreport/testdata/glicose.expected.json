@@ -15,7 +15,7 @@
       "collected_at": "2026-09-01 08:15:00",
       "release_at": null,
       "items": [
-        { "parameter_name": "Glicemia de jejum", "result_value": "99", "result_unit": "mg/dL", "reference_text": null }
+        { "parameter_name": "Glicemia de jejum", "result_value": "99", "result_unit": "mg/dL", "reference_text": "70 a 99 mg/dL" }
       ]
     }
   ]

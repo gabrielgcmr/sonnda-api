@@ -35,7 +35,7 @@ mas são excluídos do JSON de resposta da LLM.
 - As chaves declaradas são obrigatórias; campos opcionais clinicamente usam `null`.
 - `result_value` é texto, como no banco: `14,2`, `245.000`, `< 5`, `Negativo`.
 - Não converter unidades, preencher valores ausentes ou criar nomes canônicos.
-- Referências permanecem compatíveis, mas podem ser `null`.
+- Referências explicitamente vinculadas a cada resultado são preservadas em `reference_text`, com unidades e qualificadores originais. Use `null` quando ausentes ou ambíguas; não calcular faixas.
 - Datas seguem as representações descritas no schema e aceitas pelo mapper.
 - Percentual e absoluto são itens distintos, preservando nome, valor e unidade.
 - `tests: []` representa ausência de resultados. Um pedido ou atestado sem resultados

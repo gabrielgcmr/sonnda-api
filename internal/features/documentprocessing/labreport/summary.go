@@ -50,7 +50,13 @@ func FormatSummary(report *ExtractedLabReport) string {
 			if item.ResultUnit != nil {
 				value += " " + *item.ResultUnit
 			}
-			writeSummaryLine(&builder, fmt.Sprintf("%s: %s", item.ParameterName, value))
+			line := fmt.Sprintf("%s: %s", item.ParameterName, value)
+			if item.ResultValue != nil && item.ReferenceText != nil {
+				if reference := strings.TrimSpace(*item.ReferenceText); reference != "" {
+					line += " (referência: " + reference + ")"
+				}
+			}
+			writeSummaryLine(&builder, line)
 		}
 		wroteTest = true
 	}

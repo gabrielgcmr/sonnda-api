@@ -41,7 +41,7 @@
                 "parameter_name": { "type": "string", "minLength": 1, "pattern": "\\S", "description": "Nome original do analito, sem codigo canonico inventado." },
                 "result_value": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S", "description": "Preservar o valor textual: 15,1; 453.000; < 5; Negativo. Nulo se ilegivel ou ausente. Nunca usar a referencia como resultado." },
                 "result_unit": { "type": ["string", "null"], "minLength": 1, "pattern": "\\S", "description": "Unidade original, sem conversao. Nulo quando ausente. Separar resultados percentuais e absolutos em itens distintos." },
-                "reference_text": { "type": ["string", "null"], "description": "Campo compativel com o banco, opcional clinicamente. Pode ser nulo nesta etapa; nao calcular faixas." }
+                "reference_text": { "type": ["string", "null"], "description": "Referencia explicitamente associada ao mesmo parametro no laudo, incluindo unidade e qualificadores quando presentes. Preservar o texto original; nao calcular nem inventar faixas. Nulo se ausente ou ambigua." }
               }
             }
           }

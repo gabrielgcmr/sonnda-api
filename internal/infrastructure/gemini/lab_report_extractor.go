@@ -40,7 +40,9 @@ Regras:
 - Quando um campo nao estiver explicito, use null.
 - Quando nao houver resultado laboratorial, como em atestado ou pedido de exame, retorne tests vazio.
 - Nunca use valor de referencia como resultado.
-- reference_text pode ser null nesta etapa.
+- Para cada resultado, extraia em reference_text a faixa ou o texto de referencia explicitamente associado ao mesmo parametro no laudo.
+- Preserve unidades e qualificadores da referencia (por exemplo, idade, sexo ou metodo) quando presentes. Nao calcule, complete nem escolha uma faixa ambigua.
+- Use null em reference_text quando a referencia nao estiver presente ou sua associacao ao resultado for incerta.
 - Se um parametro tiver valor percentual e absoluto, crie itens separados quando ambos forem resultados reais.`
 
 type LabReportExtractor struct {

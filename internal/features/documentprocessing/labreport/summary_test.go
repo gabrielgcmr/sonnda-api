@@ -12,6 +12,7 @@ func TestFormatLabSummary(t *testing.T) {
 	patientName := "HELLEN CRISTINALLEN CRISTINA"
 	value := "4,40"
 	unit := "milhões/mm3"
+	reference := "3,90 a 5,30 milhões/mm3"
 	report := &ExtractedLabReport{
 		PatientName: &patientName,
 		LabName:     &labName,
@@ -22,16 +23,17 @@ func TestFormatLabSummary(t *testing.T) {
 				ParameterName: "Resultado",
 				ResultValue:   &value,
 				ResultUnit:    &unit,
+				ReferenceText: &reference,
 			}},
 		}},
 	}
 
 	got := FormatSummary(report)
-	want := "Paciente: HELLEN CRISTINALLEN CRISTINA\nLaboratório: Laboratório Excelência\nData de coleta: 05/05/2026 11:48\n\nHemácias\nResultado: 4,40 milhões/mm3\n"
+	want := "Paciente: HELLEN CRISTINALLEN CRISTINA\nLaboratório: Laboratório Excelência\nData de coleta: 05/05/2026 11:48\n\nHemácias\nResultado: 4,40 milhões/mm3 (referência: 3,90 a 5,30 milhões/mm3)\n"
 	if got != want {
 		t.Fatalf("FormatSummary() = %q, want %q", got, want)
 	}
-	if strings.Contains(got, "referência") || strings.Contains(got, "paciente") {
+	if strings.Contains(got, "paciente") {
 		t.Fatalf("summary contains fields that should be omitted: %q", got)
 	}
 }
