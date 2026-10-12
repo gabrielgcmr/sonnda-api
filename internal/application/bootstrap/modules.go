@@ -22,7 +22,7 @@ type Modules struct {
 func NewModules(
 	dbClient *postgress.Client,
 	redisClient *redis.Client,
-	labTextExtractor labextraction.LabReportTextExtractor,
+	labExtractor labextraction.LabReportExtractor,
 	storage documentprocessing.FileStorageService,
 	captureStorage capture.FileStorage,
 	ocrConfig config.OCRConfig,
@@ -36,6 +36,6 @@ func NewModules(
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),
-		Exams:         NewExamsModule(dbClient, labTextExtractor, storage, captureModule.Service, ocrConfig),
+		Exams:         NewExamsModule(dbClient, labExtractor, storage, captureModule.Service, ocrConfig),
 	}
 }

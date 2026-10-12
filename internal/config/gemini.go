@@ -14,6 +14,7 @@ type GeminiConfig struct {
 	Model           string
 	Timeout         time.Duration
 	MaxInputBytes   int
+	MaxMediaBytes   int
 	MaxOutputTokens int32
 }
 
@@ -30,6 +31,10 @@ func loadGeminiConfig() (GeminiConfig, error) {
 	if err != nil {
 		return GeminiConfig{}, apperr.Validation("invalid configuration", apperr.Violation{Field: "GEMINI_MAX_INPUT_BYTES", Reason: "invalid_integer"})
 	}
+	mediaLimit, err := strconv.Atoi(getEnvOrDefault("GEMINI_MAX_MEDIA_BYTES", "10485760"))
+	if err != nil {
+		return GeminiConfig{}, apperr.Validation("invalid configuration", apperr.Violation{Field: "GEMINI_MAX_MEDIA_BYTES", Reason: "invalid_integer"})
+	}
 	outputLimit, err := strconv.ParseInt(getEnvOrDefault("GEMINI_MAX_OUTPUT_TOKENS", "8192"), 10, 32)
 	if err != nil {
 		return GeminiConfig{}, apperr.Validation("invalid configuration", apperr.Violation{Field: "GEMINI_MAX_OUTPUT_TOKENS", Reason: "invalid_integer"})
@@ -39,6 +44,7 @@ func loadGeminiConfig() (GeminiConfig, error) {
 		Model:           getEnvOrDefault("GEMINI_MODEL", "gemini-3.5-flash-lite"),
 		Timeout:         timeout,
 		MaxInputBytes:   inputLimit,
+		MaxMediaBytes:   mediaLimit,
 		MaxOutputTokens: int32(outputLimit),
 	}
 	return cfg, cfg.Validate()
@@ -55,6 +61,9 @@ func (cfg GeminiConfig) Validate() error {
 	}
 	if cfg.MaxInputBytes <= 0 {
 		violations = append(violations, apperr.Violation{Field: "GEMINI_MAX_INPUT_BYTES", Reason: "must_be_positive"})
+	}
+	if cfg.MaxMediaBytes <= 0 {
+		violations = append(violations, apperr.Violation{Field: "GEMINI_MAX_MEDIA_BYTES", Reason: "must_be_positive"})
 	}
 	if cfg.MaxOutputTokens <= 0 {
 		violations = append(violations, apperr.Violation{Field: "GEMINI_MAX_OUTPUT_TOKENS", Reason: "must_be_positive"})

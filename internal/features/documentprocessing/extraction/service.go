@@ -4,6 +4,9 @@ package extraction
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"strings"
 
@@ -12,19 +15,22 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
+const maxDocumentBytes = 10 * 1024 * 1024
+
 type Result struct {
-	Status      labextraction.ExtractionStatus    `json:"status"`
-	Warnings    []labextraction.ExtractionWarning `json:"warnings"`
-	Report      labextraction.ExtractedLabReport  `json:"report"`
-	SummaryText string                            `json:"summary_text"`
+	Status           labextraction.ExtractionStatus    `json:"status"`
+	Warnings         []labextraction.ExtractionWarning `json:"warnings"`
+	Report           labextraction.ExtractedLabReport  `json:"report"`
+	SummaryText      string                            `json:"summary_text"`
+	ProcessingMethod string                            `json:"-"`
 }
 
 type Service struct {
 	text text.Extractor
-	lab  labextraction.LabReportTextExtractor
+	lab  labextraction.LabReportExtractor
 }
 
-func New(reader text.Extractor, lab labextraction.LabReportTextExtractor) *Service {
+func New(reader text.Extractor, lab labextraction.LabReportExtractor) *Service {
 	return &Service{text: reader, lab: lab}
 }
 
@@ -33,20 +39,56 @@ func unavailable(value any) bool {
 }
 
 func (s *Service) ExtractPDF(ctx context.Context, path, filename string) (*Result, error) {
-	if s == nil || unavailable(s.text) || unavailable(s.lab) {
+	return s.ExtractDocument(ctx, path, filename, "application/pdf")
+}
+
+func (s *Service) ExtractDocument(ctx context.Context, path, filename, mimeType string) (*Result, error) {
+	if s == nil || unavailable(s.lab) {
 		return nil, apperr.Internal("A extração laboratorial está indisponível.", nil)
 	}
+	switch mimeType {
+	case "application/pdf":
+		if unavailable(s.text) {
+			return nil, apperr.Internal("A leitura de PDF está indisponível.", nil)
+		}
+		return s.extractPDF(ctx, path, filename)
+	case "image/jpeg", "image/png":
+		return s.extractMedia(ctx, path, mimeType)
+	default:
+		return nil, &apperr.AppError{Kind: apperr.UNSUPPORTED_MEDIA_TYPE, Message: "Envie um arquivo PDF, JPEG ou PNG."}
+	}
+}
+
+func (s *Service) extractPDF(ctx context.Context, path, filename string) (*Result, error) {
 	extracted, err := s.text.Extract(ctx, text.ExtractInput{LocalPath: path, OriginalFilename: filename, MimeType: "application/pdf"})
 	if err != nil {
 		if errors.Is(err, text.ErrUnreadablePDF) {
-			return nil, unreadablePDF()
+			return s.extractMedia(ctx, path, "application/pdf")
 		}
 		return nil, technicalError("Não foi possível ler o PDF.", err)
 	}
 	if extracted == nil || strings.TrimSpace(extracted.Text) == "" {
-		return nil, unreadablePDF()
+		return s.extractMedia(ctx, path, "application/pdf")
 	}
-	return s.ExtractText(ctx, extracted.Text)
+	result, err := s.ExtractText(ctx, extracted.Text)
+	if err == nil {
+		result.ProcessingMethod = extracted.Method
+	}
+	return result, err
+}
+
+func (s *Service) extractMedia(ctx context.Context, path, mimeType string) (*Result, error) {
+	data, err := readDocument(path, maxDocumentBytes)
+	if err != nil {
+		return nil, err
+	}
+	report, err := s.lab.ExtractLabReport(ctx, labextraction.ExtractLabReportInput{
+		Media: &labextraction.MediaInput{Data: data, MIMEType: mimeType},
+	})
+	if err != nil {
+		return nil, technicalError("Não foi possível extrair os dados laboratoriais.", err)
+	}
+	return finalizeReport(report, "gemini_multimodal", nil)
 }
 
 func (s *Service) ExtractText(ctx context.Context, input string) (*Result, error) {
@@ -54,18 +96,22 @@ func (s *Service) ExtractText(ctx context.Context, input string) (*Result, error
 		return nil, apperr.Internal("A extração laboratorial está indisponível.", nil)
 	}
 	if strings.TrimSpace(input) == "" {
-		return nil, unreadablePDF()
+		return nil, apperr.DomainRuleViolation("O documento não contém texto legível.", apperr.Violation{Field: "file", Reason: "text_not_readable"})
 	}
 	semanticText := text.NormalizeForSemanticExtraction(input)
 	report, err := s.lab.ExtractLabReport(ctx, labextraction.ExtractLabReportInput{Text: semanticText})
 	if err != nil {
 		return nil, technicalError("Não foi possível extrair os dados laboratoriais.", err)
 	}
+	return finalizeReport(report, "", &input)
+}
+
+func finalizeReport(report *labextraction.ExtractedLabReport, processor string, rawText *string) (*Result, error) {
 	if report == nil {
 		return nil, apperr.Internal("O extrator não retornou um resultado.", nil)
 	}
 	report.Normalize()
-	report.RawText = &input
+	report.RawText = rawText
 	assessStructure(report)
 	normalizeDates(report)
 	normalizeResults(report)
@@ -74,11 +120,26 @@ func (s *Service) ExtractText(ctx context.Context, input string) (*Result, error
 	if warnings == nil {
 		warnings = []labextraction.ExtractionWarning{}
 	}
-	return &Result{Status: report.Metadata.Status, Warnings: warnings, Report: *report, SummaryText: FormatSummary(report)}, nil
+	return &Result{Status: report.Metadata.Status, Warnings: warnings, Report: *report, SummaryText: FormatSummary(report), ProcessingMethod: processor}, nil
 }
 
-func unreadablePDF() error {
-	return apperr.DomainRuleViolation("Envie um PDF com texto selecionável e legível. PDFs escaneados não são compatíveis.", apperr.Violation{Field: "file", Reason: "text_not_readable"})
+func readDocument(path string, maximum int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, apperr.Internal("Não foi possível abrir o documento.", err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maximum+1))
+	if err != nil {
+		return nil, apperr.Internal("Não foi possível ler o documento.", err)
+	}
+	if int64(len(data)) > maximum {
+		return nil, &apperr.AppError{Kind: apperr.UPLOAD_SIZE_EXCEEDED, Message: fmt.Sprintf("o arquivo deve ter no máximo %d MiB", maximum/(1024*1024))}
+	}
+	if len(data) == 0 {
+		return nil, apperr.Validation("arquivo vazio", apperr.Violation{Field: "file", Reason: "empty"})
+	}
+	return data, nil
 }
 
 func technicalError(message string, err error) error {

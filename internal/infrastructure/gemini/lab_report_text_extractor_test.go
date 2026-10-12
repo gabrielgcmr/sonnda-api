@@ -18,6 +18,7 @@ func labReportExtractorTestClient(t *testing.T, generator ContentGenerator) *Cli
 	t.Helper()
 	cfg := testConfig()
 	cfg.MaxInputBytes = 64 * 1024
+	cfg.MaxMediaBytes = 64 * 1024
 	client, err := NewClientWithGenerator(cfg, generator)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestLabReportTextExtractorUsesPromptSchemaAndMapsResponse(t *testing.T) {
 		}
 		return geminiTextResponse(expectedJSON), nil
 	}))
-	extractor, err := NewLabReportTextExtractor(client)
+	extractor, err := NewLabReportExtractor(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestLabReportTextExtractorLeavesNormalizationToApplication(t *testing.T) {
 		capturedText = contents[0].Parts[0].Text
 		return geminiTextResponse(strings.ReplaceAll(readExpectedLabJSON(t, "glicose.expected.json"), `"99"`, `" 99 "`)), nil
 	}))
-	extractor, err := NewLabReportTextExtractor(client)
+	extractor, err := NewLabReportExtractor(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +120,36 @@ func TestLabReportTextExtractorLeavesNormalizationToApplication(t *testing.T) {
 	}
 }
 
+func TestLabReportExtractorForwardsMediaWithoutOCR(t *testing.T) {
+	media := []byte{0xff, 0xd8, 0xff, 0x01}
+	client := labReportExtractorTestClient(t, generatorFunc(func(_ context.Context, _ string, contents []*genai.Content, _ *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+		if len(contents) != 1 || len(contents[0].Parts) != 1 {
+			t.Fatalf("unexpected Gemini content: %+v", contents)
+		}
+		part := contents[0].Parts[0]
+		if part.InlineData == nil || part.InlineData.MIMEType != "image/jpeg" || !reflect.DeepEqual(part.InlineData.Data, media) {
+			t.Fatalf("media was not forwarded: %+v", part.InlineData)
+		}
+		return geminiTextResponse(readExpectedLabJSON(t, "glicose.expected.json")), nil
+	}))
+	extractor, err := NewLabReportExtractor(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := extractor.ExtractLabReport(context.Background(), labextraction.ExtractLabReportInput{
+		Media: &labextraction.MediaInput{Data: media, MIMEType: "image/jpeg"},
+	})
+	if err != nil || len(report.Tests) != 1 {
+		t.Fatalf("report=%+v err=%v", report, err)
+	}
+}
+
 func TestLabReportTextExtractorAcceptsEmptyReportWithoutAssessment(t *testing.T) {
 	client := labReportExtractorTestClient(t, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 		return geminiTextResponse(readExpectedLabJSON(t, "atestado.expected.json")), nil
 	}))
-	extractor, err := NewLabReportTextExtractor(client)
+	extractor, err := NewLabReportExtractor(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +179,7 @@ func TestLabReportTextExtractorValidatesJSONAndSchema(t *testing.T) {
 			client := labReportExtractorTestClient(t, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 				return geminiTextResponse(tc.payload), nil
 			}))
-			extractor, err := NewLabReportTextExtractor(client)
+			extractor, err := NewLabReportExtractor(client)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -182,7 +208,7 @@ func TestLabReportTextExtractorInterpretsProviderStopReasons(t *testing.T) {
 			client := labReportExtractorTestClient(t, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 				return response, nil
 			}))
-			extractor, err := NewLabReportTextExtractor(client)
+			extractor, err := NewLabReportExtractor(client)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -208,7 +234,7 @@ func TestLabReportTextExtractorRejectsMissingCandidateOrText(t *testing.T) {
 			client := labReportExtractorTestClient(t, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 				return tc.response, nil
 			}))
-			extractor, err := NewLabReportTextExtractor(client)
+			extractor, err := NewLabReportExtractor(client)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -221,18 +247,18 @@ func TestLabReportTextExtractorRejectsMissingCandidateOrText(t *testing.T) {
 }
 
 func TestLabReportTextExtractorPropagatesInputAndClientErrors(t *testing.T) {
-	if _, err := NewLabReportTextExtractor(nil); !errors.Is(err, ErrMissingLabExtractionClient) {
+	if _, err := NewLabReportExtractor(nil); !errors.Is(err, ErrMissingLabExtractionClient) {
 		t.Fatalf("expected missing client error, got %v", err)
 	}
 	clientErr := errors.New("provider down")
 	client := labReportExtractorTestClient(t, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 		return nil, clientErr
 	}))
-	extractor, err := NewLabReportTextExtractor(client)
+	extractor, err := NewLabReportExtractor(client)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := extractor.ExtractLabReport(context.Background(), labextraction.ExtractLabReportInput{}); !errors.Is(err, labextraction.ErrEmptyText) {
+	if _, err := extractor.ExtractLabReport(context.Background(), labextraction.ExtractLabReportInput{}); !errors.Is(err, labextraction.ErrEmptyInput) {
 		t.Fatalf("expected input validation error, got %v", err)
 	}
 	if _, err := extractor.ExtractLabReport(context.Background(), labextraction.ExtractLabReportInput{Text: "Glicose 99 mg/dL"}); !errors.Is(err, clientErr) {

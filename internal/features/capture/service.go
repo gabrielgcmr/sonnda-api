@@ -40,7 +40,7 @@ type Service interface {
 	UploadCapture(ctx context.Context, credential MobileCredential, input UploadInput) (*capturedomain.Capture, error)
 	ListCaptures(ctx context.Context, accountID uuid.UUID, page Pagination) (*CapturePage, error)
 	GetCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*SignedCaptureFile, error)
-	OpenCapturePDF(ctx context.Context, accountID, captureID uuid.UUID) (*CapturePDF, error)
+	OpenCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*CaptureFile, error)
 	DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error
 	Cleanup(ctx context.Context, opts CleanupOptions) (*CleanupReport, error)
 }
@@ -92,10 +92,11 @@ type SignedCaptureFile struct {
 	ExpiresAt time.Time
 }
 
-// CapturePDF is an open capture body; the caller must close Body.
-type CapturePDF struct {
+// CaptureFile is an open capture body; the caller must close Body.
+type CaptureFile struct {
 	Body             io.ReadCloser
 	OriginalFilename string
+	MIMEType         string
 	SizeBytes        int64
 }
 
@@ -434,7 +435,7 @@ func (s *service) GetCaptureFile(ctx context.Context, accountID, captureID uuid.
 	return &SignedCaptureFile{URL: url, ExpiresAt: now.Add(lifetime)}, nil
 }
 
-func (s *service) OpenCapturePDF(ctx context.Context, accountID, captureID uuid.UUID) (*CapturePDF, error) {
+func (s *service) OpenCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*CaptureFile, error) {
 	if accountID == uuid.Nil {
 		return nil, apperr.Unauthorized("autenticação necessária")
 	}
@@ -452,9 +453,6 @@ func (s *service) OpenCapturePDF(ctx context.Context, accountID, captureID uuid.
 	if err != nil {
 		return nil, mapRepositoryError("captureRepository.FindAvailableCapture", err)
 	}
-	if item.MIMEType != "application/pdf" {
-		return nil, &apperr.AppError{Kind: apperr.UNSUPPORTED_MEDIA_TYPE, Message: "a captura não é um PDF"}
-	}
 	if item.StorageURI == nil || strings.TrimSpace(*item.StorageURI) == "" {
 		return nil, apperr.Internal("arquivo da captura indisponível", errors.New("available capture has no storage URI"))
 	}
@@ -462,7 +460,7 @@ func (s *service) OpenCapturePDF(ctx context.Context, accountID, captureID uuid.
 	if err != nil {
 		return nil, mapStorageError("captureStorage.Open", err)
 	}
-	return &CapturePDF{Body: body, OriginalFilename: item.OriginalFilename, SizeBytes: item.SizeBytes}, nil
+	return &CaptureFile{Body: body, OriginalFilename: item.OriginalFilename, MIMEType: item.MIMEType, SizeBytes: item.SizeBytes}, nil
 }
 
 func (s *service) DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error {

@@ -14,7 +14,7 @@ import (
 	domaintext "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/textextraction"
 )
 
-func TestInvalidPDFIsUnreadable(t *testing.T) {
+func TestInvalidPDFRemainsTechnicalFailure(t *testing.T) {
 	if _, err := exec.LookPath("pdftotext"); err != nil {
 		t.Skip("pdftotext is required")
 	}
@@ -23,8 +23,8 @@ func TestInvalidPDFIsUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := NewCommandExtractor().extractPDF(context.Background(), path)
-	if !errors.Is(err, domaintext.ErrUnreadablePDF) {
-		t.Fatalf("invalid PDF must be classified as unreadable: %v", err)
+	if err == nil || errors.Is(err, domaintext.ErrUnreadablePDF) {
+		t.Fatalf("invalid PDF must not trigger multimodal fallback: %v", err)
 	}
 }
 

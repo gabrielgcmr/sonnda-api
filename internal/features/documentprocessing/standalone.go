@@ -11,7 +11,7 @@ import (
 )
 
 type StandaloneLabExtractor interface {
-	ExtractPDF(context.Context, string, string) (*extraction.Result, error)
+	ExtractDocument(context.Context, string, string, string) (*extraction.Result, error)
 }
 
 type StandaloneLabExtraction struct {
@@ -30,9 +30,9 @@ func (s *StandaloneLabExtraction) Authorize(currentAccount *accountdomain.Accoun
 	return s.authorizer.AuthorizeStandalone(currentAccount, ExtractStandaloneLab)
 }
 
-func (s *StandaloneLabExtraction) ExtractPDF(ctx context.Context, currentAccount *accountdomain.Account, path, filename string) (*extraction.Result, error) {
+func (s *StandaloneLabExtraction) ExtractDocument(ctx context.Context, currentAccount *accountdomain.Account, path, filename, mimeType string) (*extraction.Result, error) {
 	if err := s.Authorize(currentAccount); err != nil {
 		return nil, err
 	}
-	return s.extractor.ExtractPDF(ctx, path, filename)
+	return s.extractor.ExtractDocument(ctx, path, filename, mimeType)
 }

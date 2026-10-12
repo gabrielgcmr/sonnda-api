@@ -105,13 +105,13 @@ func main() {
 		logInfraFatal("falha ao configurar bucket de capturas", err)
 	}
 
-	var labTextExtractor labextraction.LabReportTextExtractor
+	var labExtractor labextraction.LabReportExtractor
 	if strings.TrimSpace(cfg.Gemini.APIKey) != "" {
 		geminiClient, err := geminiinfra.NewClient(ctx, cfg.Gemini)
 		if err != nil {
 			logInfraFatal("falha ao criar Gemini client", err)
 		}
-		labTextExtractor, err = geminiinfra.NewLabReportTextExtractor(geminiClient)
+		labExtractor, err = geminiinfra.NewLabReportExtractor(geminiClient)
 		if err != nil {
 			logInfraFatal("falha ao criar extrator laboratorial", err)
 		}
@@ -128,7 +128,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labTextExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
+	modules := bootstrap.NewModules(dbClient, redisClient, labExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
 
 	//8 Middlewares
 	//8.1 API

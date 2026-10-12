@@ -62,10 +62,6 @@ func (e *CommandExtractor) Extract(ctx context.Context, input domaintext.Extract
 func (e *CommandExtractor) extractPDF(ctx context.Context, localPath string) (*domaintext.ExtractOutput, error) {
 	text, err := e.run(ctx, "pdftotext", "-raw", localPath, "-")
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) && (exit.ExitCode() == 1 || exit.ExitCode() == 3) {
-			return nil, fmt.Errorf("%w: %w", domaintext.ErrUnreadablePDF, err)
-		}
 		return nil, err
 	}
 	if e.requireUsableText && !domaintext.IsUsableText(text) {

@@ -19,7 +19,7 @@ func (f generatorFunc) GenerateContent(ctx context.Context, model string, conten
 }
 
 func testConfig() config.GeminiConfig {
-	return config.GeminiConfig{Model: "test-model", Timeout: time.Second, MaxInputBytes: 1024, MaxOutputTokens: 256}
+	return config.GeminiConfig{Model: "test-model", Timeout: time.Second, MaxInputBytes: 1024, MaxMediaBytes: 1024, MaxOutputTokens: 256}
 }
 
 func TestClientConfigurationAndRequest(t *testing.T) {
@@ -54,6 +54,53 @@ func TestClientConfigurationAndRequest(t *testing.T) {
 	}
 }
 
+func TestClientMultimodalRequest(t *testing.T) {
+	media := &MediaInput{Data: []byte{0xff, 0xd8, 0xff, 0xe0}, MIMEType: " IMAGE/JPEG "}
+	client, err := NewClientWithGenerator(testConfig(), generatorFunc(func(_ context.Context, _ string, contents []*genai.Content, _ *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+		if len(contents) != 1 || len(contents[0].Parts) != 2 {
+			t.Fatalf("unexpected multimodal contents: %+v", contents)
+		}
+		if contents[0].Parts[0].Text != "Extraia o documento." {
+			t.Fatalf("unexpected prompt: %q", contents[0].Parts[0].Text)
+		}
+		blob := contents[0].Parts[1].InlineData
+		if blob == nil || blob.MIMEType != "image/jpeg" || !reflect.DeepEqual(blob.Data, media.Data) {
+			t.Fatalf("unexpected inline media: %+v", blob)
+		}
+		return &genai.GenerateContentResponse{}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Generate(t.Context(), GenerateRequest{Text: "Extraia o documento.", Media: media}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientAcceptsSupportedMediaSignatures(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		mimeType string
+		data     []byte
+	}{
+		{name: "PDF", mimeType: "application/pdf", data: []byte("%PDF-1.7")},
+		{name: "JPEG", mimeType: "image/jpeg", data: []byte{0xff, 0xd8, 0xff, 0xe0}},
+		{name: "PNG", mimeType: "image/png", data: []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClientWithGenerator(testConfig(), generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+				return &genai.GenerateContentResponse{}, nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Generate(t.Context(), GenerateRequest{Media: &MediaInput{Data: tc.data, MIMEType: tc.mimeType}}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestClientRejectsInputBeforeCallingSDK(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -78,6 +125,36 @@ func TestClientRejectsInputBeforeCallingSDK(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := client.Generate(context.Background(), tc.request); !errors.Is(err, tc.want) {
+				t.Fatalf("expected %v, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestClientRejectsInvalidMediaBeforeCallingSDK(t *testing.T) {
+	validPNG := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
+	for _, tc := range []struct {
+		name  string
+		media *MediaInput
+		limit int
+		want  error
+	}{
+		{name: "empty", media: &MediaInput{MIMEType: "image/png"}, limit: 100, want: ErrEmptyMedia},
+		{name: "too large", media: &MediaInput{Data: validPNG, MIMEType: "image/png"}, limit: 7, want: ErrMediaTooLarge},
+		{name: "unsupported", media: &MediaInput{Data: []byte("GIF89a"), MIMEType: "image/gif"}, limit: 100, want: ErrUnsupportedMedia},
+		{name: "signature mismatch", media: &MediaInput{Data: validPNG, MIMEType: "image/jpeg"}, limit: 100, want: ErrMediaTypeMismatch},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig()
+			cfg.MaxMediaBytes = tc.limit
+			client, err := NewClientWithGenerator(cfg, generatorFunc(func(context.Context, string, []*genai.Content, *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+				t.Fatal("SDK called for invalid media")
+				return nil, nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Generate(t.Context(), GenerateRequest{Media: tc.media}); !errors.Is(err, tc.want) {
 				t.Fatalf("expected %v, got %v", tc.want, err)
 			}
 		})

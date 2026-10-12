@@ -72,7 +72,10 @@ func (s *Drafts) Create(ctx context.Context, currentAccount *accountdomain.Accou
 	document, err := documents.NewExamDocument(input.PatientID, currentAccount.ID, uri, input.Filename, "application/pdf")
 	if err == nil {
 		status, kind := "pending", documents.ExamTypeLaboratory
-		method := "pdf_text_raw"
+		method := result.ProcessingMethod
+		if method == "" {
+			method = "pdf_text_raw"
+		}
 		document.ReviewStatus, document.ExamType, document.ExtractionMethod = &status, &kind, &method
 		document.Status = documents.DocumentStatusProcessed
 		err = s.repo.CreateDraft(ctx, document, snapshot)

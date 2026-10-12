@@ -11,7 +11,7 @@ import (
 
 func clearGeminiEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_TIMEOUT", "GEMINI_MAX_INPUT_BYTES", "GEMINI_MAX_OUTPUT_TOKENS"} {
+	for _, key := range []string{"GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_TIMEOUT", "GEMINI_MAX_INPUT_BYTES", "GEMINI_MAX_MEDIA_BYTES", "GEMINI_MAX_OUTPUT_TOKENS"} {
 		t.Setenv(key, "")
 	}
 }
@@ -22,7 +22,7 @@ func TestGeminiConfigDefaultsWithoutCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.APIKey != "" || cfg.Model != "gemini-3.5-flash-lite" || cfg.Timeout != 30*time.Second || cfg.MaxInputBytes != 131072 || cfg.MaxOutputTokens != 8192 {
+	if cfg.APIKey != "" || cfg.Model != "gemini-3.5-flash-lite" || cfg.Timeout != 30*time.Second || cfg.MaxInputBytes != 131072 || cfg.MaxMediaBytes != 10*1024*1024 || cfg.MaxOutputTokens != 8192 {
 		t.Fatal("unexpected Gemini defaults")
 	}
 }
@@ -33,12 +33,13 @@ func TestGeminiConfigOverrides(t *testing.T) {
 	t.Setenv("GEMINI_MODEL", " test-model ")
 	t.Setenv("GEMINI_TIMEOUT", "5s")
 	t.Setenv("GEMINI_MAX_INPUT_BYTES", "1024")
+	t.Setenv("GEMINI_MAX_MEDIA_BYTES", "2048")
 	t.Setenv("GEMINI_MAX_OUTPUT_TOKENS", "256")
 	cfg, err := loadGeminiConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.APIKey != "test-key" || cfg.Model != "test-model" || cfg.Timeout != 5*time.Second || cfg.MaxInputBytes != 1024 || cfg.MaxOutputTokens != 256 {
+	if cfg.APIKey != "test-key" || cfg.Model != "test-model" || cfg.Timeout != 5*time.Second || cfg.MaxInputBytes != 1024 || cfg.MaxMediaBytes != 2048 || cfg.MaxOutputTokens != 256 {
 		t.Fatal("Gemini configuration overrides were not applied")
 	}
 }
@@ -51,6 +52,9 @@ func TestGeminiConfigRejectsInvalidLimits(t *testing.T) {
 		{"GEMINI_MAX_INPUT_BYTES", "text"},
 		{"GEMINI_MAX_INPUT_BYTES", "0"},
 		{"GEMINI_MAX_INPUT_BYTES", "-1"},
+		{"GEMINI_MAX_MEDIA_BYTES", "text"},
+		{"GEMINI_MAX_MEDIA_BYTES", "0"},
+		{"GEMINI_MAX_MEDIA_BYTES", "-1"},
 		{"GEMINI_MAX_OUTPUT_TOKENS", "1.5"},
 		{"GEMINI_MAX_OUTPUT_TOKENS", "-1"},
 		{"GEMINI_MAX_OUTPUT_TOKENS", "0"},

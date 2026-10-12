@@ -36,10 +36,10 @@ que exigem banco estão identificados como testes de integração.
      metadados laboratoriais e revisão.
    - Não depende de HTTP, persistência ou da raiz da feature.
 2. **`textextraction` e `labextraction` (Folhas)**:
-   - Definem interfaces (`Extractor`, `LabReportTextExtractor`), schemas e DTOs puros.
+   - Definem interfaces (`Extractor`, `LabReportExtractor`), schemas e DTOs puros.
    - Não dependem da raiz da feature, de HTTP, banco de dados ou SDKs de terceiros.
 3. **`extraction` (Coordenação de extração)**:
-   - Compõe `textextraction.Extractor` e `labextraction.LabReportTextExtractor`.
+   - Compõe `textextraction.Extractor` e `labextraction.LabReportExtractor`.
    - Executa normalização de entrada semântica, avaliação de resultados e geração de resumo.
    - Não depende de HTTP, banco de dados, storage nem da raiz de `documentprocessing`.
 4. **Raiz de `documentprocessing`**:

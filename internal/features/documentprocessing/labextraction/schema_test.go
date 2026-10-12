@@ -41,7 +41,7 @@ func readContractFixture(t *testing.T, filename string) []byte {
 
 func TestExtractLabReportInput(t *testing.T) {
 	for _, text := range []string{"", " \t\n\r", "\u00a0"} {
-		if err := (ExtractLabReportInput{Text: text}).Validate(); !errors.Is(err, ErrEmptyText) {
+		if err := (ExtractLabReportInput{Text: text}).Validate(); !errors.Is(err, ErrEmptyInput) {
 			t.Fatalf("expected empty text error, got %v", err)
 		}
 	}
@@ -52,6 +52,16 @@ func TestExtractLabReportInput(t *testing.T) {
 	}
 	if input.Text != original {
 		t.Fatal("input validation changed the original text")
+	}
+	media := ExtractLabReportInput{Media: &MediaInput{Data: []byte{0xff, 0xd8, 0xff}, MIMEType: "image/jpeg"}}
+	if err := media.Validate(); err != nil {
+		t.Fatalf("valid media rejected: %v", err)
+	}
+	if err := (ExtractLabReportInput{Text: "Glicose 90", Media: media.Media}).Validate(); !errors.Is(err, ErrAmbiguousInput) {
+		t.Fatalf("expected ambiguous input error, got %v", err)
+	}
+	if err := (ExtractLabReportInput{Media: &MediaInput{Data: []byte{1}}}).Validate(); !errors.Is(err, ErrInvalidMediaType) {
+		t.Fatalf("expected media type error, got %v", err)
 	}
 }
 

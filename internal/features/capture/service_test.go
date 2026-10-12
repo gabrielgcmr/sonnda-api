@@ -772,55 +772,43 @@ func TestGetCaptureFileNeverSignsLongerThanFiveMinutes(t *testing.T) {
 	}
 }
 
-func TestOpenCapturePDFReadsOwnedAvailableCapture(t *testing.T) {
+func TestOpenCaptureFileReadsOwnedAvailableCapture(t *testing.T) {
 	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
 	accountID, captureID := uuid.New(), uuid.New()
-	uri := "supabase://captures/account/capture.pdf"
+	uri := "supabase://captures/account/capture.jpg"
 	repository := &serviceRepository{availableByID: &capturedomain.Capture{
-		ID: captureID, AccountID: accountID, StorageURI: &uri, OriginalFilename: "exame.pdf",
-		MIMEType: "application/pdf", SizeBytes: 8, Status: capturedomain.StatusAvailable, ExpiresAt: now.Add(time.Hour),
+		ID: captureID, AccountID: accountID, StorageURI: &uri, OriginalFilename: "exame.jpg",
+		MIMEType: "image/jpeg", SizeBytes: 4, Status: capturedomain.StatusAvailable, ExpiresAt: now.Add(time.Hour),
 	}}
-	storage := &captureStorageStub{openBody: []byte("%PDF-1.4")}
+	storage := &captureStorageStub{openBody: []byte{0xff, 0xd8, 0xff, 0xe0}}
 	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
 
-	file, err := service.OpenCapturePDF(t.Context(), accountID, captureID)
+	file, err := service.OpenCaptureFile(t.Context(), accountID, captureID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer file.Body.Close()
 	content, _ := io.ReadAll(file.Body)
-	if string(content) != "%PDF-1.4" || file.OriginalFilename != "exame.pdf" || file.SizeBytes != 8 {
-		t.Fatalf("unexpected capture file: %+v content=%q", file, content)
+	if !bytes.Equal(content, []byte{0xff, 0xd8, 0xff, 0xe0}) || file.OriginalFilename != "exame.jpg" || file.MIMEType != "image/jpeg" || file.SizeBytes != 4 {
+		t.Fatalf("unexpected capture file: %+v content=%v", file, content)
 	}
 	if repository.ownedAccount != accountID || repository.ownedCapture != captureID || !repository.listNow.Equal(now) || storage.openedURI != uri {
 		t.Fatalf("capture lookup was not scoped: account=%s capture=%s now=%s uri=%q", repository.ownedAccount, repository.ownedCapture, repository.listNow, storage.openedURI)
 	}
 }
 
-func TestOpenCapturePDFRejectsMissingOrNonPDFCaptureWithoutReadingStorage(t *testing.T) {
+func TestOpenCaptureFileRejectsMissingCaptureWithoutReadingStorage(t *testing.T) {
 	now := time.Date(2026, 10, 9, 18, 0, 0, 0, time.UTC)
-	uri := "supabase://captures/account/capture.jpg"
-	for _, tc := range []struct {
-		name      string
-		available *capturedomain.Capture
-		want      apperr.ErrorKind
-	}{
-		{name: "missing, expired or from another account", want: apperr.NOT_FOUND},
-		{name: "image", available: &capturedomain.Capture{ID: uuid.New(), StorageURI: &uri, MIMEType: "image/jpeg", Status: capturedomain.StatusAvailable, ExpiresAt: now.Add(time.Hour)}, want: apperr.UNSUPPORTED_MEDIA_TYPE},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			repository := &serviceRepository{availableByID: tc.available}
-			storage := &captureStorageStub{openBody: []byte("%PDF-1.4")}
-			service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
+	repository := &serviceRepository{}
+	storage := &captureStorageStub{openBody: []byte("%PDF-1.4")}
+	service := newService(repository, storage, fixedPairingCodeGenerator{}, func() time.Time { return now })
 
-			file, err := service.OpenCapturePDF(t.Context(), uuid.New(), uuid.New())
-			if file != nil || apperr.ErrorCodeOf(err) != tc.want {
-				t.Fatalf("file=%+v err=%v, want %s", file, err, tc.want)
-			}
-			if storage.openedURI != "" {
-				t.Fatalf("storage was read for a rejected capture: %q", storage.openedURI)
-			}
-		})
+	file, err := service.OpenCaptureFile(t.Context(), uuid.New(), uuid.New())
+	if file != nil || apperr.ErrorCodeOf(err) != apperr.NOT_FOUND {
+		t.Fatalf("file=%+v err=%v", file, err)
+	}
+	if storage.openedURI != "" {
+		t.Fatalf("storage was read for a rejected capture: %q", storage.openedURI)
 	}
 }
 

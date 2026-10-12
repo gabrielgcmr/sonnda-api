@@ -27,7 +27,7 @@ type ExamsModule struct {
 	StandaloneLabExtractionHandler *documenthttp.StandaloneLabExtractionHandler
 }
 
-func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
+func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportExtractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
 	patients := patientpostgres.NewRepository(db)
 	labs := labpostgres.NewRepository(db)
 	documentRepo := documentpostgres.NewDocumentRepository(db)
@@ -42,18 +42,24 @@ func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportTextExtractor
 	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
 	return &ExamsModule{
 		Handler:                        documenthttp.NewExams(service, drafts, confirmer, storage),
-		StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone, capturedPDFSource{captures: captures}),
+		StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone, capturedFileSource{captures: captures}),
 	}
 }
 
-type capturedPDFSource struct {
-	captures capture.Service
+type capturedFileSource struct {
+	captures captureFileSource
 }
 
-func (s capturedPDFSource) OpenCapturedPDF(ctx context.Context, accountID, captureID uuid.UUID) (*documenthttp.CapturedPDF, error) {
-	file, err := s.captures.OpenCapturePDF(ctx, accountID, captureID)
+type captureFileSource interface {
+	OpenCaptureFile(ctx context.Context, accountID, captureID uuid.UUID) (*capture.CaptureFile, error)
+}
+
+func (s capturedFileSource) OpenCapturedFile(ctx context.Context, accountID, captureID uuid.UUID) (*documenthttp.CapturedFile, error) {
+	file, err := s.captures.OpenCaptureFile(ctx, accountID, captureID)
 	if err != nil {
 		return nil, err
 	}
-	return &documenthttp.CapturedPDF{Body: file.Body, Filename: file.OriginalFilename}, nil
+	return &documenthttp.CapturedFile{
+		Body: file.Body, Filename: file.OriginalFilename, MIMEType: file.MIMEType, SizeBytes: file.SizeBytes,
+	}, nil
 }

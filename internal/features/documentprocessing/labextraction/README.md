@@ -1,12 +1,12 @@
 <!-- internal/features/documentprocessing/labextraction/README.md -->
-# Contrato de extração laboratorial por texto
+# Contrato de extração laboratorial
 
-Este pacote define o contrato de entrada textual (`ExtractLabReportInput`), o contrato do extrator semântico (`LabReportTextExtractor`), os tipos de dados e o JSON Schema versionado (`lab_report.schema.json`).
+Este pacote define o contrato de entrada textual ou multimodal (`ExtractLabReportInput`), o contrato do extrator semântico (`LabReportExtractor`), os tipos de dados e o JSON Schema versionado (`lab_report.schema.json`).
 
 ## Entrada e responsabilidades
 
-`ExtractLabReportInput{Text: texto}` aceita texto não vazio e preserva a entrada.
-`LabReportTextExtractor` é a interface implementada por adaptadores externos (como Gemini em `internal/infrastructure/gemini`).
+`ExtractLabReportInput` aceita exatamente uma origem: texto não vazio ou mídia PDF, JPEG ou PNG.
+`LabReportExtractor` é a interface implementada por adaptadores externos (como Gemini em `internal/infrastructure/gemini`).
 Paciente, usuário, persistência, rascunhos e storage ficam a cargo da feature `documentprocessing` e dos casos de uso de confirmação.
 
 ## Correspondência com o banco

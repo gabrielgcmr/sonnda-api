@@ -58,7 +58,7 @@ func TestExtractionPreservesExistingAssessmentMetadata(t *testing.T) {
 			if tc.inputStatus == lab.ExtractionStatusFailed {
 				wantWarnings = append(wantWarnings, lab.ExtractionWarning{Code: "no_usable_results", Message: "Nenhum resultado laboratorial utilizável foi encontrado."})
 			}
-			result, err := New(nil, labStub{report: report}).ExtractText(context.Background(), "laudo")
+			result, err := New(nil, &labStub{report: report}).ExtractText(context.Background(), "laudo")
 			if err != nil {
 				t.Fatal(err)
 			}

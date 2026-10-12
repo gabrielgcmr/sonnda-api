@@ -90,7 +90,7 @@ func TestExtractionBehaviorBaseline(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			calls := 0
 			provider, model := "stub", "baseline-model"
-			var extractor lab.LabReportTextExtractor = baselineLabExtractor(func(_ context.Context, input lab.ExtractLabReportInput) (*lab.ExtractedLabReport, error) {
+			var extractor lab.LabReportExtractor = baselineLabExtractor(func(_ context.Context, input lab.ExtractLabReportInput) (*lab.ExtractedLabReport, error) {
 				calls++
 				if input.Text != strings.ReplaceAll(baselineText, "\uFF05", "%") {
 					t.Fatalf("semantic extractor input changed: %q", input.Text)
@@ -105,7 +105,7 @@ func TestExtractionBehaviorBaseline(t *testing.T) {
 			if tc.UseGemini {
 				provider = "gemini"
 				client, err := gemini.NewClientWithGenerator(config.GeminiConfig{
-					Model: model, Timeout: time.Second, MaxInputBytes: 64 * 1024, MaxOutputTokens: 4096,
+					Model: model, Timeout: time.Second, MaxInputBytes: 64 * 1024, MaxMediaBytes: 10 * 1024 * 1024, MaxOutputTokens: 4096,
 				}, baselineGenerator(func(_ context.Context, gotModel string, contents []*genai.Content, _ *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 					calls++
 					if gotModel != model || len(contents) != 1 || len(contents[0].Parts) != 1 {
@@ -121,7 +121,7 @@ func TestExtractionBehaviorBaseline(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				extractor, err = gemini.NewLabReportTextExtractor(client)
+				extractor, err = gemini.NewLabReportExtractor(client)
 				if err != nil {
 					t.Fatal(err)
 				}
