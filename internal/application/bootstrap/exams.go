@@ -9,25 +9,26 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
 	documenthttp "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/http"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/imagingreport"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	documentpostgres "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/postgres"
 	patientaccess "github.com/gabrielgcmr/sonnda/internal/features/patient/access"
 	accesspostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/access/postgres"
 	labpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/postgres"
 	patientpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/profile/postgres"
 	pginfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
-	textinfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/textextraction"
+	pdftext "github.com/gabrielgcmr/sonnda/internal/infrastructure/pdftotext"
 	"github.com/google/uuid"
 )
 
 type ExamsModule struct {
-	Handler                        *documenthttp.ExamsHandler
-	StandaloneLabExtractionHandler *documenthttp.StandaloneLabExtractionHandler
+	Handler                            *documenthttp.ExamsHandler
+	StandaloneLabExtractionHandler     *documenthttp.StandaloneLabExtractionHandler
+	StandaloneImagingExtractionHandler *documenthttp.StandaloneImagingExtractionHandler
 }
 
-func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportExtractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
+func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imaging imagingreport.Extractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
 	patients := patientpostgres.NewRepository(db)
 	labs := labpostgres.NewRepository(db)
 	documentRepo := documentpostgres.NewDocumentRepository(db)
@@ -35,14 +36,17 @@ func NewExamsModule(db *pginfra.Client, lab labextraction.LabReportExtractor, st
 	authorizer := documents.NewAuthorizer(documentRepo, access)
 	service := documents.New(documentRepo, authorizer)
 	repo := documentpostgres.NewDraftRepository(db, labs)
-	reader := textinfra.NewCommandExtractorWithOptions(textinfra.CommandExtractorOptions{Timeout: config.Timeout, RequireUsableText: true})
-	extractor := extraction.New(reader, lab)
+	reader := pdftext.NewExtractorWithOptions(pdftext.ExtractorOptions{Timeout: config.Timeout, RequireUsableText: true})
+	extractor := labreport.New(reader, lab)
+	imagingService := imagingreport.New(reader, imaging)
 	drafts := documents.NewDrafts(repo, extractor, storage, authorizer)
 	confirmer := labdocumentconfirmation.New(authorizer, repo, labs)
 	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
+	standaloneImaging := documents.NewStandaloneImagingExtraction(imagingService, authorizer)
 	return &ExamsModule{
-		Handler:                        documenthttp.NewExams(service, drafts, confirmer, storage),
-		StandaloneLabExtractionHandler: documenthttp.NewStandaloneLabExtraction(standalone, capturedFileSource{captures: captures}),
+		Handler:                            documenthttp.NewExams(service, drafts, confirmer, storage),
+		StandaloneLabExtractionHandler:     documenthttp.NewStandaloneLabExtraction(standalone, capturedFileSource{captures: captures}),
+		StandaloneImagingExtractionHandler: documenthttp.NewStandaloneImagingExtraction(standaloneImaging, capturedFileSource{captures: captures}),
 	}
 }
 

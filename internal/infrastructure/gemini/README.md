@@ -33,10 +33,10 @@ configura `application/json` na resposta.
 
 ## Extrator laboratorial
 
-`NewLabReportExtractor(client)` implementa `labextraction.LabReportExtractor`.
+`NewLabReportExtractor(client)` implementa `labreport.LabReportExtractor`.
 Ele recebe texto ou mídia em `ExtractLabReportInput`, chama o cliente Gemini com prompt
 específico para exames laboratoriais e valida a resposta contra o schema local de
-`internal/features/documentprocessing/labextraction`.
+`internal/features/documentprocessing/labreport`.
 
 O prompt tem uma barreira para retornar `tests: []` em laudos de imagem, atestados,
 pedidos, receitas e prescrições.
@@ -52,7 +52,14 @@ O adaptador trata:
 - JSON fora do schema;
 - resposta válida sem itens, devolvida sem avaliação de qualidade pelo adaptador.
 
-O serviço `documentprocessing/extraction` prepara o texto semântico ou encaminha a mídia, preserva o
+## Extrator de laudos escritos de imagem
+
+`NewImagingReportExtractor(client)` implementa `imagingreport.Extractor` com schema próprio.
+O adaptador retorna a classificação do documento e os campos do laudo sem interpretar
+pixels radiológicos, calcular classificações ou completar achados ausentes. O serviço
+`documentprocessing/imagingreport` decide se o arquivo é compatível e gera o resumo.
+
+O serviço `documentprocessing/labreport` prepara o texto semântico ou encaminha a mídia, preserva o
 texto original e aplica normalização, avisos e estados (`needs_review`, `partial`
 ou `succeeded`). O adaptador valida a resposta e informa fornecedor/modelo.
 

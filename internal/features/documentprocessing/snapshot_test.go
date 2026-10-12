@@ -5,50 +5,49 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	lab "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 )
 
 func snapshotPtr[T any](v T) *T { return &v }
 
 func TestSnapshotEncodeDecodeRoundtrip(t *testing.T) {
-	warnings := []lab.ExtractionWarning{{Code: "review", Message: "Check original", Field: "tests.items"}}
+	warnings := []labreport.ExtractionWarning{{Code: "review", Message: "Check original", Field: "tests.items"}}
 	raw := "Raw document text"
 	val := "95"
 	unit := "mg/dL"
 	ref := "70-99"
 	date := "2026-09-01"
 
-	original := &extraction.Result{
-		Status:      lab.ExtractionStatusPartial,
+	original := &labreport.Result{
+		Status:      labreport.ExtractionStatusPartial,
 		Warnings:    warnings,
 		SummaryText: "Glicose: 95 mg/dL",
-		Report: lab.ExtractedLabReport{
-			Metadata: lab.ExtractionMetadata{
+		Report: labreport.ExtractedLabReport{
+			Metadata: labreport.ExtractionMetadata{
 				Provider:   "gemini",
 				Processor:  "test-processor",
 				Model:      "gemini-1.5",
-				Status:     lab.ExtractionStatusPartial,
+				Status:     labreport.ExtractionStatusPartial,
 				Confidence: snapshotPtr(0.92),
 				Warnings:   warnings,
 			},
 			RawText: &raw,
-			Tests: []lab.ExtractedTestResult{
+			Tests: []labreport.ExtractedTestResult{
 				{
 					TestName:    "Glicose",
 					CollectedAt: &date,
 					RawText:     snapshotPtr("Glicose em jejum"),
-					Status:      lab.ExtractionStatusPartial,
+					Status:      labreport.ExtractionStatusPartial,
 					Confidence:  snapshotPtr(0.9),
 					Warnings:    warnings,
-					Items: []lab.ExtractedTestItem{
+					Items: []labreport.ExtractedTestItem{
 						{
 							ParameterName: "Glicose",
 							ResultValue:   &val,
 							ResultUnit:    &unit,
 							ReferenceText: &ref,
 							RawText:       snapshotPtr("Glicose 95 mg/dL"),
-							Status:        lab.ExtractionStatusPartial,
+							Status:        labreport.ExtractionStatusPartial,
 							Confidence:    snapshotPtr(0.85),
 							Warnings:      warnings,
 						},

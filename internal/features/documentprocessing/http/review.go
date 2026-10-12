@@ -8,12 +8,12 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	"github.com/gabrielgcmr/sonnda/internal/api/humaerror"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
+	labreport "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 )
 
-type extractionOutput struct{ Body extraction.Result }
+type extractionOutput struct{ Body labreport.Result }
 type confirmationOutput struct{ Body laboratory.LabReportOutput }
 
 func registerReviewRoutes(api huma.API, security []map[string][]string, endpoints examEndpoints) {

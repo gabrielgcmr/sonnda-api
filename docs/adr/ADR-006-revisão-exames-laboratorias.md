@@ -15,14 +15,13 @@ O fluxo temporário aceita PDFs de até 10 MiB. O fluxo persistente por paciente
 
 A feature `internal/features/documentprocessing` concentra os contratos de processamento:
 
-- `documentprocessing/textextraction`: contrato de leitura (`Extractor`), qualidade (`IsUsableText`) e normalização textual.
-- `documentprocessing/labextraction`: contrato (`LabReportTextExtractor`), tipos e schema JSON da extração estruturada.
-- `documentprocessing/extraction`: coordenação da extração (`Service`), normalização semântica, avaliação e resumo. Não depende de HTTP, storage nem banco de dados.
+- `documentprocessing/textreading`: contrato de leitura (`Extractor`), qualidade (`IsUsableText`) e normalização textual.
+- `documentprocessing/labreport`: contrato (`LabReportExtractor`), tipos, schema JSON e coordenação da extração. Não depende de HTTP, storage nem banco de dados.
 - Raiz de `documentprocessing`:
   - `queries.go`: consultas públicas internas de documentos e textos extraídos (`Service`).
   - `drafts.go`: coordenação do upload, criação com snapshot e exclusão de rascunhos.
   - `snapshot.go`: codificação (`EncodeExtractionSnapshot`) e decodificação (`DecodeExtractionSnapshot`) do snapshot versionado.
-- Infraestrutura: implementações de leitura de texto (`infrastructure/textextraction`) e cliente Gemini (`infrastructure/gemini`).
+- Infraestrutura: leitura de PDF (`infrastructure/pdftotext`), OCR (`infrastructure/ocr`) e cliente Gemini (`infrastructure/gemini`).
 - `labdocumentconfirmation`: caso de uso que converte o snapshot conferido em histórico clínico (`patient/exam/laboratory`).
 
 Componentes sem uso foram eliminados: o classificador heurístico (`router.go`), o fallback textual secundário e o helper HTTP `isNilExtractor`.

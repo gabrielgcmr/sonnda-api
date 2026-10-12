@@ -26,11 +26,11 @@ Simple instructions for coding agents working on this repo.
 
 - The codebase is organized primarily by business feature under `internal/features`. The migration is incremental; do not assume every feature has the same internal package layout.
 - Feature-specific models, contracts, services, HTTP handlers, and persistence adapters belong with their owning feature where applicable. Current feature areas include `account`, `auth`, `documentprocessing`, and `patient` (`access`, `profile`, and `exam`).
-- `documentprocessing` owns document workflows, extraction coordination, snapshots, and the file-storage contract. Its specialized packages include `domain`, `extraction`, `labextraction`, `textextraction`, `http`, and `postgres`.
+- `documentprocessing` owns document workflows, extraction coordination, snapshots, and the file-storage contract. Its specialized packages include `domain`, `labreport`, `imagingreport`, `textreading`, `http`, and `postgres`.
 - `internal/domain` contains shared domain concepts used by multiple features, currently including demographics. Feature-specific domain models live under their feature.
 - `internal/application/bootstrap` composes modules and dependencies. `internal/application/usecase` contains cross-feature workflows, including patient creation and laboratory-document confirmation.
 - `internal/api` owns Gin/Huma setup, shared middleware and helpers, route composition, and HTTP error translation. Feature handlers remain in their feature packages. Huma route registrations are the OpenAPI source of truth; export `artifacts/openapi.json` locally and use each consumer's Taskfile command to regenerate clients.
-- `internal/infrastructure` contains concrete adapters: PostgreSQL and generated sqlc code under `database/postgres`, plus `auth`, `filestorage`, `redis`, `documentai`, `gemini`, and `textextraction`.
+- `internal/infrastructure` contains concrete adapters: PostgreSQL and generated sqlc code under `database/postgres`, plus `auth`, `filestorage`, `redis`, `documentai`, `gemini`, `pdftotext`, and `ocr`.
 - `internal/kernel` contains cross-cutting application errors, persistence errors, and observability. `internal/config` owns environment and integration configuration.
 - Patient access checks live in `internal/features/patient/access`; the checker permits the patient owner or an account with an active grant. It does not currently implement action-level, account-type, or professional-kind authorization.
 

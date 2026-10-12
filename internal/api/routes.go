@@ -21,19 +21,20 @@ import (
 )
 
 type APIDependencies struct {
-	APIInfo                        APIInfo
-	Auth                           *authhttp.Middleware
-	Account                        *accounthttp.Middleware
-	AccountHandler                 *accounthttp.Handler
-	CaptureHandler                 *capturehttp.Handler
-	CaptureAuth                    *capturehttp.Middleware
-	CaptureCleanup                 *capturehttp.CleanupHandler
-	PatientAccessHandler           *accesshttp.Handler
-	PatientHandler                 *profilehttp.Handler
-	PatientProblemHandler          *problemhttp.Handler
-	LaboratoryHandler              *laboratoryhttp.Handler
-	ExamsHandler                   *documentprocessinghttp.ExamsHandler
-	StandaloneLabExtractionHandler *documentprocessinghttp.StandaloneLabExtractionHandler
+	APIInfo                            APIInfo
+	Auth                               *authhttp.Middleware
+	Account                            *accounthttp.Middleware
+	AccountHandler                     *accounthttp.Handler
+	CaptureHandler                     *capturehttp.Handler
+	CaptureAuth                        *capturehttp.Middleware
+	CaptureCleanup                     *capturehttp.CleanupHandler
+	PatientAccessHandler               *accesshttp.Handler
+	PatientHandler                     *profilehttp.Handler
+	PatientProblemHandler              *problemhttp.Handler
+	LaboratoryHandler                  *laboratoryhttp.Handler
+	ExamsHandler                       *documentprocessinghttp.ExamsHandler
+	StandaloneLabExtractionHandler     *documentprocessinghttp.StandaloneLabExtractionHandler
+	StandaloneImagingExtractionHandler *documentprocessinghttp.StandaloneImagingExtractionHandler
 }
 
 type routeGroups struct {
@@ -109,6 +110,7 @@ func registerRuntimeRoutes(groups routeGroups, deps *APIDependencies) {
 
 	deps.ExamsHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 	deps.StandaloneLabExtractionHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
+	deps.StandaloneImagingExtractionHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 	deps.LaboratoryHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 }
 
@@ -128,6 +130,7 @@ func registerOpenAPIRoutes(groups routeGroups) {
 
 	documentprocessinghttp.RegisterExamsOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	documentprocessinghttp.RegisterStandaloneLabExtractionOpenAPIRoutes(groups.onboarded, bearerSecurity())
+	documentprocessinghttp.RegisterStandaloneImagingExtractionOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	laboratoryhttp.RegisterOpenAPIRoutes(groups.onboarded, bearerSecurity())
 }
 
@@ -168,6 +171,9 @@ func validateAPIDependencies(deps *APIDependencies) error {
 	}
 	if deps == nil || deps.StandaloneLabExtractionHandler == nil {
 		missing = append(missing, "StandaloneLabExtractionHandler")
+	}
+	if deps == nil || deps.StandaloneImagingExtractionHandler == nil {
+		missing = append(missing, "StandaloneImagingExtractionHandler")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("dependências obrigatórias da API ausentes: %s", strings.Join(missing, ", "))

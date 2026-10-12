@@ -45,7 +45,7 @@ func TestValidateAPIDependenciesReportsEveryMissingDependency(t *testing.T) {
 }
 
 func TestValidateAPIDependenciesReportsNilSetDeterministically(t *testing.T) {
-	const want = "dependências obrigatórias da API ausentes: Auth, Account, AccountHandler, CaptureHandler, CaptureAuth, CaptureCleanup, PatientAccessHandler, PatientHandler, PatientProblemHandler, LaboratoryHandler, ExamsHandler, StandaloneLabExtractionHandler"
+	const want = "dependências obrigatórias da API ausentes: Auth, Account, AccountHandler, CaptureHandler, CaptureAuth, CaptureCleanup, PatientAccessHandler, PatientHandler, PatientProblemHandler, LaboratoryHandler, ExamsHandler, StandaloneLabExtractionHandler, StandaloneImagingExtractionHandler"
 	err := validateAPIDependencies(nil)
 	if err == nil || err.Error() != want {
 		t.Fatalf("erro = %q; esperado %q", err, want)

@@ -13,17 +13,18 @@ import (
 
 func completeTestDependencies() *APIDependencies {
 	return &APIDependencies{
-		Auth:                           authenticatedTestMiddleware(),
-		Account:                        accounthttp.NewMiddleware(nil),
-		AccountHandler:                 accounthttp.NewHandler(nil, nil),
-		CaptureHandler:                 capturehttp.NewHandler(nil),
-		CaptureAuth:                    capturehttp.NewMiddleware(nil),
-		CaptureCleanup:                 capturehttp.NewCleanupHandler(nil, "test-cleanup-token"),
-		PatientAccessHandler:           accesshttp.NewHandler(nil),
-		PatientHandler:                 profilehttp.NewHandler(nil, nil),
-		PatientProblemHandler:          problemhttp.NewHandler(nil),
-		LaboratoryHandler:              laboratoryhttp.NewHandler(nil),
-		ExamsHandler:                   documentprocessinghttp.NewExams(nil, nil, nil, nil),
-		StandaloneLabExtractionHandler: documentprocessinghttp.NewStandaloneLabExtraction(nil, nil),
+		Auth:                               authenticatedTestMiddleware(),
+		Account:                            accounthttp.NewMiddleware(nil),
+		AccountHandler:                     accounthttp.NewHandler(nil, nil),
+		CaptureHandler:                     capturehttp.NewHandler(nil),
+		CaptureAuth:                        capturehttp.NewMiddleware(nil),
+		CaptureCleanup:                     capturehttp.NewCleanupHandler(nil, "test-cleanup-token"),
+		PatientAccessHandler:               accesshttp.NewHandler(nil),
+		PatientHandler:                     profilehttp.NewHandler(nil, nil),
+		PatientProblemHandler:              problemhttp.NewHandler(nil),
+		LaboratoryHandler:                  laboratoryhttp.NewHandler(nil),
+		ExamsHandler:                       documentprocessinghttp.NewExams(nil, nil, nil, nil),
+		StandaloneLabExtractionHandler:     documentprocessinghttp.NewStandaloneLabExtraction(nil, nil),
+		StandaloneImagingExtractionHandler: documentprocessinghttp.NewStandaloneImagingExtraction(nil, nil),
 	}
 }

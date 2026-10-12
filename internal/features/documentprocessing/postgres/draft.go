@@ -1,4 +1,4 @@
-// internal/features/documentprocessing/postgres/drafts.go
+// internal/features/documentprocessing/postgres/draft.go
 package postgres
 
 import (

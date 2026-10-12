@@ -8,7 +8,7 @@ import (
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	domain "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
 	labs "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/domain"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
@@ -51,7 +51,7 @@ func (s *Service) Confirm(ctx context.Context, currentAccount *accountdomain.Acc
 	if err != nil {
 		return nil, err
 	}
-	if !extraction.Usable(&result.Report) {
+	if !labreport.Usable(&result.Report) {
 		return nil, apperr.DomainRuleViolation("A extração não contém resultados utilizáveis.")
 	}
 	report, err := mapExtractedToDomain(document.PatientID, document.UploadedByUserID, &result.Report)

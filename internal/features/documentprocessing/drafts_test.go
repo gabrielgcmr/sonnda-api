@@ -4,16 +4,16 @@ package documentprocessing
 import (
 	"context"
 	"errors"
-	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
-	domain "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	lab "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
-	"github.com/google/uuid"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
+	domain "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
+	"github.com/google/uuid"
 )
 
 type allowDocumentAuthorizer struct{}
@@ -54,11 +54,11 @@ func (s *draftStoreStub) FinishDelete(context.Context, uuid.UUID) error {
 }
 
 type pdfStub struct {
-	result *extraction.Result
+	result *labreport.Result
 	err    error
 }
 
-func (s pdfStub) ExtractPDF(context.Context, string, string) (*extraction.Result, error) {
+func (s pdfStub) ExtractPDF(context.Context, string, string) (*labreport.Result, error) {
 	return s.result, s.err
 }
 
@@ -75,9 +75,9 @@ func (s *storageStub) Delete(context.Context, string) error { s.deleted = true; 
 func (s *storageStub) GetSignedURL(context.Context, string, time.Duration) (string, error) {
 	return "https://test/file.pdf", nil
 }
-func draftResult() *extraction.Result {
+func draftResult() *labreport.Result {
 	value := "Negativo"
-	return &extraction.Result{Status: lab.ExtractionStatusPartial, SummaryText: "Resultado: Negativo", Report: lab.ExtractedLabReport{Tests: []lab.ExtractedTestResult{{TestName: "Teste", Items: []lab.ExtractedTestItem{{ParameterName: "Resultado", ResultValue: &value}}}}}}
+	return &labreport.Result{Status: labreport.ExtractionStatusPartial, SummaryText: "Resultado: Negativo", Report: labreport.ExtractedLabReport{Tests: []labreport.ExtractedTestResult{{TestName: "Teste", Items: []labreport.ExtractedTestItem{{ParameterName: "Resultado", ResultValue: &value}}}}}}
 }
 func TestDraftCreationAndCompensation(t *testing.T) {
 	for _, failure := range []bool{false, true} {
@@ -110,7 +110,7 @@ func TestDraftCreationAndCompensation(t *testing.T) {
 func TestUnusableExtractionDoesNotUpload(t *testing.T) {
 	storage := &storageStub{}
 	repo := &draftStoreStub{}
-	service := NewDrafts(repo, pdfStub{result: &extraction.Result{}}, storage, allowDocumentAuthorizer{})
+	service := NewDrafts(repo, pdfStub{result: &labreport.Result{}}, storage, allowDocumentAuthorizer{})
 	if _, err := service.Create(context.Background(), documentTestAccount(), CreateDraftInput{PatientID: uuid.New()}); err == nil || storage.uploaded || repo.snapshot != nil {
 		t.Fatal("unusable extraction persisted")
 	}

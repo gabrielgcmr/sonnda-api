@@ -5,24 +5,23 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 )
 
 // Snapshot keeps fields deliberately excluded from the public extraction JSON.
 type Snapshot struct {
-	Version  int                              `json:"version"`
-	Result   extraction.Result                `json:"result"`
-	Metadata labextraction.ExtractionMetadata `json:"metadata"`
-	RawText  *string                          `json:"raw_text"`
-	Tests    []TestMetadata                   `json:"tests_metadata"`
+	Version  int                          `json:"version"`
+	Result   labreport.Result             `json:"result"`
+	Metadata labreport.ExtractionMetadata `json:"metadata"`
+	RawText  *string                      `json:"raw_text"`
+	Tests    []TestMetadata               `json:"tests_metadata"`
 }
 
 type NodeMetadata struct {
-	RawText    *string                           `json:"raw_text"`
-	Status     labextraction.ExtractionStatus    `json:"status"`
-	Confidence *float64                          `json:"confidence"`
-	Warnings   []labextraction.ExtractionWarning `json:"warnings"`
+	RawText    *string                       `json:"raw_text"`
+	Status     labreport.ExtractionStatus    `json:"status"`
+	Confidence *float64                      `json:"confidence"`
+	Warnings   []labreport.ExtractionWarning `json:"warnings"`
 }
 
 type TestMetadata struct {
@@ -31,7 +30,7 @@ type TestMetadata struct {
 }
 
 // EncodeExtractionSnapshot serializes an extraction result into snapshot JSON.
-func EncodeExtractionSnapshot(result *extraction.Result) ([]byte, error) {
+func EncodeExtractionSnapshot(result *labreport.Result) ([]byte, error) {
 	if result == nil {
 		return nil, fmt.Errorf("cannot encode nil extraction result")
 	}
@@ -64,7 +63,7 @@ func EncodeExtractionSnapshot(result *extraction.Result) ([]byte, error) {
 }
 
 // DecodeExtractionSnapshot deserializes snapshot JSON into an extraction result.
-func DecodeExtractionSnapshot(data []byte) (*extraction.Result, error) {
+func DecodeExtractionSnapshot(data []byte) (*labreport.Result, error) {
 	var s Snapshot
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
@@ -96,4 +95,3 @@ func DecodeExtractionSnapshot(data []byte) (*extraction.Result, error) {
 	}
 	return &s.Result, nil
 }
-

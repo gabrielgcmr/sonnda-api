@@ -20,8 +20,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -39,9 +38,9 @@ func (denyStandaloneAuthorizer) AuthorizeStandalone(*accountdomain.Account, docu
 	return apperr.Forbidden("acesso negado")
 }
 
-type documentExtractorFunc func(context.Context, string, string, string) (*extraction.Result, error)
+type documentExtractorFunc func(context.Context, string, string, string) (*labreport.Result, error)
 
-func (f documentExtractorFunc) ExtractDocument(ctx context.Context, path, filename, mimeType string) (*extraction.Result, error) {
+func (f documentExtractorFunc) ExtractDocument(ctx context.Context, path, filename, mimeType string) (*labreport.Result, error) {
 	return f(ctx, path, filename, mimeType)
 }
 
@@ -74,9 +73,9 @@ func TestStandaloneLabExtractionAcceptsPDFJPEGAndPNG(t *testing.T) {
 	}
 	for _, tc := range formats {
 		t.Run(tc.name, func(t *testing.T) {
-			want := extraction.Result{Status: labextraction.ExtractionStatusSucceeded, SummaryText: "Glicose: 90 mg/dL"}
+			want := labreport.Result{Status: labreport.ExtractionStatusSucceeded, SummaryText: "Glicose: 90 mg/dL"}
 			var temporaryPath string
-			extractor := documentExtractorFunc(func(_ context.Context, path, filename, mimeType string) (*extraction.Result, error) {
+			extractor := documentExtractorFunc(func(_ context.Context, path, filename, mimeType string) (*labreport.Result, error) {
 				temporaryPath = path
 				data, err := os.ReadFile(path)
 				if err != nil || !bytes.Equal(data, tc.content) || filename != tc.filename || mimeType != tc.mimeType {
@@ -94,7 +93,7 @@ func TestStandaloneLabExtractionAcceptsPDFJPEGAndPNG(t *testing.T) {
 			if response.Code != http.StatusOK {
 				t.Fatalf("status = %d: %s", response.Code, response.Body.String())
 			}
-			var got extraction.Result
+			var got labreport.Result
 			if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("result=%+v err=%v", got, err)
 			}
@@ -117,9 +116,9 @@ func TestStandaloneDocumentValidation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
-			extractor := documentExtractorFunc(func(context.Context, string, string, string) (*extraction.Result, error) {
+			extractor := documentExtractorFunc(func(context.Context, string, string, string) (*labreport.Result, error) {
 				called = true
-				return &extraction.Result{}, nil
+				return &labreport.Result{}, nil
 			})
 			router := standaloneRouter(&accountdomain.Account{ID: uuid.New()}, authorizedStandalone(extractor), nil)
 			body, contentType := standaloneLabMultipart(t, "exam.pdf", "application/pdf", tc.content)
@@ -177,9 +176,9 @@ func TestCaptureLabExtractionForwardsOwnedImageAndClosesBody(t *testing.T) {
 	account := &accountdomain.Account{ID: uuid.New(), AccountType: accountdomain.AccountTypeBasicCare}
 	captureID := uuid.New()
 	content := []byte{0xff, 0xd8, 0xff, 0x01}
-	want := extraction.Result{Status: labextraction.ExtractionStatusSucceeded, SummaryText: "Glicose: 90 mg/dL"}
+	want := labreport.Result{Status: labreport.ExtractionStatusSucceeded, SummaryText: "Glicose: 90 mg/dL"}
 	var extractedPath string
-	extractor := documentExtractorFunc(func(_ context.Context, path, filename, mimeType string) (*extraction.Result, error) {
+	extractor := documentExtractorFunc(func(_ context.Context, path, filename, mimeType string) (*labreport.Result, error) {
 		extractedPath = path
 		data, err := os.ReadFile(path)
 		if err != nil || !bytes.Equal(data, content) || filename != "capturado.jpg" || mimeType != "image/jpeg" {
@@ -225,9 +224,9 @@ func TestCaptureLabExtractionProtectsAccountAndContentBoundaries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
-			extractor := documentExtractorFunc(func(context.Context, string, string, string) (*extraction.Result, error) {
+			extractor := documentExtractorFunc(func(context.Context, string, string, string) (*labreport.Result, error) {
 				called = true
-				return &extraction.Result{}, nil
+				return &labreport.Result{}, nil
 			})
 			router := standaloneRouter(account, documents.NewStandaloneLabExtraction(extractor, tc.authorizer), tc.source)
 			response := postCaptureExtraction(router, tc.body)

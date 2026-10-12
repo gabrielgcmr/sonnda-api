@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	labsvc "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
 	labs "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/domain"
 	"github.com/google/uuid"
@@ -18,7 +18,7 @@ import (
 func mapExtractedToDomain(
 	patientID uuid.UUID,
 	uploadedByUserID uuid.UUID,
-	extracted *labextraction.ExtractedLabReport,
+	extracted *labreport.ExtractedLabReport,
 ) (*labs.LabReport, error) {
 	if extracted == nil {
 		return nil, labs.ErrInvalidInput

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -35,7 +35,7 @@ var supportedProviderSchemaKeys = map[string]struct{}{
 
 func loadLabReportSchemas() (map[string]any, *jsonschema.Schema, error) {
 	var document map[string]any
-	if err := json.Unmarshal([]byte(labextraction.LabReportResponseSchema()), &document); err != nil {
+	if err := json.Unmarshal([]byte(labreport.LabReportResponseSchema()), &document); err != nil {
 		return nil, nil, fmt.Errorf("decode lab report schema: %w", err)
 	}
 	compiler := jsonschema.NewCompiler()

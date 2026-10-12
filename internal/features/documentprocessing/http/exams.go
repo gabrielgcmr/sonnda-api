@@ -14,7 +14,7 @@ import (
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
+	labreport "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	laboratory "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ import (
 
 type draftService interface {
 	Create(context.Context, *accountdomain.Account, documents.CreateDraftInput) (*documents.ExamDocumentOutput, error)
-	Extraction(context.Context, *accountdomain.Account, uuid.UUID) (*extraction.Result, error)
+	Extraction(context.Context, *accountdomain.Account, uuid.UUID) (*labreport.Result, error)
 	Delete(context.Context, *accountdomain.Account, uuid.UUID) error
 }
 type confirmationService interface {

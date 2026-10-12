@@ -4,7 +4,7 @@ package documentai
 import (
 	"strings"
 
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 
 	"cloud.google.com/go/documentai/apiv1/documentaipb"
 )
@@ -48,8 +48,8 @@ func extractEntityValue(doc *documentaipb.Document, ent *documentaipb.Document_E
 	return strings.TrimSpace(extractEntityText(doc, ent))
 }
 
-func mapDocumentToExtractedLabs(doc *documentaipb.Document) *labextraction.ExtractedLabReport {
-	out := &labextraction.ExtractedLabReport{}
+func mapDocumentToExtractedLabs(doc *documentaipb.Document) *labreport.ExtractedLabReport {
+	out := &labreport.ExtractedLabReport{}
 
 	// Se quiser guardar o texto inteiro do laudo
 	if txt := doc.GetText(); txt != "" {
@@ -104,8 +104,8 @@ func mapDocumentToExtractedLabs(doc *documentaipb.Document) *labextraction.Extra
 
 }
 
-func mapTestResult(doc *documentaipb.Document, ent *documentaipb.Document_Entity) labextraction.ExtractedTestResult {
-	var tr labextraction.ExtractedTestResult
+func mapTestResult(doc *documentaipb.Document, ent *documentaipb.Document_Entity) labreport.ExtractedTestResult {
+	var tr labreport.ExtractedTestResult
 
 	for _, prop := range ent.GetProperties() {
 		switch prop.GetType() {
@@ -136,8 +136,8 @@ func mapTestResult(doc *documentaipb.Document, ent *documentaipb.Document_Entity
 	return tr
 }
 
-func mapTestItem(doc *documentaipb.Document, ent *documentaipb.Document_Entity) labextraction.ExtractedTestItem {
-	var item labextraction.ExtractedTestItem
+func mapTestItem(doc *documentaipb.Document, ent *documentaipb.Document_Entity) labreport.ExtractedTestItem {
+	var item labreport.ExtractedTestItem
 
 	for _, prop := range ent.GetProperties() {
 		switch prop.GetType() {

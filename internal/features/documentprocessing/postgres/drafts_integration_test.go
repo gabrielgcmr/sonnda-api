@@ -18,8 +18,7 @@ import (
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	processing "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
-	labextract "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	labs "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/domain"
 	labpostgres "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory/postgres"
 	pginfra "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
@@ -243,8 +242,8 @@ func TestLegacyDocumentCannotBeConfirmedOrDiscarded(t *testing.T) {
 func TestConfirmationUsesStoredSnapshotWithoutReextracting(t *testing.T) {
 	client, repo, patient, user := reviewTestDatabase(t)
 	value, unit, reference, date, raw := "< 5", "mg/dL", "70–99", "2026-09-01", "Original extracted text"
-	result := &extraction.Result{Status: labextract.ExtractionStatusPartial, SummaryText: "Glicose: < 5 mg/dL", Report: labextract.ExtractedLabReport{
-		RawText: &raw, Tests: []labextract.ExtractedTestResult{{TestName: "Glicose", CollectedAt: &date, Items: []labextract.ExtractedTestItem{{ParameterName: "Glicose", ResultValue: &value, ResultUnit: &unit, ReferenceText: &reference}}}},
+	result := &labreport.Result{Status: labreport.ExtractionStatusPartial, SummaryText: "Glicose: < 5 mg/dL", Report: labreport.ExtractedLabReport{
+		RawText: &raw, Tests: []labreport.ExtractedTestResult{{TestName: "Glicose", CollectedAt: &date, Items: []labreport.ExtractedTestItem{{ParameterName: "Glicose", ResultValue: &value, ResultUnit: &unit, ReferenceText: &reference}}}},
 	}}
 	data, err := processing.EncodeExtractionSnapshot(result)
 	if err != nil {

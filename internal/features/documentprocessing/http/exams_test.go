@@ -16,7 +16,7 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
 	account "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	labs "github.com/gabrielgcmr/sonnda/internal/features/patient/exam/laboratory"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gin-gonic/gin"
@@ -75,11 +75,11 @@ func (s *reviewStub) Create(_ context.Context, _ *account.Account, in documents.
 	state := "pending"
 	return &documents.ExamDocumentOutput{ID: uuid.New(), PatientID: in.PatientID, ReviewStatus: &state}, s.err
 }
-func (s *reviewStub) Extraction(context.Context, *account.Account, uuid.UUID) (*extraction.Result, error) {
+func (s *reviewStub) Extraction(context.Context, *account.Account, uuid.UUID) (*labreport.Result, error) {
 	if s.denied {
 		return nil, apperr.Forbidden("Sem acesso.")
 	}
-	return &extraction.Result{SummaryText: "Glicose: 90"}, s.err
+	return &labreport.Result{SummaryText: "Glicose: 90"}, s.err
 }
 func (s *reviewStub) Confirm(context.Context, *account.Account, uuid.UUID) (*labs.LabReportOutput, error) {
 	if s.denied {

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sonnda - Laudo escrito de imagem v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["document_kind", "readability", "report"],
+  "properties": {
+    "document_kind": {"type": "string", "enum": ["imaging_report", "radiology_image", "incompatible", "unreadable", "multiple_reports"]},
+    "readability": {"type": "string", "enum": ["complete", "partial"]},
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modality", "exam_name", "body_region", "exam_date", "technique_text", "findings_text", "impression_text", "classifications", "measurements"],
+      "properties": {
+        "modality": {"type": "string", "enum": ["ultrasound", "ct", "mri", "mammography", "xray", "other", "unknown"]},
+        "exam_name": {"type": ["string", "null"]},
+        "body_region": {"type": ["string", "null"]},
+        "exam_date": {"type": ["string", "null"], "description": "Data explícita do exame, preferencialmente YYYY-MM-DD; não inferir."},
+        "technique_text": {"type": ["string", "null"]},
+        "findings_text": {"type": ["string", "null"]},
+        "impression_text": {"type": ["string", "null"]},
+        "classifications": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["system", "value", "source_text"], "properties": {"system": {"type": "string"}, "value": {"type": "string"}, "source_text": {"type": "string"}}}},
+        "measurements": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "location", "value_text", "unit", "source_text"], "properties": {"name": {"type": "string"}, "location": {"type": ["string", "null"]}, "value_text": {"type": "string"}, "unit": {"type": ["string", "null"]}, "source_text": {"type": "string"}}}}
+      }
+    }
+  }
+}

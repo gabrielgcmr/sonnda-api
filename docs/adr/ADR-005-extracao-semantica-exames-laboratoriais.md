@@ -440,9 +440,8 @@ sem criar laudos duplicados nem sobrescrever silenciosamente resultados anterior
 Como evolucao das decisoes registradas nesta ADR e complementadas pela ADR-006:
 
 1. **Consolidacao na feature:** Os contratos antes dispersos em `internal/domain/textextraction` e `internal/domain/labextraction` foram reorganizados para dentro de `internal/features/documentprocessing`:
-   - `internal/features/documentprocessing/textextraction`: contrato de leitura, qualidade e normalizacao de texto.
-   - `internal/features/documentprocessing/labextraction`: contrato, tipos e schema da extracao estruturada.
-   - `internal/features/documentprocessing/extraction`: coordenacao, normalizacao de entrada semantica, avaliacao e geracao de resumo.
+   - `internal/features/documentprocessing/textreading`: contrato de leitura, qualidade e normalizacao de texto.
+   - `internal/features/documentprocessing/labreport`: contrato, tipos, schema e coordenacao da extracao estruturada.
 2. **Infraestrutura:** O adaptador do Gemini foi movido para `internal/infrastructure/gemini`.
 3. **Persistencia e Snapshot:** A fotografia versionada da extracao reside na raiz de `documentprocessing` (`snapshot.go`), mantendo a extracao livre de dependencias de persistencia.
 4. **Remocao de execucao via terminal:** Utilitarios CLI de extracao textual e laboratorial foram descontinuados e removidos para prevenir usos descontrolados, restringindo o processamento aos fluxos autenticados da API (extracao temporaria e rascunhos de exames).

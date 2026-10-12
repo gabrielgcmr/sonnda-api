@@ -19,7 +19,8 @@ import (
 	authhttp "github.com/gabrielgcmr/sonnda/internal/features/auth/http"
 	capturedomain "github.com/gabrielgcmr/sonnda/internal/features/capture/domain"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/imagingreport"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/observability"
 
@@ -105,7 +106,8 @@ func main() {
 		logInfraFatal("falha ao configurar bucket de capturas", err)
 	}
 
-	var labExtractor labextraction.LabReportExtractor
+	var labExtractor labreport.LabReportExtractor
+	var imagingExtractor imagingreport.Extractor
 	if strings.TrimSpace(cfg.Gemini.APIKey) != "" {
 		geminiClient, err := geminiinfra.NewClient(ctx, cfg.Gemini)
 		if err != nil {
@@ -114,6 +116,10 @@ func main() {
 		labExtractor, err = geminiinfra.NewLabReportExtractor(geminiClient)
 		if err != nil {
 			logInfraFatal("falha ao criar extrator laboratorial", err)
+		}
+		imagingExtractor, err = geminiinfra.NewImagingReportExtractor(geminiClient)
+		if err != nil {
+			logInfraFatal("falha ao criar extrator de laudos de imagem", err)
 		}
 	}
 
@@ -128,7 +134,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
+	modules := bootstrap.NewModules(dbClient, redisClient, labExtractor, imagingExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
 
 	//8 Middlewares
 	//8.1 API
@@ -147,18 +153,19 @@ func main() {
 		Logger:     appLogger,
 		CORSConfig: cfg.CORS,
 		Deps: &api.APIDependencies{
-			Auth:                           authMiddleware,
-			Account:                        modules.Account.Middleware,
-			AccountHandler:                 modules.Account.Handler,
-			CaptureHandler:                 modules.Capture.Handler,
-			CaptureAuth:                    modules.Capture.Middleware,
-			CaptureCleanup:                 modules.Capture.Cleanup,
-			PatientAccessHandler:           modules.PatientAccess.Handler,
-			PatientHandler:                 modules.Patient.ProfileHandler,
-			PatientProblemHandler:          modules.Patient.ProblemHandler,
-			LaboratoryHandler:              modules.Labs.LaboratoryHandler,
-			ExamsHandler:                   modules.Exams.Handler,
-			StandaloneLabExtractionHandler: modules.Exams.StandaloneLabExtractionHandler,
+			Auth:                               authMiddleware,
+			Account:                            modules.Account.Middleware,
+			AccountHandler:                     modules.Account.Handler,
+			CaptureHandler:                     modules.Capture.Handler,
+			CaptureAuth:                        modules.Capture.Middleware,
+			CaptureCleanup:                     modules.Capture.Cleanup,
+			PatientAccessHandler:               modules.PatientAccess.Handler,
+			PatientHandler:                     modules.Patient.ProfileHandler,
+			PatientProblemHandler:              modules.Patient.ProblemHandler,
+			LaboratoryHandler:                  modules.Labs.LaboratoryHandler,
+			ExamsHandler:                       modules.Exams.Handler,
+			StandaloneLabExtractionHandler:     modules.Exams.StandaloneLabExtractionHandler,
+			StandaloneImagingExtractionHandler: modules.Exams.StandaloneImagingExtractionHandler,
 		},
 	})
 	if err != nil {

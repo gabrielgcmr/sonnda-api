@@ -10,14 +10,15 @@ import (
 type Action string
 
 const (
-	ExtractStandaloneLab Action = "extract_standalone_lab"
-	ListPatientDocuments Action = "list_patient_documents"
-	ListPatientTexts     Action = "list_patient_document_texts"
-	ReadDocument         Action = "read_document"
-	ReadExtraction       Action = "read_document_extraction"
-	UploadDocument       Action = "upload_document"
-	ConfirmDocument      Action = "confirm_document"
-	DiscardDocument      Action = "discard_document"
+	ExtractStandaloneLab     Action = "extract_standalone_lab"
+	ExtractStandaloneImaging Action = "extract_standalone_imaging"
+	ListPatientDocuments     Action = "list_patient_documents"
+	ListPatientTexts         Action = "list_patient_document_texts"
+	ReadDocument             Action = "read_document"
+	ReadExtraction           Action = "read_document_extraction"
+	UploadDocument           Action = "upload_document"
+	ConfirmDocument          Action = "confirm_document"
+	DiscardDocument          Action = "discard_document"
 )
 
 func RequireAction(action Action, patientID uuid.UUID, actor authz.PatientContext) error {
@@ -27,7 +28,7 @@ func RequireAction(action Action, patientID uuid.UUID, actor authz.PatientContex
 	if !actor.AccountType.IsValid() {
 		return apperr.Forbidden("acesso negado")
 	}
-	if action == ExtractStandaloneLab {
+	if action == ExtractStandaloneLab || action == ExtractStandaloneImaging {
 		return nil
 	}
 	if patientID == uuid.Nil || actor.PatientID != patientID || !actor.HasAccess {

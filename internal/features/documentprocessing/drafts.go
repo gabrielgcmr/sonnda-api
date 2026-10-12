@@ -10,7 +10,7 @@ import (
 
 	accountdomain "github.com/gabrielgcmr/sonnda/internal/features/account/domain"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/domain"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/extraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
@@ -23,7 +23,7 @@ type DraftRepository interface {
 }
 
 type PDFExtractor interface {
-	ExtractPDF(context.Context, string, string) (*extraction.Result, error)
+	ExtractPDF(context.Context, string, string) (*labreport.Result, error)
 }
 
 type Drafts struct {
@@ -53,7 +53,7 @@ func (s *Drafts) Create(ctx context.Context, currentAccount *accountdomain.Accou
 	if err != nil {
 		return nil, err
 	}
-	if result == nil || !extraction.Usable(&result.Report) {
+	if result == nil || !labreport.Usable(&result.Report) {
 		return nil, apperr.DomainRuleViolation("O PDF não contém resultados laboratoriais utilizáveis.")
 	}
 	snapshot, err := EncodeExtractionSnapshot(result)
@@ -89,7 +89,7 @@ func (s *Drafts) Create(ctx context.Context, currentAccount *accountdomain.Accou
 	return mapDomainDocumentToOutput(document), nil
 }
 
-func (s *Drafts) Extraction(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*extraction.Result, error) {
+func (s *Drafts) Extraction(ctx context.Context, currentAccount *accountdomain.Account, id uuid.UUID) (*labreport.Result, error) {
 	document, err := s.authorizer.AuthorizeDocument(ctx, currentAccount, id, ReadExtraction)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,8 @@ import (
 	"github.com/gabrielgcmr/sonnda/internal/config"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
-	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labextraction"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/imagingreport"
+	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing/labreport"
 	postgress "github.com/gabrielgcmr/sonnda/internal/infrastructure/database/postgres"
 	"github.com/redis/go-redis/v9"
 )
@@ -22,7 +23,8 @@ type Modules struct {
 func NewModules(
 	dbClient *postgress.Client,
 	redisClient *redis.Client,
-	labExtractor labextraction.LabReportExtractor,
+	labExtractor labreport.LabReportExtractor,
+	imagingExtractor imagingreport.Extractor,
 	storage documentprocessing.FileStorageService,
 	captureStorage capture.FileStorage,
 	ocrConfig config.OCRConfig,
@@ -36,6 +38,6 @@ func NewModules(
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),
-		Exams:         NewExamsModule(dbClient, labExtractor, storage, captureModule.Service, ocrConfig),
+		Exams:         NewExamsModule(dbClient, labExtractor, imagingExtractor, storage, captureModule.Service, ocrConfig),
 	}
 }
