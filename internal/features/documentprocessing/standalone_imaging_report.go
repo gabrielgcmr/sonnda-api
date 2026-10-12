@@ -12,6 +12,7 @@ import (
 
 type StandaloneImagingExtractor interface {
 	ExtractDocument(context.Context, string, string, string) (*imagingreport.ImagingReportResult, error)
+	ExtractImagePages(context.Context, []imagingreport.DocumentPage) (*imagingreport.ImagingReportResult, error)
 }
 
 type StandaloneImagingExtraction struct {
@@ -35,4 +36,11 @@ func (s *StandaloneImagingExtraction) ExtractDocument(ctx context.Context, accou
 		return nil, err
 	}
 	return s.extractor.ExtractDocument(ctx, path, filename, mimeType)
+}
+
+func (s *StandaloneImagingExtraction) ExtractImagePages(ctx context.Context, account *accountdomain.Account, pages []imagingreport.DocumentPage) (*imagingreport.ImagingReportResult, error) {
+	if err := s.Authorize(account); err != nil {
+		return nil, err
+	}
+	return s.extractor.ExtractImagePages(ctx, pages)
 }

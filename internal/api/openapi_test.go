@@ -52,6 +52,8 @@ func TestOpenAPIContainsExpectedOperationContract(t *testing.T) {
 		{http.MethodPost, "/lab-extractions/from-capture", "extractStandaloneLabReportFromCapture", bearer},
 		{http.MethodPost, "/imaging-report-extractions", "extractImagingReport", bearer},
 		{http.MethodPost, "/imaging-report-extractions/from-capture", "extractImagingReportFromCapture", bearer},
+		{http.MethodPost, "/imaging-report-extractions/pages", "extractImagingReportPages", bearer},
+		{http.MethodPost, "/imaging-report-extractions/from-captures", "extractImagingReportFromCaptures", bearer},
 		{http.MethodGet, "/patients/{patientId}/lab-reports", "listPatientLabReports", bearer},
 		{http.MethodGet, "/lab-reports/{labReportId}", "getLabReport", bearer},
 		{http.MethodPost, "/capture-sessions/claim", "claimCaptureSession", ""},

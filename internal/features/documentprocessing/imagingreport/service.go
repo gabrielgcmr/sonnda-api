@@ -15,6 +15,13 @@ import (
 )
 
 const maxDocumentBytes = 10 * 1024 * 1024
+const MaxImagePages = 5
+
+type DocumentPage struct {
+	Path     string
+	Filename string
+	MIMEType string
+}
 
 type Warning struct {
 	Code    string `json:"code"`
@@ -85,6 +92,36 @@ func (s *Service) ExtractDocument(ctx context.Context, path, filename, mimeType 
 		return nil, &apperr.AppError{Kind: apperr.UNSUPPORTED_MEDIA_TYPE, Message: "Envie um arquivo PDF, JPEG ou PNG contendo um laudo escrito."}
 	}
 	return finalize(extracted, method)
+}
+
+func (s *Service) ExtractImagePages(ctx context.Context, pages []DocumentPage) (*ImagingReportResult, error) {
+	if s == nil || isUnavailable(s.model) {
+		return nil, apperr.Internal("A extração de laudos de imagem está indisponível.", nil)
+	}
+	if len(pages) < 2 || len(pages) > MaxImagePages {
+		return nil, apperr.Validation("Selecione de 2 a 5 imagens do mesmo laudo.", apperr.Violation{Field: "files", Reason: "invalid_page_count"})
+	}
+	input := ExtractInput{MediaParts: make([]MediaInput, 0, len(pages))}
+	total := 0
+	for _, page := range pages {
+		if page.MIMEType != "image/jpeg" && page.MIMEType != "image/png" {
+			return nil, &apperr.AppError{Kind: apperr.UNSUPPORTED_MEDIA_TYPE, Message: "Envie apenas imagens JPEG ou PNG para um laudo com várias páginas."}
+		}
+		data, err := readMedia(page.Path)
+		if err != nil {
+			return nil, err
+		}
+		total += len(data)
+		if total > maxDocumentBytes {
+			return nil, &apperr.AppError{Kind: apperr.UPLOAD_SIZE_EXCEEDED, Message: "As imagens devem ter no máximo 10 MiB no total."}
+		}
+		input.MediaParts = append(input.MediaParts, MediaInput{Data: data, MIMEType: page.MIMEType})
+	}
+	extracted, err := s.model.ExtractImagingReport(ctx, input)
+	if err != nil {
+		return nil, extractionError("Não foi possível extrair o laudo de imagem.", err)
+	}
+	return finalize(extracted, "gemini_multimodal")
 }
 
 func finalize(document *ExtractedDocument, method string) (*ImagingReportResult, error) {

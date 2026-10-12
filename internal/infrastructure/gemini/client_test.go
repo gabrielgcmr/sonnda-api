@@ -77,6 +77,29 @@ func TestClientMultimodalRequest(t *testing.T) {
 	}
 }
 
+func TestClientSendsMultipleImagesInPageOrder(t *testing.T) {
+	first := []byte{0xff, 0xd8, 0xff, 0xe0, 0x01}
+	second := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x02}
+	client, err := NewClientWithGenerator(testConfig(), generatorFunc(func(_ context.Context, _ string, contents []*genai.Content, _ *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+		if len(contents) != 1 || len(contents[0].Parts) != 2 {
+			t.Fatalf("expected two ordered image parts: %+v", contents)
+		}
+		parts := contents[0].Parts
+		if parts[0].InlineData.MIMEType != "image/jpeg" || !reflect.DeepEqual(parts[0].InlineData.Data, first) ||
+			parts[1].InlineData.MIMEType != "image/png" || !reflect.DeepEqual(parts[1].InlineData.Data, second) {
+			t.Fatalf("image parts were reordered: %+v", parts)
+		}
+		return &genai.GenerateContentResponse{}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Generate(t.Context(), GenerateRequest{MediaParts: []MediaInput{{Data: first, MIMEType: "image/jpeg"}, {Data: second, MIMEType: "image/png"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClientAcceptsSupportedMediaSignatures(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

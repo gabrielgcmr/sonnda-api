@@ -33,6 +33,7 @@ var _ ContentGenerator = (*genai.Models)(nil)
 type GenerateRequest struct {
 	Text              string
 	Media             *MediaInput
+	MediaParts        []MediaInput
 	SystemInstruction string
 	JSONSchema        map[string]any
 }
@@ -84,7 +85,10 @@ func NewClientWithGenerator(cfg config.GeminiConfig, generator ContentGenerator)
 
 // Generate devolve a resposta crua; interpretacao laboratorial fica no adaptador.
 func (c *Client) Generate(ctx context.Context, request GenerateRequest) (*genai.GenerateContentResponse, error) {
-	if strings.TrimSpace(request.Text) == "" && request.Media == nil {
+	if strings.TrimSpace(request.Text) == "" && request.Media == nil && len(request.MediaParts) == 0 {
+		return nil, ErrEmptyInput
+	}
+	if request.Media != nil && len(request.MediaParts) > 0 {
 		return nil, ErrEmptyInput
 	}
 	remaining := c.cfg.MaxInputBytes
@@ -119,6 +123,23 @@ func (c *Client) Generate(ctx context.Context, request GenerateRequest) (*genai.
 			return nil, ErrMediaTypeMismatch
 		}
 	}
+	mediaBytes := 0
+	for _, part := range request.MediaParts {
+		if len(part.Data) == 0 {
+			return nil, ErrEmptyMedia
+		}
+		mediaBytes += len(part.Data)
+		if mediaBytes > c.cfg.MaxMediaBytes {
+			return nil, ErrMediaTooLarge
+		}
+		mimeType := strings.ToLower(strings.TrimSpace(part.MIMEType))
+		if !supportedMediaType(mimeType) {
+			return nil, ErrUnsupportedMedia
+		}
+		if !mediaMatchesType(part.Data, mimeType) {
+			return nil, ErrMediaTypeMismatch
+		}
+	}
 	callCtx, cancel := context.WithTimeout(ctx, c.cfg.Timeout)
 	defer cancel()
 	if err := callCtx.Err(); err != nil {
@@ -135,12 +156,15 @@ func (c *Client) Generate(ctx context.Context, request GenerateRequest) (*genai.
 		generation.ResponseMIMEType = "application/json"
 		generation.ResponseJsonSchema = request.JSONSchema
 	}
-	parts := make([]*genai.Part, 0, 2)
+	parts := make([]*genai.Part, 0, 2+len(request.MediaParts))
 	if strings.TrimSpace(request.Text) != "" {
 		parts = append(parts, genai.NewPartFromText(request.Text))
 	}
 	if request.Media != nil {
 		parts = append(parts, genai.NewPartFromBytes(request.Media.Data, mediaMIMEType))
+	}
+	for _, part := range request.MediaParts {
+		parts = append(parts, genai.NewPartFromBytes(part.Data, strings.ToLower(strings.TrimSpace(part.MIMEType))))
 	}
 	contents := []*genai.Content{genai.NewContentFromParts(parts, genai.RoleUser)}
 	response, err := c.generator.GenerateContent(callCtx, c.cfg.Model, contents, generation)

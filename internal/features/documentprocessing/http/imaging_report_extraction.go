@@ -20,6 +20,7 @@ import (
 type standaloneImagingExtractor interface {
 	Authorize(*accountdomain.Account) error
 	ExtractDocument(context.Context, *accountdomain.Account, string, string, string) (*imagingreport.ImagingReportResult, error)
+	ExtractImagePages(context.Context, *accountdomain.Account, []imagingreport.DocumentPage) (*imagingreport.ImagingReportResult, error)
 }
 
 type StandaloneImagingExtractionHandler struct {
@@ -47,12 +48,16 @@ func NewStandaloneImagingExtraction(extractor standaloneImagingExtractor, captur
 
 func (h *StandaloneImagingExtractionHandler) RegisterHumaRoutes(registered huma.API, security []map[string][]string) {
 	registerImagingExtractionRoutes(registered, security, h.extract, h.extractFromCapture)
+	registerImagingPageRoutes(registered, security, h.extractPages, h.extractFromCaptures)
 }
 
 func RegisterStandaloneImagingExtractionOpenAPIRoutes(registered huma.API, security []map[string][]string) {
 	registerImagingExtractionRoutes(registered, security,
 		humaspec.NotImplemented[imagingExtractionInput, imagingExtractionOutput],
 		humaspec.NotImplemented[imagingCaptureInput, imagingExtractionOutput])
+	registerImagingPageRoutes(registered, security,
+		humaspec.NotImplemented[imagingPagesInput, imagingExtractionOutput],
+		humaspec.NotImplemented[imagingCapturesInput, imagingExtractionOutput])
 }
 
 func registerImagingExtractionRoutes(

@@ -47,20 +47,34 @@ type MediaInput struct {
 }
 
 type ExtractInput struct {
-	Text  string
-	Media *MediaInput
+	Text       string
+	Media      *MediaInput
+	MediaParts []MediaInput
 }
 
 func (input ExtractInput) Validate() error {
 	hasText := strings.TrimSpace(input.Text) != ""
 	hasMedia := input.Media != nil && len(input.Media.Data) > 0 && strings.TrimSpace(input.Media.MIMEType) != ""
-	if !hasText && !hasMedia {
+	hasParts := len(input.MediaParts) > 0
+	if boolCount(hasText, hasMedia, hasParts) != 1 {
 		return ErrEmptyInput
 	}
-	if hasText == hasMedia {
-		return ErrEmptyInput
+	for _, part := range input.MediaParts {
+		if len(part.Data) == 0 || strings.TrimSpace(part.MIMEType) == "" {
+			return ErrEmptyInput
+		}
 	}
 	return nil
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
 }
 
 type Classification struct {
