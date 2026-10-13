@@ -22,8 +22,9 @@ type cleanupService interface {
 }
 
 type CleanupHandler struct {
-	service cleanupService
-	token   string
+	service          cleanupService
+	token            string
+	temporaryCleaner interface{ Cleanup(context.Context) error }
 }
 
 type cleanupInput struct {
@@ -45,6 +46,10 @@ type cleanupOutput struct {
 
 func NewCleanupHandler(service cleanupService, token string) *CleanupHandler {
 	return &CleanupHandler{service: service, token: strings.TrimSpace(token)}
+}
+
+func (h *CleanupHandler) SetTemporaryCleaner(cleaner interface{ Cleanup(context.Context) error }) {
+	h.temporaryCleaner = cleaner
 }
 
 func (h *CleanupHandler) RegisterHumaRoutes(api huma.API) {
@@ -83,6 +88,11 @@ func (h *CleanupHandler) cleanup(ctx context.Context, input *cleanupInput) (*cle
 	}
 	if len(report.Errors) > 0 {
 		return nil, humaerror.From(apperr.Internal("limpeza de capturas incompleta", errors.Join(report.Errors...)))
+	}
+	if h.temporaryCleaner != nil {
+		if err := h.temporaryCleaner.Cleanup(ctx); err != nil {
+			return nil, humaerror.From(err)
+		}
 	}
 	return &cleanupOutput{
 		CacheControl: captureSessionCacheControl,

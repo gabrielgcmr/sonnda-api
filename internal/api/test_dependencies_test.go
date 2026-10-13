@@ -26,5 +26,6 @@ func completeTestDependencies() *APIDependencies {
 		ExamsHandler:                       documentprocessinghttp.NewExams(nil, nil, nil, nil),
 		StandaloneLabExtractionHandler:     documentprocessinghttp.NewStandaloneLabExtraction(nil, nil),
 		StandaloneImagingExtractionHandler: documentprocessinghttp.NewStandaloneImagingExtraction(nil, nil),
+		TemporaryExtractionHandler:         documentprocessinghttp.NewTemporaryExtractionHandler(nil, nil, nil, nil),
 	}
 }

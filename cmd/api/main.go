@@ -105,6 +105,12 @@ func main() {
 	if err != nil {
 		logInfraFatal("falha ao configurar bucket de capturas", err)
 	}
+	temporaryStorage, err := supabaseStorageClient.ForBucket(filestorage.BucketConfig{
+		BucketName: cfg.Storage.SupabaseTemporaryBucket, MaxFileSize: 10 * 1024 * 1024,
+	})
+	if err != nil {
+		logInfraFatal("falha ao configurar bucket de extrações temporárias", err)
+	}
 
 	var labExtractor labreport.LabReportExtractor
 	var imagingExtractor imagingreport.Extractor
@@ -134,7 +140,7 @@ func main() {
 	}
 
 	//7. Módulos
-	modules := bootstrap.NewModules(dbClient, redisClient, labExtractor, imagingExtractor, examDocumentsStorage, captureStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
+	modules := bootstrap.NewModules(dbClient, redisClient, labExtractor, imagingExtractor, examDocumentsStorage, captureStorage, temporaryStorage, cfg.OCR, cfg.ProfessionalActivation, cfg.Jobs.CaptureCleanupToken)
 
 	//8 Middlewares
 	//8.1 API
@@ -166,6 +172,7 @@ func main() {
 			ExamsHandler:                       modules.Exams.Handler,
 			StandaloneLabExtractionHandler:     modules.Exams.StandaloneLabExtractionHandler,
 			StandaloneImagingExtractionHandler: modules.Exams.StandaloneImagingExtractionHandler,
+			TemporaryExtractionHandler:         modules.Exams.TemporaryExtractionHandler,
 		},
 	})
 	if err != nil {

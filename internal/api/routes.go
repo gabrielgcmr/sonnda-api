@@ -35,6 +35,7 @@ type APIDependencies struct {
 	ExamsHandler                       *documentprocessinghttp.ExamsHandler
 	StandaloneLabExtractionHandler     *documentprocessinghttp.StandaloneLabExtractionHandler
 	StandaloneImagingExtractionHandler *documentprocessinghttp.StandaloneImagingExtractionHandler
+	TemporaryExtractionHandler         *documentprocessinghttp.TemporaryExtractionHandler
 }
 
 type routeGroups struct {
@@ -111,6 +112,7 @@ func registerRuntimeRoutes(groups routeGroups, deps *APIDependencies) {
 	deps.ExamsHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 	deps.StandaloneLabExtractionHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 	deps.StandaloneImagingExtractionHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
+	deps.TemporaryExtractionHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 	deps.LaboratoryHandler.RegisterHumaRoutes(groups.onboarded, bearerSecurity())
 }
 
@@ -131,6 +133,7 @@ func registerOpenAPIRoutes(groups routeGroups) {
 	documentprocessinghttp.RegisterExamsOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	documentprocessinghttp.RegisterStandaloneLabExtractionOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	documentprocessinghttp.RegisterStandaloneImagingExtractionOpenAPIRoutes(groups.onboarded, bearerSecurity())
+	documentprocessinghttp.RegisterTemporaryExtractionOpenAPIRoutes(groups.onboarded, bearerSecurity())
 	laboratoryhttp.RegisterOpenAPIRoutes(groups.onboarded, bearerSecurity())
 }
 
@@ -174,6 +177,9 @@ func validateAPIDependencies(deps *APIDependencies) error {
 	}
 	if deps == nil || deps.StandaloneImagingExtractionHandler == nil {
 		missing = append(missing, "StandaloneImagingExtractionHandler")
+	}
+	if deps == nil || deps.TemporaryExtractionHandler == nil {
+		missing = append(missing, "TemporaryExtractionHandler")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("dependências obrigatórias da API ausentes: %s", strings.Join(missing, ", "))

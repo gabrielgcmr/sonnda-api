@@ -27,17 +27,20 @@ func NewModules(
 	imagingExtractor imagingreport.Extractor,
 	storage documentprocessing.FileStorageService,
 	captureStorage capture.FileStorage,
+	temporaryStorage documentprocessing.TemporaryFileStorage,
 	ocrConfig config.OCRConfig,
 	activationConfig config.ProfessionalActivationConfig,
 	captureCleanupToken string,
 ) *Modules {
 	captureModule := NewCaptureModule(dbClient, captureStorage, captureCleanupToken)
+	examsModule := NewExamsModule(dbClient, labExtractor, imagingExtractor, storage, temporaryStorage, captureModule.Service, ocrConfig)
+	captureModule.Cleanup.SetTemporaryCleaner(examsModule.TemporaryResults)
 	return &Modules{
 		Account:       NewAccountModule(dbClient, redisClient, activationConfig),
 		Capture:       captureModule,
 		Patient:       NewPatientModule(dbClient),
 		PatientAccess: NewPatientAccessModule(dbClient),
 		Labs:          NewLabsModule(dbClient),
-		Exams:         NewExamsModule(dbClient, labExtractor, imagingExtractor, storage, captureModule.Service, ocrConfig),
+		Exams:         examsModule,
 	}
 }

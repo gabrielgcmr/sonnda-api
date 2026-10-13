@@ -26,9 +26,11 @@ type ExamsModule struct {
 	Handler                            *documenthttp.ExamsHandler
 	StandaloneLabExtractionHandler     *documenthttp.StandaloneLabExtractionHandler
 	StandaloneImagingExtractionHandler *documenthttp.StandaloneImagingExtractionHandler
+	TemporaryExtractionHandler         *documenthttp.TemporaryExtractionHandler
+	TemporaryResults                   *documentprocessing.TemporaryResults
 }
 
-func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imaging imagingreport.Extractor, storage documentprocessing.FileStorageService, captures capture.Service, config config.OCRConfig) *ExamsModule {
+func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imaging imagingreport.Extractor, storage documentprocessing.FileStorageService, temporaryStorage documentprocessing.TemporaryFileStorage, captures capture.Service, config config.OCRConfig) *ExamsModule {
 	patients := patientpostgres.NewRepository(db)
 	labs := labpostgres.NewRepository(db)
 	documentRepo := documentpostgres.NewDocumentRepository(db)
@@ -43,10 +45,14 @@ func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imagin
 	confirmer := labdocumentconfirmation.New(authorizer, repo, labs)
 	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
 	standaloneImaging := documents.NewStandaloneImagingExtraction(imagingService, authorizer)
+	temporaryResults := documents.NewTemporaryResults(documentpostgres.NewTemporaryResultRepository(db), temporaryStorage)
+	captureSource := capturedFileSource{captures: captures}
 	return &ExamsModule{
 		Handler:                            documenthttp.NewExams(service, drafts, confirmer, storage),
-		StandaloneLabExtractionHandler:     documenthttp.NewStandaloneLabExtraction(standalone, capturedFileSource{captures: captures}),
-		StandaloneImagingExtractionHandler: documenthttp.NewStandaloneImagingExtraction(standaloneImaging, capturedFileSource{captures: captures}),
+		StandaloneLabExtractionHandler:     documenthttp.NewStandaloneLabExtraction(standalone, captureSource),
+		StandaloneImagingExtractionHandler: documenthttp.NewStandaloneImagingExtraction(standaloneImaging, captureSource),
+		TemporaryExtractionHandler:         documenthttp.NewTemporaryExtractionHandler(standalone, standaloneImaging, captureSource, temporaryResults),
+		TemporaryResults:                   temporaryResults,
 	}
 }
 
@@ -64,6 +70,6 @@ func (s capturedFileSource) OpenCapturedFile(ctx context.Context, accountID, cap
 		return nil, err
 	}
 	return &documenthttp.CapturedFile{
-		Body: file.Body, Filename: file.OriginalFilename, MIMEType: file.MIMEType, SizeBytes: file.SizeBytes,
+		Body: file.Body, Filename: file.OriginalFilename, MIMEType: file.MIMEType, SizeBytes: file.SizeBytes, ExpiresAt: file.ExpiresAt,
 	}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gabrielgcmr/sonnda/internal/api/helpers"
@@ -31,6 +32,7 @@ type CapturedFile struct {
 	Filename  string
 	MIMEType  string
 	SizeBytes int64
+	ExpiresAt time.Time
 }
 
 // CapturedFileSource opens a capture owned by the account, if it is still available.

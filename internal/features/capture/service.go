@@ -98,6 +98,7 @@ type CaptureFile struct {
 	OriginalFilename string
 	MIMEType         string
 	SizeBytes        int64
+	ExpiresAt        time.Time
 }
 
 type CleanupOptions struct {
@@ -460,7 +461,7 @@ func (s *service) OpenCaptureFile(ctx context.Context, accountID, captureID uuid
 	if err != nil {
 		return nil, mapStorageError("captureStorage.Open", err)
 	}
-	return &CaptureFile{Body: body, OriginalFilename: item.OriginalFilename, MIMEType: item.MIMEType, SizeBytes: item.SizeBytes}, nil
+	return &CaptureFile{Body: body, OriginalFilename: item.OriginalFilename, MIMEType: item.MIMEType, SizeBytes: item.SizeBytes, ExpiresAt: item.ExpiresAt}, nil
 }
 
 func (s *service) DeleteCapture(ctx context.Context, accountID, captureID uuid.UUID) error {
