@@ -180,6 +180,7 @@ func normalize(report *Report) {
 			}
 		}
 	}
+	trim(report.PatientName)
 	trim(report.ExamName)
 	trim(report.BodyRegion)
 	trim(report.ExamDate)
@@ -215,6 +216,7 @@ func summary(report Report) string {
 			lines = append(lines, label+": "+strings.TrimSpace(*value))
 		}
 	}
+	add("Paciente", report.PatientName)
 	lines = append(lines, "Modalidade: "+modalityLabel(report.Modality))
 	add("Exame", report.ExamName)
 	add("Região anatômica", report.BodyRegion)

@@ -22,9 +22,11 @@ import (
 )
 
 type temporaryResultStore interface {
-	Save(context.Context, uuid.UUID, string, any, []documentprocessing.TemporaryPage) (*documentprocessing.TemporaryResult, error)
+	Enqueue(context.Context, uuid.UUID, string, []documentprocessing.TemporaryPage) (*documentprocessing.TemporaryResult, error)
 	List(context.Context, uuid.UUID) ([]documentprocessing.TemporaryResult, error)
 	Get(context.Context, uuid.UUID, uuid.UUID) (*documentprocessing.TemporaryResult, error)
+	Retry(context.Context, uuid.UUID, uuid.UUID) (*documentprocessing.TemporaryResult, error)
+	PageFile(context.Context, uuid.UUID, uuid.UUID, int) (*documentprocessing.TemporaryPageFile, error)
 }
 
 type TemporaryExtractionHandler struct {
@@ -47,17 +49,34 @@ type temporaryUploadInput struct {
 }
 type temporaryCaptureRequest struct {
 	Kind       string      `json:"kind" enum:"laboratory,imaging"`
-	CaptureIDs []uuid.UUID `json:"capture_ids" minItems:"1" maxItems:"5"`
+	CaptureIDs []uuid.UUID `json:"capture_ids" minItems:"1" maxItems:"20"`
 }
 type temporaryCaptureInput struct{ Body temporaryCaptureRequest }
 type temporaryPathInput struct {
 	ID uuid.UUID `path:"id" format:"uuid"`
 }
 type temporaryListInput struct{}
+type temporaryPageInput struct {
+	ID       uuid.UUID `path:"id" format:"uuid"`
+	Position int       `path:"position" minimum:"0" maximum:"19"`
+}
+type temporaryPageFileResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+type temporaryPageFileOutput struct {
+	CacheControl string `header:"Cache-Control"`
+	Body         temporaryPageFileResponse
+}
 
 type temporaryResultResponse struct {
 	ID            uuid.UUID                          `json:"id"`
 	Kind          string                             `json:"kind"`
+	Status        string                             `json:"status"`
+	Progress      int                                `json:"progress"`
+	ErrorMessage  string                             `json:"error_message,omitempty"`
+	PatientName   string                             `json:"patient_name,omitempty"`
+	ExamName      string                             `json:"exam_name,omitempty"`
 	CreatedAt     time.Time                          `json:"created_at"`
 	ExpiresAt     time.Time                          `json:"expires_at"`
 	Pages         []documentprocessing.TemporaryPage `json:"pages"`
@@ -77,7 +96,7 @@ type temporaryListOutput struct {
 }
 
 func (h *TemporaryExtractionHandler) RegisterHumaRoutes(api huma.API, security []map[string][]string) {
-	registerTemporaryRoutes(api, security, h.fromUpload, h.fromCaptures, h.list, h.get)
+	registerTemporaryRoutes(api, security, h.fromUpload, h.fromCaptures, h.list, h.get, h.retry, h.pageFile)
 }
 
 func RegisterTemporaryExtractionOpenAPIRoutes(api huma.API, security []map[string][]string) {
@@ -85,7 +104,9 @@ func RegisterTemporaryExtractionOpenAPIRoutes(api huma.API, security []map[strin
 		humaspec.NotImplemented[temporaryUploadInput, temporaryResultOutput],
 		humaspec.NotImplemented[temporaryCaptureInput, temporaryResultOutput],
 		humaspec.NotImplemented[temporaryListInput, temporaryListOutput],
-		humaspec.NotImplemented[temporaryPathInput, temporaryResultOutput])
+		humaspec.NotImplemented[temporaryPathInput, temporaryResultOutput],
+		humaspec.NotImplemented[temporaryPathInput, temporaryResultOutput],
+		humaspec.NotImplemented[temporaryPageInput, temporaryPageFileOutput])
 }
 
 func registerTemporaryRoutes(api huma.API, security []map[string][]string,
@@ -93,10 +114,12 @@ func registerTemporaryRoutes(api huma.API, security []map[string][]string,
 	captures func(context.Context, *temporaryCaptureInput) (*temporaryResultOutput, error),
 	list func(context.Context, *temporaryListInput) (*temporaryListOutput, error),
 	get func(context.Context, *temporaryPathInput) (*temporaryResultOutput, error),
+	retry func(context.Context, *temporaryPathInput) (*temporaryResultOutput, error),
+	pageFile func(context.Context, *temporaryPageInput) (*temporaryPageFileOutput, error),
 ) {
 	huma.Register(api, huma.Operation{OperationID: "createTemporaryExtraction", Method: http.MethodPost,
 		Path: "/temporary-extractions", Summary: "Extrair e guardar temporariamente arquivos enviados",
-		MaxBodyBytes: 11 * 1024 * 1024, Tags: []string{"Temporary extractions"}, Security: security}, upload)
+		MaxBodyBytes: 202 * 1024 * 1024, Tags: []string{"Temporary extractions"}, Security: security}, upload)
 	huma.Register(api, huma.Operation{OperationID: "createTemporaryExtractionFromCaptures", Method: http.MethodPost,
 		Path: "/temporary-extractions/from-captures", Summary: "Extrair e guardar temporariamente capturas",
 		Tags: []string{"Temporary extractions"}, Security: security}, captures)
@@ -106,6 +129,12 @@ func registerTemporaryRoutes(api huma.API, security []map[string][]string,
 	huma.Register(api, huma.Operation{OperationID: "getTemporaryExtraction", Method: http.MethodGet,
 		Path: "/temporary-extractions/{id}", Summary: "Consultar uma extração temporária da conta",
 		Tags: []string{"Temporary extractions"}, Security: security}, get)
+	huma.Register(api, huma.Operation{OperationID: "retryTemporaryExtraction", Method: http.MethodPost,
+		Path: "/temporary-extractions/{id}/retry", Summary: "Tentar novamente uma extração temporária",
+		Tags: []string{"Temporary extractions"}, Security: security}, retry)
+	huma.Register(api, huma.Operation{OperationID: "getTemporaryExtractionPageFile", Method: http.MethodGet,
+		Path: "/temporary-extractions/{id}/pages/{position}/file", Summary: "Obter URL temporária de uma página da extração",
+		Tags: []string{"Temporary extractions"}, Security: security}, pageFile)
 }
 
 func (h *TemporaryExtractionHandler) fromUpload(ctx context.Context, input *temporaryUploadInput) (*temporaryResultOutput, error) {
@@ -142,11 +171,11 @@ func (h *TemporaryExtractionHandler) fromUpload(ctx context.Context, input *temp
 			MIMEType: document.mimeType, SizeBytes: info.Size()}
 		pages = append(pages, page)
 		total += info.Size()
-		if total > standaloneLabExtractionMaxFileSize || (len(files) > 1 && document.mimeType == "application/pdf") {
-			return nil, humaerror.From(apperr.Validation("selecione até cinco imagens com 10 MiB no total"))
+		if total > temporaryTotalLimit(kind[0]) || (len(files) > 1 && document.mimeType == "application/pdf") {
+			return nil, humaerror.From(apperr.Validation(temporarySelectionMessage(kind[0])))
 		}
 	}
-	return h.extractAndSave(ctx, account, kind[0], pages)
+	return h.enqueue(ctx, account, kind[0], pages)
 }
 
 func (h *TemporaryExtractionHandler) fromCaptures(ctx context.Context, input *temporaryCaptureInput) (*temporaryResultOutput, error) {
@@ -198,52 +227,55 @@ func (h *TemporaryExtractionHandler) fromCaptures(ctx context.Context, input *te
 			CaptureID: &id, OriginalFilename: file.Filename, MIMEType: document.mimeType,
 			SizeBytes: info.Size(), ExpiresAt: file.ExpiresAt})
 		total += info.Size()
-		if total > standaloneLabExtractionMaxFileSize || (len(input.Body.CaptureIDs) > 1 && document.mimeType == "application/pdf") {
-			return nil, humaerror.From(apperr.Validation("selecione até cinco imagens com 10 MiB no total"))
+		if total > temporaryTotalLimit(input.Body.Kind) || (len(input.Body.CaptureIDs) > 1 && document.mimeType == "application/pdf") {
+			return nil, humaerror.From(apperr.Validation(temporarySelectionMessage(input.Body.Kind)))
 		}
 	}
-	return h.extractAndSave(ctx, account, input.Body.Kind, pages)
+	return h.enqueue(ctx, account, input.Body.Kind, pages)
 }
 
 func validateTemporarySelection(kind string, count int) error {
 	if kind != "laboratory" && kind != "imaging" {
 		return apperr.Validation("tipo de extração inválido")
 	}
-	if count < 1 || (kind == "laboratory" && count != 1) || count > 5 {
+	maximum := 5
+	if kind == "laboratory" {
+		maximum = 20
+	}
+	if count < 1 || count > maximum {
 		return apperr.Validation("quantidade de arquivos inválida")
 	}
 	return nil
 }
 
-func (h *TemporaryExtractionHandler) extractAndSave(ctx context.Context, account *accountdomain.Account, kind string, pages []documentprocessing.TemporaryPage) (*temporaryResultOutput, error) {
+func temporaryTotalLimit(kind string) int64 {
+	if kind == "laboratory" {
+		return 200 * 1024 * 1024
+	}
+	return standaloneLabExtractionMaxFileSize
+}
+
+func temporarySelectionMessage(kind string) string {
+	if kind == "laboratory" {
+		return "selecione um PDF ou até 20 imagens JPEG/PNG de até 10 MiB cada"
+	}
+	return "selecione até cinco imagens com 10 MiB no total"
+}
+
+func (h *TemporaryExtractionHandler) enqueue(ctx context.Context, account *accountdomain.Account, kind string, pages []documentprocessing.TemporaryPage) (*temporaryResultOutput, error) {
 	if h.store == nil {
 		return nil, humaerror.From(apperr.Internal("extrações temporárias indisponíveis", errors.New("store missing")))
 	}
-	var result any
+	var err error
 	if kind == "laboratory" {
-		lab, err := h.lab.ExtractDocument(ctx, account, pages[0].LocalPath, pages[0].OriginalFilename, pages[0].MIMEType)
-		if err != nil {
-			return nil, humaerror.From(err)
-		}
-		result = lab
-	} else if len(pages) == 1 {
-		imaging, err := h.imaging.ExtractDocument(ctx, account, pages[0].LocalPath, pages[0].OriginalFilename, pages[0].MIMEType)
-		if err != nil {
-			return nil, humaerror.From(err)
-		}
-		result = imaging
+		err = h.lab.Authorize(account)
 	} else {
-		input := make([]imagingreport.DocumentPage, len(pages))
-		for i, page := range pages {
-			input[i] = imagingreport.DocumentPage{Path: page.LocalPath, Filename: page.OriginalFilename, MIMEType: page.MIMEType}
-		}
-		imaging, err := h.imaging.ExtractImagePages(ctx, account, input)
-		if err != nil {
-			return nil, humaerror.From(err)
-		}
-		result = imaging
+		err = h.imaging.Authorize(account)
 	}
-	item, err := h.store.Save(ctx, account.ID, kind, result, pages)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	item, err := h.store.Enqueue(ctx, account.ID, kind, pages)
 	if err != nil {
 		return nil, humaerror.From(err)
 	}
@@ -264,9 +296,41 @@ func (h *TemporaryExtractionHandler) list(ctx context.Context, _ *temporaryListI
 	}
 	response := make([]temporaryResultResponse, len(items))
 	for i, item := range items {
-		response[i] = temporaryResultResponse{ID: item.ID, Kind: item.Kind, CreatedAt: item.CreatedAt, ExpiresAt: item.ExpiresAt}
+		response[i] = temporaryResultResponse{ID: item.ID, Kind: item.Kind, Status: item.Status, Progress: item.Progress, ErrorMessage: item.ErrorMessage,
+			PatientName: item.PatientName, ExamName: item.ExamName, CreatedAt: item.CreatedAt, ExpiresAt: item.ExpiresAt}
 	}
 	return &temporaryListOutput{CacheControl: "no-store", Body: temporaryListResponse{Items: response}}, nil
+}
+
+func (h *TemporaryExtractionHandler) pageFile(ctx context.Context, input *temporaryPageInput) (*temporaryPageFileOutput, error) {
+	if h.store == nil {
+		return nil, humaerror.From(apperr.Internal("extrações temporárias indisponíveis", errors.New("store missing")))
+	}
+	account, err := temporaryAccount(ctx)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	file, err := h.store.PageFile(ctx, account.ID, input.ID, input.Position)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	return &temporaryPageFileOutput{CacheControl: "private, no-store",
+		Body: temporaryPageFileResponse{URL: file.URL, ExpiresAt: file.ExpiresAt}}, nil
+}
+
+func (h *TemporaryExtractionHandler) retry(ctx context.Context, input *temporaryPathInput) (*temporaryResultOutput, error) {
+	if h.store == nil {
+		return nil, humaerror.From(apperr.Internal("extrações temporárias indisponíveis", errors.New("store missing")))
+	}
+	account, err := temporaryAccount(ctx)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	item, err := h.store.Retry(ctx, account.ID, input.ID)
+	if err != nil {
+		return nil, humaerror.From(err)
+	}
+	return presentTemporaryResult(item)
 }
 
 func (h *TemporaryExtractionHandler) get(ctx context.Context, input *temporaryPathInput) (*temporaryResultOutput, error) {
@@ -285,8 +349,11 @@ func (h *TemporaryExtractionHandler) get(ctx context.Context, input *temporaryPa
 }
 
 func presentTemporaryResult(item *documentprocessing.TemporaryResult) (*temporaryResultOutput, error) {
-	response := temporaryResultResponse{ID: item.ID, Kind: item.Kind, CreatedAt: item.CreatedAt,
+	response := temporaryResultResponse{ID: item.ID, Kind: item.Kind, Status: item.Status, Progress: item.Progress, ErrorMessage: item.ErrorMessage, CreatedAt: item.CreatedAt,
 		ExpiresAt: item.ExpiresAt, Pages: item.Pages}
+	if item.Status != "completed" {
+		return &temporaryResultOutput{CacheControl: "no-store", Body: response}, nil
+	}
 	if item.Kind == "laboratory" {
 		var result labreport.Result
 		if err := json.Unmarshal(item.Result, &result); err != nil {

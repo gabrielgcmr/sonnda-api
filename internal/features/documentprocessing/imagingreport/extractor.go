@@ -92,6 +92,7 @@ type Measurement struct {
 }
 
 type Report struct {
+	PatientName     *string          `json:"patient_name"`
 	Modality        Modality         `json:"modality"`
 	ExamName        *string          `json:"exam_name"`
 	BodyRegion      *string          `json:"body_region"`

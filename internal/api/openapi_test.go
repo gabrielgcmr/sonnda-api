@@ -58,6 +58,8 @@ func TestOpenAPIContainsExpectedOperationContract(t *testing.T) {
 		{http.MethodPost, "/temporary-extractions/from-captures", "createTemporaryExtractionFromCaptures", bearer},
 		{http.MethodGet, "/temporary-extractions", "listTemporaryExtractions", bearer},
 		{http.MethodGet, "/temporary-extractions/{id}", "getTemporaryExtraction", bearer},
+		{http.MethodPost, "/temporary-extractions/{id}/retry", "retryTemporaryExtraction", bearer},
+		{http.MethodGet, "/temporary-extractions/{id}/pages/{position}/file", "getTemporaryExtractionPageFile", bearer},
 		{http.MethodGet, "/patients/{patientId}/lab-reports", "listPatientLabReports", bearer},
 		{http.MethodGet, "/lab-reports/{labReportId}", "getLabReport", bearer},
 		{http.MethodPost, "/capture-sessions/claim", "claimCaptureSession", ""},

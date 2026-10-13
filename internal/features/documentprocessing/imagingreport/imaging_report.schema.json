@@ -10,8 +10,9 @@
     "report": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["modality", "exam_name", "body_region", "exam_date", "technique_text", "findings_text", "impression_text", "classifications", "measurements"],
+      "required": ["patient_name", "modality", "exam_name", "body_region", "exam_date", "technique_text", "findings_text", "impression_text", "classifications", "measurements"],
       "properties": {
+        "patient_name": {"type": ["string", "null"], "description": "Nome do paciente explicitamente presente no laudo; nulo se ausente."},
         "modality": {"type": "string", "enum": ["ultrasound", "ct", "mri", "mammography", "xray", "other", "unknown"]},
         "exam_name": {"type": ["string", "null"]},
         "body_region": {"type": ["string", "null"]},

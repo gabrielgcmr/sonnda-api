@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/kernel/apperr"
 	"github.com/google/uuid"
 )
@@ -30,13 +31,18 @@ type TemporaryPage struct {
 }
 
 type TemporaryResult struct {
-	ID        uuid.UUID       `json:"id"`
-	AccountID uuid.UUID       `json:"-"`
-	Kind      string          `json:"kind"`
-	Result    json.RawMessage `json:"-"`
-	Pages     []TemporaryPage `json:"pages"`
-	CreatedAt time.Time       `json:"created_at"`
-	ExpiresAt time.Time       `json:"expires_at"`
+	ID           uuid.UUID       `json:"id"`
+	AccountID    uuid.UUID       `json:"-"`
+	Kind         string          `json:"kind"`
+	Result       json.RawMessage `json:"-"`
+	Status       string          `json:"status"`
+	Progress     int             `json:"progress"`
+	ErrorMessage string          `json:"error_message,omitempty"`
+	PatientName  string          `json:"patient_name,omitempty"`
+	ExamName     string          `json:"exam_name,omitempty"`
+	Pages        []TemporaryPage `json:"pages"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ExpiresAt    time.Time       `json:"expires_at"`
 }
 
 type TemporaryResultRepository interface {
@@ -45,18 +51,44 @@ type TemporaryResultRepository interface {
 	Get(context.Context, uuid.UUID, uuid.UUID, time.Time) (*TemporaryResult, error)
 	Expired(context.Context, time.Time, int) ([]TemporaryResult, error)
 	Delete(context.Context, uuid.UUID) error
+	// Claim fails jobs whose expired lease already used maxAttempts before reserving the next one.
+	Claim(ctx context.Context, owner uuid.UUID, now time.Time, lease time.Duration, maxAttempts int, exhaustedMessage string) (*TemporaryResult, error)
+	Renew(context.Context, uuid.UUID, uuid.UUID, time.Time, time.Duration) (bool, error)
+	Advance(context.Context, uuid.UUID, uuid.UUID, time.Time, int) (bool, error)
+	Complete(context.Context, uuid.UUID, uuid.UUID, time.Time, json.RawMessage) (bool, error)
+	Fail(context.Context, uuid.UUID, uuid.UUID, time.Time, string) (bool, error)
+	// Release returns an interrupted job to the queue without consuming an attempt.
+	Release(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	Retry(context.Context, uuid.UUID, uuid.UUID, time.Time) (bool, error)
 }
 
 type TemporaryFileStorage interface {
 	Upload(context.Context, io.Reader, string, string) (string, error)
+	Open(context.Context, string) (io.ReadCloser, error)
+	GetSignedURL(context.Context, string, time.Duration) (string, error)
 	Delete(context.Context, string) error
 }
 
-type TemporaryResults struct {
-	repo    TemporaryResultRepository
-	storage TemporaryFileStorage
-	now     func() time.Time
+type temporaryCaptureSource interface {
+	temporaryCaptureOpener
+	GetCaptureFile(context.Context, uuid.UUID, uuid.UUID) (*capture.SignedCaptureFile, error)
 }
+
+const temporaryPageURLLifetime = 5 * time.Minute
+
+type TemporaryPageFile struct {
+	URL       string
+	ExpiresAt time.Time
+}
+
+type TemporaryResults struct {
+	repo     TemporaryResultRepository
+	storage  TemporaryFileStorage
+	captures temporaryCaptureSource
+	now      func() time.Time
+}
+
+func (s *TemporaryResults) SetCaptureSource(source temporaryCaptureSource) { s.captures = source }
 
 func NewTemporaryResults(repo TemporaryResultRepository, storage TemporaryFileStorage) *TemporaryResults {
 	return &TemporaryResults{repo: repo, storage: storage, now: time.Now}
@@ -73,7 +105,25 @@ func (s *TemporaryResults) Save(ctx context.Context, accountID uuid.UUID, kind s
 	if err != nil {
 		return nil, apperr.Internal("não foi possível preparar o resultado", err)
 	}
-	item := &TemporaryResult{ID: uuid.New(), AccountID: accountID, Kind: kind, Result: payload, Pages: make([]TemporaryPage, len(pages)), CreatedAt: s.now().UTC()}
+	return s.persist(ctx, accountID, kind, payload, "completed", pages)
+}
+
+func (s *TemporaryResults) Enqueue(ctx context.Context, accountID uuid.UUID, kind string, pages []TemporaryPage) (*TemporaryResult, error) {
+	if s == nil || s.repo == nil || s.storage == nil {
+		return nil, apperr.Internal("extrações temporárias indisponíveis", errors.New("temporary results dependencies missing"))
+	}
+	if accountID == uuid.Nil || (kind != "laboratory" && kind != "imaging") || len(pages) == 0 {
+		return nil, apperr.Validation("extração temporária inválida")
+	}
+	return s.persist(ctx, accountID, kind, nil, "queued", pages)
+}
+
+func (s *TemporaryResults) persist(ctx context.Context, accountID uuid.UUID, kind string, payload json.RawMessage, status string, pages []TemporaryPage) (saved *TemporaryResult, retErr error) {
+	var err error
+	item := &TemporaryResult{ID: uuid.New(), AccountID: accountID, Kind: kind, Result: payload, Status: status, Pages: make([]TemporaryPage, len(pages)), CreatedAt: s.now().UTC()}
+	if status == "completed" {
+		item.Progress = 100
+	}
 	var uploaded []string
 	committed := false
 	defer func() {
@@ -126,6 +176,89 @@ func (s *TemporaryResults) Save(ctx context.Context, accountID uuid.UUID, kind s
 	}
 	committed = true
 	return item, nil
+}
+
+func (s *TemporaryResults) Retry(ctx context.Context, accountID, id uuid.UUID) (*TemporaryResult, error) {
+	item, err := s.Get(ctx, accountID, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Status != "failed" {
+		return nil, apperr.Conflict("A extração não está em falha.")
+	}
+	for _, page := range item.Pages {
+		if !page.ExpiresAt.After(s.now().UTC()) {
+			return nil, apperr.NotFound("arquivo expirado")
+		}
+		var body io.ReadCloser
+		var err error
+		if page.CaptureID != nil {
+			if s.captures == nil {
+				return nil, apperr.Internal("capturas indisponíveis", errors.New("capture source missing"))
+			}
+			file, openErr := s.captures.OpenCaptureFile(ctx, accountID, *page.CaptureID)
+			if openErr != nil {
+				return nil, apperr.NotFound("arquivo indisponível")
+			}
+			body = file.Body
+		} else {
+			body, err = s.storage.Open(ctx, page.StorageURI)
+		}
+		if err != nil {
+			return nil, apperr.NotFound("arquivo indisponível")
+		}
+		_ = body.Close()
+	}
+	updated, err := s.repo.Retry(ctx, accountID, id, s.now().UTC())
+	if err != nil {
+		return nil, apperr.Internal("não foi possível tentar novamente", err)
+	}
+	if !updated {
+		return nil, apperr.Conflict("A extração mudou de estado.")
+	}
+	item.Status, item.Progress, item.ErrorMessage = "queued", 0, ""
+	return item, nil
+}
+
+// PageFile issues a short-lived URL only after Get confirms the account owns an available job.
+func (s *TemporaryResults) PageFile(ctx context.Context, accountID, id uuid.UUID, position int) (*TemporaryPageFile, error) {
+	item, err := s.Get(ctx, accountID, id)
+	if err != nil {
+		return nil, err
+	}
+	var page *TemporaryPage
+	for index := range item.Pages {
+		if item.Pages[index].Position == position {
+			page = &item.Pages[index]
+			break
+		}
+	}
+	if page == nil {
+		return nil, apperr.NotFound("página não encontrada")
+	}
+	if page.CaptureID != nil {
+		if s.captures == nil {
+			return nil, apperr.Internal("capturas indisponíveis", errors.New("capture source missing"))
+		}
+		file, err := s.captures.GetCaptureFile(ctx, accountID, *page.CaptureID)
+		if err != nil {
+			return nil, err
+		}
+		return &TemporaryPageFile{URL: file.URL, ExpiresAt: file.ExpiresAt}, nil
+	}
+	now := s.now().UTC()
+	lifetime := min(temporaryPageURLLifetime, page.ExpiresAt.Sub(now)).Truncate(time.Second)
+	if lifetime <= 0 {
+		return nil, apperr.NotFound("arquivo expirado")
+	}
+	url, err := s.storage.GetSignedURL(ctx, page.StorageURI, lifetime)
+	if err != nil {
+		if apperr.IsNotFound(err) {
+			return nil, apperr.NotFound("arquivo indisponível")
+		}
+		return nil, apperr.Internal("não foi possível acessar o arquivo", err)
+	}
+	return &TemporaryPageFile{URL: url, ExpiresAt: now.Add(lifetime)}, nil
 }
 
 func (s *TemporaryResults) List(ctx context.Context, accountID uuid.UUID) ([]TemporaryResult, error) {

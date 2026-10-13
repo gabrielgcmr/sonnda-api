@@ -26,7 +26,8 @@ Use radiology_image para imagens radiológicas/DICOM/imagens diagnósticas isola
 Use incompatible para exames laboratoriais, atestados, receitas, pedidos, documentos administrativos ou conteúdo que não seja laudo escrito de imagem.
 Use unreadable quando o documento não puder ser lido. Use multiple_reports quando o arquivo contiver mais de um laudo independente.
 Não interprete pixels radiológicos, não calcule classificações e não infira diagnósticos ausentes.
-Extraia apenas conteúdo explícito. Preserve negações, lateralidade, valores e unidades. Retorne texto-fonte literal em source_text para cada classificação e medida.
+Extraia apenas conteúdo explícito. Em patient_name, copie o nome do paciente somente quando estiver escrito no laudo; não o confunda com o médico solicitante ou responsável.
+Preserve negações, lateralidade, valores e unidades. Retorne texto-fonte literal em source_text para cada classificação e medida.
 Use null para campos ausentes e arrays vazios quando não houver classificações ou medidas. Use modality unknown quando não puder determinar a modalidade com segurança.
 Defina readability partial quando partes clinicamente relevantes estiverem cortadas, desfocadas ou ilegíveis; complete quando o conteúdo legível estiver disponível.`
 

@@ -38,6 +38,9 @@ func FormatSummary(report *ExtractedLabReport) string {
 			builder.WriteByte('\n')
 		}
 		builder.WriteString(test.TestName)
+		if test.SourcePage > 0 {
+			builder.WriteString(fmt.Sprintf(" (página %d)", test.SourcePage))
+		}
 		builder.WriteByte('\n')
 		for _, item := range test.Items {
 			if strings.TrimSpace(item.ParameterName) == "" {

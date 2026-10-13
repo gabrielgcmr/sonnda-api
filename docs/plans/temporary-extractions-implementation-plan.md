@@ -16,17 +16,27 @@ O médico poderá sair de `/home/exams`, fechar o navegador e voltar para encont
 
 ## Etapa 2 — Processamento durável
 
+**Status:** implementada nos repositórios. Aplicar as migrations das etapas 1 e 2 antes de publicar a API.
+
 - Enfileirar trabalhos no PostgreSQL e processá-los em worker Go com reserva temporária e retomada após reinício.
 - Persistir estado e progresso; permitir nova tentativa enquanto as fontes estiverem disponíveis.
 - Confirmar disponibilidade e prazo das páginas antes de gravar o resultado.
 
+O worker roda junto com a API, assume um trabalho por vez com reserva de dois minutos e renova a reserva durante a extração. Outras instâncias podem assumir trabalhos sem reserva válida. Ao desligar, a instância devolve o trabalho à fila sem gastar tentativa; após três reservas interrompidas, o trabalho fica em falha até nova tentativa manual, que reinicia a contagem. Pânicos no extrator e fontes vencidas antes da gravação viram falha registrada. A interface consulta o estado do trabalho enquanto a página estiver aberta; o processamento no servidor independe dessa consulta.
+
+Testes de integração do SQL e da retomada do worker: `TEMPORARY_EXTRACTIONS_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres go test -tags integration -run Temporary ./internal/features/documentprocessing/postgres/`.
+
 ## Etapa 3 — Documento e resultado lado a lado
+
+**Status:** implementada nos repositórios. `GET /temporary-extractions/{id}/pages/{position}/file` emite URL assinada de até cinco minutos, limitada ao vencimento da página, depois de confirmar a conta. A listagem traz `patient_name` (laudos laboratoriais e de imagem) e `exam_name`; a extração de imagem passou a identificar o nome do paciente. Em `/home/exams`, o envio e as extrações recentes ficam numa coluna estreita; documento e resultado ficam lado a lado quando o painel tem pelo menos 52rem e alternam por abas abaixo disso. O resultado laboratorial mostra os dados do laudo no topo e a referência em coluna própria.
 
 - Mostrar imagem ou PDF com navegação por páginas à esquerda e resultado estruturado à direita; em telas estreitas, alternar entre as áreas.
 - Emitir URLs temporárias somente após verificar a conta. Mostrar progresso, falha, prazo e aviso de revisão clínica.
 - Limpar a seleção e recarregar os trabalhos ao mudar de conta.
 
 ## Etapa 4 — Otimização e múltiplas páginas laboratoriais
+
+**Status:** implementada nos repositórios. A otimização usa o navegador antes do upload e conserva o original quando a conversão não reduz o tamanho em pelo menos 10%, não é suportada ou há transparência. A legibilidade clínica deve ser conferida no documento exibido. O worker avança em grupos de até quatro páginas e 10 MiB; extrai cada página em uma chamada própria para atribuir a origem sem ambiguidade. Isso pode aumentar o número de chamadas ao Gemini em trabalhos longos.
 
 - Comprimir fotos no celular e no computador antes do envio, corrigindo orientação e testando inicialmente 2.400 px no lado maior e JPEG de qualidade 0,85. Conservar o original quando a conversão piorar a leitura ou não reduzir tamanho. Preservar PDFs.
 - Aceitar de 1 a 20 imagens por trabalho laboratorial. Processar em grupos de até quatro páginas e 10 MiB por chamada, salvar progresso e consolidar resultados com origem por página.

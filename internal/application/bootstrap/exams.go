@@ -6,6 +6,7 @@ import (
 
 	"github.com/gabrielgcmr/sonnda/internal/application/usecase/labdocumentconfirmation"
 	"github.com/gabrielgcmr/sonnda/internal/config"
+	accountpostgres "github.com/gabrielgcmr/sonnda/internal/features/account/postgres"
 	"github.com/gabrielgcmr/sonnda/internal/features/capture"
 	"github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
 	documents "github.com/gabrielgcmr/sonnda/internal/features/documentprocessing"
@@ -28,6 +29,7 @@ type ExamsModule struct {
 	StandaloneImagingExtractionHandler *documenthttp.StandaloneImagingExtractionHandler
 	TemporaryExtractionHandler         *documenthttp.TemporaryExtractionHandler
 	TemporaryResults                   *documentprocessing.TemporaryResults
+	TemporaryWorker                    *documentprocessing.TemporaryWorker
 }
 
 func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imaging imagingreport.Extractor, storage documentprocessing.FileStorageService, temporaryStorage documentprocessing.TemporaryFileStorage, captures capture.Service, config config.OCRConfig) *ExamsModule {
@@ -46,6 +48,7 @@ func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imagin
 	standalone := documents.NewStandaloneLabExtraction(extractor, authorizer)
 	standaloneImaging := documents.NewStandaloneImagingExtraction(imagingService, authorizer)
 	temporaryResults := documents.NewTemporaryResults(documentpostgres.NewTemporaryResultRepository(db), temporaryStorage)
+	temporaryResults.SetCaptureSource(captures)
 	captureSource := capturedFileSource{captures: captures}
 	return &ExamsModule{
 		Handler:                            documenthttp.NewExams(service, drafts, confirmer, storage),
@@ -53,6 +56,7 @@ func NewExamsModule(db *pginfra.Client, lab labreport.LabReportExtractor, imagin
 		StandaloneImagingExtractionHandler: documenthttp.NewStandaloneImagingExtraction(standaloneImaging, captureSource),
 		TemporaryExtractionHandler:         documenthttp.NewTemporaryExtractionHandler(standalone, standaloneImaging, captureSource, temporaryResults),
 		TemporaryResults:                   temporaryResults,
+		TemporaryWorker:                    documents.NewTemporaryWorker(temporaryResults, accountpostgres.New(db.Pool()), captures, standalone, standaloneImaging),
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const validImagingResponse = `{"document_kind":"imaging_report","readability":"complete","report":{"modality":"mammography","exam_name":"Mamografia","body_region":"mamas","exam_date":null,"technique_text":null,"findings_text":"NÃ£o hÃ¡ nÃ³dulos suspeitos Ã  direita.","impression_text":"BI-RADS 2","classifications":[{"system":"BI-RADS","value":"2","source_text":"Categoria BI-RADS 2"}],"measurements":[{"name":"linfonodo","location":"mama esquerda","value_text":"12 x 8","unit":"mm","source_text":"linfonodo na mama esquerda medindo 12 x 8 mm"}]}}`
+const validImagingResponse = `{"document_kind":"imaging_report","readability":"complete","report":{"patient_name":"Maria Souza","modality":"mammography","exam_name":"Mamografia","body_region":"mamas","exam_date":null,"technique_text":null,"findings_text":"NÃ£o hÃ¡ nÃ³dulos suspeitos Ã  direita.","impression_text":"BI-RADS 2","classifications":[{"system":"BI-RADS","value":"2","source_text":"Categoria BI-RADS 2"}],"measurements":[{"name":"linfonodo","location":"mama esquerda","value_text":"12 x 8","unit":"mm","source_text":"linfonodo na mama esquerda medindo 12 x 8 mm"}]}}`
 
 func TestImagingReportExtractorPreservesExplicitSourceAndMultimodalInput(t *testing.T) {
 	media := []byte{0xff, 0xd8, 0xff, 0xe0}
@@ -37,6 +37,9 @@ func TestImagingReportExtractorPreservesExplicitSourceAndMultimodalInput(t *test
 	}
 	if !strings.Contains(captured.SystemInstruction, "Preserve negações, lateralidade, valores e unidades") {
 		t.Fatal("prompt does not require preserving clinical wording")
+	}
+	if document.Report.PatientName == nil || *document.Report.PatientName != "Maria Souza" {
+		t.Fatalf("patient name lost: %+v", document.Report.PatientName)
 	}
 	if document.Report.FindingsText == nil || !strings.Contains(*document.Report.FindingsText, "NÃ£o hÃ¡") || !strings.Contains(*document.Report.FindingsText, "direita") {
 		t.Fatalf("negation or laterality lost: %+v", document.Report.FindingsText)

@@ -42,6 +42,7 @@ type ExtractedTestItem struct {
 // ExtractedTestResult representa um exame ou painel estruturado.
 type ExtractedTestResult struct {
 	TestName    string              `json:"test_name"`
+	SourcePage  int                 `json:"source_page,omitempty"`
 	Material    *string             `json:"material"`
 	Method      *string             `json:"method"`
 	CollectedAt *string             `json:"collected_at"`

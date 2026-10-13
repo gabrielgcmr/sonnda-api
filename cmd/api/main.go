@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -147,11 +148,7 @@ func main() {
 	authMiddleware := authhttp.NewMiddleware(apiAuthProvider.AuthenticateBearerToken)
 
 	//10. Cria o router HTTP
-	ginMode := gin.DebugMode
-	if cfg.App.Env == "prod" {
-		ginMode = gin.ReleaseMode
-	}
-	gin.SetMode(ginMode)
+	gin.SetMode(gin.ReleaseMode)
 
 	app, err := api.New(api.Options{
 		Name:       "Sonnda API",
@@ -178,13 +175,13 @@ func main() {
 	if err != nil {
 		logInfraFatal("falha ao configurar API", err)
 	}
+	go modules.Exams.TemporaryWorker.Run(ctx)
 
 	// 10. Inicia o servidor
-	slog.Info(
-		"Sonnda is running",
-		slog.String("mode", cfg.App.Env),
-		slog.String("local_api_url", "http://localhost:"+cfg.HTTP.Port),
-		slog.String("public_api_url", "https://api.sonnda.com.br"),
+	fmt.Printf(
+		"\n────────────────────────────────────────\n SONNDA IS RUNNING\n────────────────────────────────────────\n  mode          : %s\n  LOCAL_API_URL : http://localhost:%s\n  PUBLIC_API_URL: https://api.sonnda.com.br\n\n",
+		cfg.App.Env,
+		cfg.HTTP.Port,
 	)
 	if err := app.Run(ctx, ":"+cfg.HTTP.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		// 1. Loga o erro com nivel Error (estruturado)
